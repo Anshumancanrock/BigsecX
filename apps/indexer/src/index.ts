@@ -1,0 +1,39 @@
+/**
+ * Indexer entrypoint. Runs the job once, then on an interval.
+ */
+
+import { Rpc } from "@ps/chain";
+import { JupiterClient } from "@ps/market";
+import { Store } from "@ps/db";
+import { runJob } from "./job.ts";
+
+const RPC_URL = process.env["SOLANA_RPC_URL"] ?? "https://solana-rpc.publicnode.com";
+const INTERVAL_MS = Number(process.env["INDEXER_INTERVAL_MS"] ?? 5 * 60_000);
+
+const rpc = new Rpc({ url: RPC_URL });
+const jupiter = new JupiterClient();
+const store = new Store();
+
+async function tick(): Promise<void> {
+  const started = Date.now();
+  try {
+    const result = await runJob(rpc, jupiter, store);
+    console.log(
+      `[${new Date().toISOString()}] snapshot ${result.snapshotId} · ` +
+        `epoch ${result.snapshot.epoch} · +${result.tradesWritten} trades ` +
+        `from ${result.tradersSeen} wallets · ${result.indexesWritten} indexes · ` +
+        `${Date.now() - started}ms` +
+        (result.tradeError ? ` · trades degraded: ${result.tradeError}` : ""),
+    );
+  } catch (error) {
+    // A failed tick must not kill the loop: upstreams rate limit, and the
+    // next run will pick up where this one left off.
+    console.error(`[${new Date().toISOString()}] job failed:`, (error as Error).message);
+  }
+}
+
+await tick();
+if (process.env["INDEXER_ONCE"] !== "1") {
+  setInterval(() => void tick(), INTERVAL_MS);
+  console.log(`indexer running every ${INTERVAL_MS / 1000}s`);
+}

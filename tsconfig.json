@@ -40,6 +40,9 @@
       ],
       "@ps/tx/*": [
         "./packages/tx/src/*"
+      ],
+      "@ps/indexer/*": [
+        "./apps/indexer/src/*"
       ]
     }
   },

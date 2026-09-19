@@ -4,5 +4,6 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts", "./*": "./src/*.ts" }
+  "exports": { ".": "./src/index.ts", "./*": "./src/*.ts" },
+  "dependencies": { "@ps/core": "workspace:*" }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@ps/indexer",
+  "name": "@ps/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,6 +8,7 @@
     "@ps/chain": "workspace:*",
     "@ps/market": "workspace:*",
     "@ps/db": "workspace:*",
-    "@ps/tx": "workspace:*"
+    "@ps/tx": "workspace:*",
+    "hono": "^4.13.8"
   }
 }

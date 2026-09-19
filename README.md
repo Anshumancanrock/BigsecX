@@ -10,7 +10,9 @@ Backend foundation for a Solana app built on PreStocks tokenized pre-IPO equity.
 | `packages/chain` | Solana JSON-RPC reads and Token-2022 mint/account parsing. |
 | `packages/market` | Issuer API and Jupiter clients, with caching and rate limiting. |
 | `packages/tx` | Builds the unsigned transactions that move a wallet onto a target allocation. |
-| `apps/indexer` | Composes market snapshots, indexes and mirror bundles. CLIs under `src/`. |
+| `packages/db` | SQLite schema, migrations and repositories. |
+| `apps/indexer` | Snapshot, trade and index-level indexing job, plus CLIs. |
+| `apps/api` | HTTP API over the above. |
 
 ## Running
 
@@ -21,6 +23,8 @@ bun run typecheck
 bun run apps/indexer/src/cli.ts              # live mainnet snapshot
 bun run apps/indexer/src/indexes-cli.ts pre8 1000   # indexes + priced execution plan
 bun run apps/indexer/src/mirror-cli.ts <wallet> pre8 3000   # build + simulate real transactions
+bun run apps/indexer/src/index.ts            # indexing job (INDEXER_ONCE=1 for one pass)
+bun run apps/api/src/index.ts                # HTTP API on :3000
 ```
 
 `SOLANA_RPC_URL` overrides the default public endpoint.
@@ -72,12 +76,33 @@ outbound calls go through a token bucket, and cache misses are single-flighted.
 cumulative volume and 60 weeks of holder counts per symbol. Volume is
 cumulative; `dailyVolume()` differences it.
 
+**Free RPC endpoints refuse the obvious holder query.** `getTokenLargestAccounts`
+returns 429 from every public endpoint tested, even for a single call, and
+`getProgramAccounts` over 68,000 accounts is worse. Traders are reconstructed
+from transaction history instead, attributed to the signer so liquidity pools
+do not appear as traders. This is also the better source: it finds people who
+trade rather than whales who hold, and each transaction carries both legs.
+
 **Routes do not always fit in a transaction.** An unconstrained PreStocks route
 can compile to 1335 bytes against a 1232-byte limit, and some venues reject a
 swap in simulation that quoted cleanly. `packages/tx` answers both with a retry
 ladder: tighten `maxAccounts`, then exclude the venue that rejected the leg,
 then fall back to direct routes. Measured on mainnet, this fills all eight legs
 of the PRE8 basket where a single unconstrained attempt fills five.
+
+## API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/market` | Latest prices, basis, liquidity, active fee, pending fee change |
+| `GET /api/indexes` | All indexes with current weights and level |
+| `GET /api/indexes/:id` | One index with its level history |
+| `GET /api/leaderboard?hours=24` | Wallets ranked by flow-adjusted return |
+| `POST /api/mirror/plan` | Price a basket against live depth, before any wallet opens |
+| `POST /api/mirror/build` | Unsigned versioned transactions for `signAllTransactions` |
+
+Verified end to end on mainnet: `POST /api/mirror/build` for the eight-token
+PRE8 basket returns seven transactions, and all seven simulate successfully.
 
 ## Mirroring
 

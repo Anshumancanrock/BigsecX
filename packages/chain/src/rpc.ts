@@ -39,15 +39,19 @@ export class Rpc {
   constructor(options: RpcOptions) {
     this.#url = options.url;
     this.#maxRetries = options.maxRetries ?? 4;
-    this.#timeoutMs = options.timeoutMs ?? 20_000;
+    this.#timeoutMs = options.timeoutMs ?? 45_000;
   }
 
-  async call<T>(method: string, params: unknown[] = []): Promise<T> {
-    const body = JSON.stringify({ jsonrpc: "2.0", id: ++this.#id, method, params });
-
+  /**
+   * POST a payload with retry on the statuses public endpoints use to shed
+   * load. Shared by single and batch calls so both get the same treatment --
+   * a batch is exactly as likely to be rate limited as a call.
+   */
+  async #send(label: string, body: string): Promise<unknown> {
     let lastError: Error | null = null;
+
     for (let attempt = 0; attempt <= this.#maxRetries; attempt++) {
-      if (attempt > 0) await sleep(250 * 2 ** (attempt - 1));
+      if (attempt > 0) await sleep(400 * 2 ** (attempt - 1));
 
       try {
         const response = await fetch(this.#url, {
@@ -59,24 +63,26 @@ export class Rpc {
 
         // Public endpoints rate limit hard; treat that as retryable.
         if (response.status === 429 || response.status >= 500) {
-          lastError = new RpcFailure(method, null, `HTTP ${response.status}`);
+          lastError = new RpcFailure(label, null, `HTTP ${response.status}`);
           continue;
         }
-        if (!response.ok) {
-          throw new RpcFailure(method, null, `HTTP ${response.status}`);
-        }
-
-        const json = (await response.json()) as { result?: T; error?: RpcError };
-        if (json.error) {
-          throw new RpcFailure(method, json.error, `${method}: ${json.error.message}`);
-        }
-        return json.result as T;
+        if (!response.ok) throw new RpcFailure(label, null, `HTTP ${response.status}`);
+        return await response.json();
       } catch (error) {
         if (error instanceof RpcFailure && error.rpcError) throw error;
         lastError = error as Error;
       }
     }
-    throw new RpcFailure(method, null, `${method} failed after retries: ${lastError?.message}`);
+    throw new RpcFailure(label, null, `${label} failed after retries: ${lastError?.message}`);
+  }
+
+  async call<T>(method: string, params: unknown[] = []): Promise<T> {
+    const body = JSON.stringify({ jsonrpc: "2.0", id: ++this.#id, method, params });
+    const json = (await this.#send(method, body)) as { result?: T; error?: RpcError };
+    if (json.error) {
+      throw new RpcFailure(method, json.error, `${method}: ${json.error.message}`);
+    }
+    return json.result as T;
   }
 
   /** Batch several calls into one HTTP request. */
@@ -89,19 +95,10 @@ export class Rpc {
       params: c.params ?? [],
     }));
 
-    const response = await fetch(this.#url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(this.#timeoutMs),
-    });
-    if (!response.ok) throw new RpcFailure("batch", null, `HTTP ${response.status}`);
-
-    const results = (await response.json()) as {
-      id: number;
-      result?: T;
-      error?: RpcError;
-    }[];
+    const results = (await this.#send(
+      `batch(${calls[0]?.method ?? "?"} x${calls.length})`,
+      JSON.stringify(payload),
+    )) as { id: number; result?: T; error?: RpcError }[];
     // Batch responses may arrive out of order; restore the request order.
     const byId = new Map(results.map((r) => [r.id, r]));
     return payload.map((p) => {

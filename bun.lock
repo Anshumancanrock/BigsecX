@@ -6,10 +6,23 @@
       "name": "prestocks-workspace",
       "dependencies": {
         "@solana/web3.js": "^1.99.0",
+        "hono": "^4.13.8",
       },
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.6.0",
+      },
+    },
+    "apps/api": {
+      "name": "@ps/api",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ps/chain": "workspace:*",
+        "@ps/core": "workspace:*",
+        "@ps/db": "workspace:*",
+        "@ps/market": "workspace:*",
+        "@ps/tx": "workspace:*",
+        "hono": "^4.13.8",
       },
     },
     "apps/indexer": {
@@ -18,7 +31,9 @@
       "dependencies": {
         "@ps/chain": "workspace:*",
         "@ps/core": "workspace:*",
+        "@ps/db": "workspace:*",
         "@ps/market": "workspace:*",
+        "@ps/tx": "workspace:*",
       },
     },
     "packages/chain": {
@@ -35,6 +50,9 @@
     "packages/db": {
       "name": "@ps/db",
       "version": "0.1.0",
+      "dependencies": {
+        "@ps/core": "workspace:*",
+      },
     },
     "packages/market": {
       "name": "@ps/market",
@@ -59,6 +77,8 @@
     "@noble/curves": ["@noble/curves@1.9.7", "", { "dependencies": { "@noble/hashes": "1.8.0" } }, "sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw=="],
 
     "@noble/hashes": ["@noble/hashes@1.8.0", "", {}, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
+
+    "@ps/api": ["@ps/api@workspace:apps/api"],
 
     "@ps/chain": ["@ps/chain@workspace:packages/chain"],
 
@@ -125,6 +145,8 @@
     "eyes": ["eyes@0.1.8", "", {}, "sha512-GipyPsXO1anza0AOZdy69Im7hGFCNB7Y/NGjDlZGJ3GJJLtwNSb2vrzYrTYJRrRloVx7pl+bhUaTB8yiccPvFQ=="],
 
     "fast-stable-stringify": ["fast-stable-stringify@1.0.0", "", {}, "sha512-wpYMUmFu5f00Sm0cj2pfivpmawLZ0NKdviQ4w9zJeR8JVtOpOxHmLaJuj0vxvGqMJQWyP/COUkF75/57OKyRag=="],
+
+    "hono": ["hono@4.13.8", "", {}, "sha512-/Gng7NfoykZl2pjukW5Z6+8Yxm3BPRf86GTbQnt0SbySkvax4fyL4H3HhY1cCpBGmiW9XDRFzRV+CXK2W8QudQ=="],
 
     "humanize-ms": ["humanize-ms@1.2.1", "", { "dependencies": { "ms": "^2.0.0" } }, "sha512-Fl70vYtsAFb/C06PTS9dZBo7ihau+Tu/DNCk/OyHhea07S+aeMWpFFkUaXRa8fI+ScZbEI8dfSxwY7gxZ9SAVQ=="],
 
