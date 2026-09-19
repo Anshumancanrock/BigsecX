@@ -57,30 +57,62 @@ describe("judgeLeg", () => {
 });
 
 describe("transferFeeCostUsd", () => {
-  test("prices the live 50 bps fee", () => {
-    expect(transferFeeCostUsd(1_000, 50)).toBe(5);
+  // The fee is assessed on the GROSS the pool sends, and the aggregator quotes
+  // the NET, so recovering the fee means grossing up. A mainnet simulation
+  // pinned the arithmetic: gross 488,641,136, fee 2,443,206, net 486,197,930.
+  test("recovers the fee observed in the mainnet simulation", () => {
+    const net = 486_197_930;
+    const fee = transferFeeCostUsd(net, 50);
+    expect(fee).toBeCloseTo(2_443_206, 0);
+    expect(net + fee).toBeCloseTo(488_641_136, 0);
   });
 
-  test("doubles once epoch 1039 lands", () => {
-    expect(transferFeeCostUsd(1_000, 100)).toBe(10);
+  test("grosses up rather than multiplying the net", () => {
+    // The naive net x rate would give exactly 5; the correct answer is larger.
+    expect(transferFeeCostUsd(1_000, 50)).toBeCloseTo(5.0251256, 6);
+    expect(transferFeeCostUsd(1_000, 50)).toBeGreaterThan(5);
+  });
+
+  test("roughly doubles once epoch 1039 lands", () => {
+    expect(transferFeeCostUsd(1_000, 100)).toBeCloseTo(10.10101, 4);
+  });
+
+  test("is zero when no fee is configured", () => {
+    expect(transferFeeCostUsd(1_000, 0)).toBe(0);
   });
 });
 
 describe("summarize", () => {
-  const leg = (usd: number, impact: number, fee: number): PlannedLeg => ({
+  const leg = (usd: number, impact: number, cost: number | null): PlannedLeg => ({
     order: { symbol: "X", side: "buy", usd, fromWeight: 0, toWeight: 1 },
     usd,
     priceImpact: impact,
-    transferFeeUsd: fee,
+    expectedOutUi: 1,
+    effectivePriceUsd: usd,
+    referencePriceUsd: usd,
+    costVsReference: cost,
+    transferFeeUsd: transferFeeCostUsd(usd, 50),
     note: null,
   });
 
-  test("totals impact and fee into an all-in cost", () => {
-    const plan = summarize([leg(1_000, 0.01, 5), leg(1_000, 0.02, 5)], []);
+  test("totals realized cost from measured fills", () => {
+    const plan = summarize([leg(1_000, 0.005, 0.01), leg(1_000, 0.005, 0.02)], []);
     expect(plan.totalUsd).toBe(2_000);
-    expect(plan.totalImpactUsd).toBeCloseTo(30, 9);
-    expect(plan.totalTransferFeeUsd).toBe(10);
-    expect(plan.costFraction).toBeCloseTo(40 / 2_000, 9);
+    expect(plan.totalCostUsd).toBeCloseTo(30, 9);
+    expect(plan.costFraction).toBeCloseTo(30 / 2_000, 9);
+  });
+
+  test("does not add the transfer fee on top of realized cost", () => {
+    // The quote is already net of the fee. Counting it again would push the
+    // total to 30 + fees; it must stay at the measured 30.
+    const plan = summarize([leg(1_000, 0.005, 0.01), leg(1_000, 0.005, 0.02)], []);
+    expect(plan.totalTransferFeeUsd).toBeGreaterThan(0);
+    expect(plan.totalCostUsd).toBeCloseTo(30, 9);
+  });
+
+  test("falls back to price impact when cost could not be measured", () => {
+    const plan = summarize([leg(1_000, 0.03, null)], []);
+    expect(plan.totalCostUsd).toBeCloseTo(30, 9);
   });
 
   test("an empty plan costs nothing rather than dividing by zero", () => {

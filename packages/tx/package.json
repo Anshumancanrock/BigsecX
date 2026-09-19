@@ -1,0 +1,13 @@
+{
+  "name": "@ps/tx",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts", "./*": "./src/*.ts" },
+  "dependencies": {
+    "@ps/core": "workspace:*",
+    "@ps/market": "workspace:*",
+    "@solana/web3.js": "^1.99.0"
+  }
+}

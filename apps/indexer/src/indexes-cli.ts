@@ -11,6 +11,7 @@ import {
   buildIndex,
   definitionById,
   planRebalance,
+  transferFeeCostUsd,
   type IndexInput,
 } from "@ps/core";
 import { Rpc } from "@ps/chain";
@@ -96,16 +97,19 @@ const plan = await buildExecutionPlan(jupiter, {
 });
 
 console.log(
-  ["SIDE".padEnd(5), "SYMBOL".padEnd(11), "SIZE".padStart(12), "IMPACT".padStart(9), "FEE".padStart(9), "NOTE"].join(" "),
+  ["SIDE".padEnd(5), "SYMBOL".padEnd(11), "SIZE".padStart(11), "SHARES".padStart(11),
+   "FILL".padStart(11), "REF".padStart(11), "COST".padStart(8), "NOTE"].join(" "),
 );
 for (const leg of plan.legs) {
   console.log(
     [
       leg.order.side.padEnd(5),
       leg.order.symbol.padEnd(11),
-      usd(leg.usd).padStart(12),
-      pct(leg.priceImpact).padStart(9),
-      usd(leg.transferFeeUsd).padStart(9),
+      usd(leg.usd).padStart(11),
+      (leg.expectedOutUi === null ? "—" : leg.expectedOutUi.toFixed(4)).padStart(11),
+      (leg.effectivePriceUsd === null ? "—" : usd(leg.effectivePriceUsd)).padStart(11),
+      (leg.referencePriceUsd === null ? "—" : usd(leg.referencePriceUsd)).padStart(11),
+      (leg.costVsReference === null ? "—" : pct(leg.costVsReference)).padStart(8),
       leg.note ?? "",
     ].join(" "),
   );
@@ -117,13 +121,14 @@ for (const d of plan.deferred) {
 console.log("─".repeat(96));
 console.log(
   `Deployed ${usd(plan.totalUsd)} of ${usd(deployUsd)} · ` +
-    `impact ${usd(plan.totalImpactUsd)} · transfer fee ${usd(plan.totalTransferFeeUsd)} @ ${feeBps}bps · ` +
-    `all-in ${pct(plan.costFraction)}`,
+    `realized cost ${usd(plan.totalCostUsd)} (${pct(plan.costFraction)}), ` +
+    `of which ${usd(plan.totalTransferFeeUsd)} is the ${feeBps}bps transfer fee already inside the quote.`,
 );
 if (snapshot.pendingFeeChange) {
-  const after = plan.totalTransferFeeUsd * (snapshot.pendingFeeChange.toBps / feeBps);
+  const { fromBps, toBps, atEpoch } = snapshot.pendingFeeChange;
+  const after = plan.legs.reduce((sum, l) => sum + transferFeeCostUsd(l.usd, toBps), 0);
   console.log(
-    `At epoch ${snapshot.pendingFeeChange.atEpoch} the same basket pays ${usd(after)} in transfer fee.`,
+    `At epoch ${atEpoch} the fee goes ${fromBps}bps -> ${toBps}bps and the same basket pays ${usd(after)}.`,
   );
 }
 console.log();

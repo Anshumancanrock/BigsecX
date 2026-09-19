@@ -119,14 +119,20 @@ export function judgeLeg(probe: LegProbe, limits: ExecutionLimits = DEFAULT_LIMI
 }
 
 /**
- * Transfer fee cost of moving `usd` of a PreStock, in USD.
+ * Transfer fee embedded in a fill of `usd`, in USD.
  *
- * Charged on the token leg of every swap, in both directions, so a round trip
- * pays it twice. At the live 50 bps that is 1% before spread; from epoch 1039
- * it is 2%.
+ * The aggregator quotes net of this fee, so it is already paid inside the price
+ * a user sees. This computes it only so the UI can name the charge. The fee is
+ * assessed on the GROSS amount the pool sent, so recovering it from the net
+ * figure means grossing up first, not multiplying the net by the rate.
+ *
+ * Charged on the token leg of every swap in both directions, so a round trip
+ * pays it twice: 1% at the live 50 bps, and 2% once epoch 1039 lands.
  */
-export function transferFeeCostUsd(usd: number, feeBps: number): number {
-  return (usd * feeBps) / 10_000;
+export function transferFeeCostUsd(netUsd: number, feeBps: number): number {
+  if (feeBps <= 0) return 0;
+  const gross = (netUsd * 10_000) / (10_000 - feeBps);
+  return gross - netUsd;
 }
 
 /** Exact fee in raw base units, for display alongside a quote. */
@@ -134,11 +140,42 @@ export function transferFeeRaw(rawAmount: bigint, fee: TransferFee): bigint {
   return calculateFee(fee, rawAmount);
 }
 
+/**
+ * One leg, priced against a live quote.
+ *
+ * Cost is measured as the realized price versus a reference price, not
+ * assembled from parts. That choice is deliberate and was forced by a mainnet
+ * simulation: Jupiter's `outAmount` is already NET of the Token-2022 transfer
+ * fee. A simulated $500 buy quoted 486,197,930 base units and credited exactly
+ * 486,197,930 spendable units, with 2,443,206 withheld separately as the fee --
+ * 0.5000% of the gross the pool sent. Adding a fee line on top of that quote,
+ * which an earlier version of this module did, charges the user twice.
+ *
+ * So `transferFeeUsd` here is a disclosure, not an addend. The real cost of a
+ * leg is `costVsReference`, which contains spread, price impact and the fee
+ * together, because that is what the fill actually gives up.
+ */
 export interface PlannedLeg {
   readonly order: RebalanceOrder;
-  /** Size after any resize, in USD. */
+  /** Size actually sent, in USD, after any resize. */
   readonly usd: number;
+  /** Price impact as reported by the aggregator. */
   readonly priceImpact: number;
+  /** Shares received net of fee, in UI units. Null when not measurable. */
+  readonly expectedOutUi: number | null;
+  /** Price per UI share the quote implies, all-in. */
+  readonly effectivePriceUsd: number | null;
+  /** Mid price the cost is measured against. */
+  readonly referencePriceUsd: number | null;
+  /**
+   * Realized cost as a fraction of notional: spread, impact and transfer fee
+   * combined. Positive means worse than reference.
+   */
+  readonly costVsReference: number | null;
+  /**
+   * Transfer fee already embedded in the quote, in USD. Shown so a user can
+   * see what the asset charges; never added to the total.
+   */
   readonly transferFeeUsd: number;
   readonly note: string | null;
 }
@@ -147,27 +184,38 @@ export interface ExecutionPlan {
   readonly legs: readonly PlannedLeg[];
   readonly deferred: readonly { readonly symbol: string; readonly usd: number; readonly reason: string }[];
   readonly totalUsd: number;
-  readonly totalImpactUsd: number;
+  /** Total realized cost in USD, from measured fills. */
+  readonly totalCostUsd: number;
+  /** Transfer fee contained within that cost, for disclosure. */
   readonly totalTransferFeeUsd: number;
-  /** All-in cost as a fraction of notional traded. */
+  /** Realized cost as a fraction of notional traded. */
   readonly costFraction: number;
 }
 
-/** Aggregate judged legs into a plan with an honest total cost. */
+/**
+ * Aggregate judged legs into a plan.
+ *
+ * Legs whose cost could not be measured fall back to price impact, which
+ * understates them; they are still counted rather than dropped, because a leg
+ * silently excluded from a total is worse than one counted imprecisely.
+ */
 export function summarize(
   legs: readonly PlannedLeg[],
   deferred: readonly { readonly symbol: string; readonly usd: number; readonly reason: string }[],
 ): ExecutionPlan {
   const totalUsd = legs.reduce((sum, l) => sum + l.usd, 0);
-  const totalImpactUsd = legs.reduce((sum, l) => sum + l.usd * l.priceImpact, 0);
+  const totalCostUsd = legs.reduce(
+    (sum, l) => sum + l.usd * (l.costVsReference ?? l.priceImpact),
+    0,
+  );
   const totalTransferFeeUsd = legs.reduce((sum, l) => sum + l.transferFeeUsd, 0);
 
   return {
     legs,
     deferred,
     totalUsd,
-    totalImpactUsd,
+    totalCostUsd,
     totalTransferFeeUsd,
-    costFraction: totalUsd > 0 ? (totalImpactUsd + totalTransferFeeUsd) / totalUsd : 0,
+    costFraction: totalUsd > 0 ? totalCostUsd / totalUsd : 0,
   };
 }

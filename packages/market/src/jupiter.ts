@@ -81,6 +81,24 @@ export interface QuoteRequest {
   readonly swapMode?: "ExactIn" | "ExactOut";
   /** Restricting to direct routes lowers the account count in the built tx. */
   readonly onlyDirectRoutes?: boolean;
+  /**
+   * Cap the accounts a route may touch.
+   *
+   * The binding constraint on a basket is the 1232-byte transaction, and a
+   * multi-hop PreStocks route can need 1335 bytes on its own. Constraining the
+   * route at quote time is the supported way to keep it executable; the
+   * alternative, discovering it does not fit after building, wastes a quote
+   * and often has no remedy.
+   */
+  readonly maxAccounts?: number;
+  /**
+   * Venue labels to route around, as they appear in `routePlan[].swapInfo.label`.
+   *
+   * Used to retry a leg whose chosen venue rejected the swap in simulation.
+   * Some PreStocks venues fail on sizes or states the quote does not predict,
+   * and routing around one is far better than dropping the leg.
+   */
+  readonly excludeDexes?: readonly string[];
 }
 
 export class JupiterClient {
@@ -124,12 +142,68 @@ export class JupiterClient {
       swapMode: request.swapMode ?? "ExactIn",
     });
     if (request.onlyDirectRoutes) params.set("onlyDirectRoutes", "true");
+    if (request.maxAccounts !== undefined) params.set("maxAccounts", String(request.maxAccounts));
+    if (request.excludeDexes?.length) params.set("excludeDexes", request.excludeDexes.join(","));
 
     const url = `${this.base}/swap/v1/quote?${params.toString()}`;
     return this.#cache.fetch(`quote:${params.toString()}`, ttlMs, () =>
       getJson<Quote>(url, { upstream: "jupiter-quote", limiter: this.#limiter }),
     );
   }
+}
+
+export interface SwapInstructionsOptions {
+  readonly userPublicKey: string;
+  readonly wrapAndUnwrapSol?: boolean;
+  readonly dynamicComputeUnitLimit?: boolean;
+  /** Reuse an existing wrapped-SOL account instead of creating one per swap. */
+  readonly useSharedAccounts?: boolean;
+}
+
+export class JupiterSwapError extends Error {
+  constructor(message: string, readonly status: number | null) {
+    super(message);
+    this.name = "JupiterSwapError";
+  }
+}
+
+/**
+ * Ask Jupiter for the raw instructions behind a quote.
+ *
+ * Preferred over `/swap`, which returns a finished transaction: a basket needs
+ * several swaps packed together, and that is only possible with the
+ * instructions in hand. The response also carries
+ * `addressesByLookupTableAddress`, so the lookup tables come back inline
+ * rather than costing an RPC call each.
+ *
+ * Deliberately not cached. These are signed and broadcast, and a stale
+ * instruction set would route against prices that have moved.
+ */
+export async function fetchSwapInstructions<T>(
+  quote: Quote,
+  options: SwapInstructionsOptions,
+  base: string = LITE,
+): Promise<T> {
+  const response = await fetch(`${base}/swap/v1/swap-instructions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      quoteResponse: quote,
+      userPublicKey: options.userPublicKey,
+      wrapAndUnwrapSol: options.wrapAndUnwrapSol ?? true,
+      dynamicComputeUnitLimit: options.dynamicComputeUnitLimit ?? true,
+      useSharedAccounts: options.useSharedAccounts ?? true,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!response.ok) {
+    throw new JupiterSwapError(
+      `swap-instructions failed: HTTP ${response.status} ${await response.text()}`,
+      response.status,
+    );
+  }
+  return (await response.json()) as T;
 }
 
 /** Venue labels seen carrying PreStocks flow, from live route plans. */
