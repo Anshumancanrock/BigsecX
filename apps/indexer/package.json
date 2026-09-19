@@ -1,0 +1,11 @@
+{
+  "name": "@ps/indexer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ps/core": "workspace:*",
+    "@ps/chain": "workspace:*",
+    "@ps/market": "workspace:*"
+  }
+}

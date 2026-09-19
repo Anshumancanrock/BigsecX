@@ -1,0 +1,16 @@
+{
+  "name": "prestocks-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun ./node_modules/typescript/lib/tsc.js --noEmit -p tsconfig.json",
+    "api": "bun run --hot apps/api/src/index.ts",
+    "indexer": "bun run apps/indexer/src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}
