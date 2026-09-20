@@ -29,6 +29,8 @@ export interface JobResult {
   readonly tradesWritten: number;
   readonly tradersSeen: number;
   readonly indexesWritten: number;
+  /** Signatures whose fetch failed; their windows will be retried. */
+  readonly missedSignatures: number;
   /** Set when trade indexing failed but the snapshot still succeeded. */
   readonly tradeError: string | null;
 }
@@ -114,6 +116,7 @@ export async function runJob(
   // Held until the trades are durably written, so a failure between parsing
   // and writing does not skip the window on the next run.
   const pendingCursors: { mint: string; signature: string }[] = [];
+  let missedSignatures = 0;
 
   try {
     const mints = snapshot.tokens.map((t) => t.token.mint);
@@ -129,20 +132,35 @@ export async function runJob(
       });
       if (signatures.length === 0) continue;
 
-      const trades = await fetchTrades(
+      const { trades, missed } = await fetchTrades(
         rpc,
         signatures.filter((s) => !s.err).map((s) => s.signature),
         watched,
       );
 
-      // Advance the cursor only after the window has been parsed, and only
-      // when the scan reached back to the previous cursor. Advancing on a
-      // partial scan, or before parsing, loses those transactions for good --
-      // nothing ever looks at that range again.
+      // Advance the cursor only after the window has been parsed. Advancing
+      // before that loses those transactions for good, since nothing looks at
+      // the range again.
+      //
+      // On a bootstrap run there is no cursor and therefore no gap to
+      // preserve: the scan simply defines where indexing starts, so the
+      // cursor is set whether or not the scan ran out of pages. Requiring
+      // completeness here is a trap -- these mints have unbounded history, so
+      // a first run always exhausts its page budget, the cursor is never
+      // written, and every later run re-scans the same signatures forever.
+      //
+      // Once a cursor exists, completeness does matter: a partial scan means
+      // the window between this page and the old cursor was never read, and
+      // moving the cursor past it would skip those transactions permanently.
+      // A batch that failed to fetch leaves a hole in this window, so the
+      // cursor stays put and the window is read again next pass. Writes are
+      // keyed on signature, so re-reading costs a request, not a duplicate.
       const newest = signatures[0];
-      if (newest && complete) {
+      const isBootstrap = cursor === null;
+      if (newest && missed === 0 && (complete || isBootstrap)) {
         pendingCursors.push({ mint, signature: newest.signature });
       }
+      if (missed > 0) missedSignatures += missed;
 
       for (const trade of trades) {
         const token = byMint(trade.mint);
@@ -200,7 +218,15 @@ export async function runJob(
     indexesWritten++;
   }
 
-  return { snapshotId, snapshot, tradesWritten, tradersSeen, indexesWritten, tradeError };
+  return {
+    snapshotId,
+    snapshot,
+    tradesWritten,
+    tradersSeen,
+    indexesWritten,
+    missedSignatures,
+    tradeError,
+  };
 }
 
 function priceMapFor(store: Store, snapshotId: number): Map<string, number> {

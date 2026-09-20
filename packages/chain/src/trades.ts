@@ -197,9 +197,10 @@ export async function fetchTrades(
   signatures: readonly string[],
   watchedMints: ReadonlySet<string>,
   options: { readonly batchSize?: number } = {},
-): Promise<Trade[]> {
+): Promise<{ readonly trades: Trade[]; readonly missed: number }> {
   const batchSize = options.batchSize ?? 10;
   const trades: Trade[] = [];
+  let missed = 0;
 
   for (let i = 0; i < signatures.length; i += batchSize) {
     const slice = signatures.slice(i, i + batchSize);
@@ -214,15 +215,19 @@ export async function fetchTrades(
         })),
       );
     } catch {
-      // Losing a batch costs coverage, not correctness: these signatures stay
-      // unindexed and will be picked up on a later pass.
+      // Report the loss upward. The caller must not advance its cursor past a
+      // window it failed to read, or these signatures are never looked at
+      // again and the gap is permanent.
+      missed += slice.length;
       continue;
     }
 
     slice.forEach((signature, j) => {
       const response = responses[j];
+      // A null response means the node has no record of it; nothing to index,
+      // and nothing lost.
       if (response) trades.push(...extractTrades(signature, response, watchedMints));
     });
   }
-  return trades;
+  return { trades, missed };
 }

@@ -23,6 +23,7 @@ async function tick(): Promise<void> {
         `epoch ${result.snapshot.epoch} · +${result.tradesWritten} trades ` +
         `from ${result.tradersSeen} wallets · ${result.indexesWritten} indexes · ` +
         `${Date.now() - started}ms` +
+        (result.missedSignatures > 0 ? ` · ${result.missedSignatures} signatures retried next pass` : "") +
         (result.tradeError ? ` · trades degraded: ${result.tradeError}` : ""),
     );
   } catch (error) {

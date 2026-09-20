@@ -19,7 +19,7 @@ import {
   type TradeRecord,
   type Weight,
 } from "@ps/core";
-import { buildExecutionPlan } from "@ps/market";
+import { Cache, buildExecutionPlan } from "@ps/market";
 import { buildMirrorBundle, findUncoveredSells, getSellableBalances } from "@ps/tx";
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
 import { createServices } from "./context.ts";
@@ -47,15 +47,27 @@ app.onError((error, c) => {
   return c.json({ error: "internal error" }, 500);
 });
 
-/** Cached market view. Snapshots are expensive and change slowly. */
-let cached: { snapshot: Awaited<ReturnType<typeof takeSnapshot>>; at: number } | null = null;
+/**
+ * Cached market view.
+ *
+ * Uses the shared Cache rather than a bare timestamp so concurrent requests
+ * collapse into one snapshot instead of each triggering their own, and so an
+ * upstream 429 -- which both the issuer API and Jupiter return readily --
+ * serves the last good snapshot rather than failing the request. During a
+ * demo a slightly old price beats an error page.
+ */
+const marketCache = new Cache(4);
 const MARKET_TTL_MS = 20_000;
+/** How long a snapshot may be served after expiry when upstreams are failing. */
+const MARKET_STALE_MS = 10 * 60_000;
 
-async function market() {
-  if (cached && Date.now() - cached.at < MARKET_TTL_MS) return cached.snapshot;
-  const snapshot = await takeSnapshot(services.rpc, services.jupiter);
-  cached = { snapshot, at: Date.now() };
-  return snapshot;
+function market() {
+  return marketCache.fetch(
+    "snapshot",
+    MARKET_TTL_MS,
+    () => takeSnapshot(services.rpc, services.jupiter),
+    MARKET_STALE_MS,
+  );
 }
 
 function indexInputs(snapshot: Awaited<ReturnType<typeof takeSnapshot>>): IndexInput[] {

@@ -58,6 +58,38 @@ interface CacheEntry<T> {
 export class Cache {
   readonly #entries = new Map<string, CacheEntry<unknown>>();
   readonly #inFlight = new Map<string, Promise<unknown>>();
+  readonly #maxEntries: number;
+
+  /**
+   * @param maxEntries Bound on retained entries. Quote keys embed the trade
+   * amount, so an API serving arbitrary sizes mints a new key per request and
+   * an unbounded map would retain every one of them for the life of the
+   * process -- expired entries included, since expiry only triggers a refetch
+   * and never reclaims anything.
+   */
+  constructor(maxEntries = 2_000) {
+    this.#maxEntries = maxEntries;
+  }
+
+  /**
+   * Evict oldest-first until the map is back within its bound.
+   *
+   * Map iterates in insertion order, so this is a first-in-first-out policy
+   * rather than a true LRU. For a cache whose entries expire in seconds the
+   * difference does not matter, and it avoids tracking access times.
+   */
+  #evict(): void {
+    if (this.#entries.size <= this.#maxEntries) return;
+    const excess = this.#entries.size - this.#maxEntries;
+    let removed = 0;
+    for (const key of this.#entries.keys()) {
+      if (removed >= excess) break;
+      // Never evict something a caller is currently waiting on.
+      if (this.#inFlight.has(key)) continue;
+      this.#entries.delete(key);
+      removed++;
+    }
+  }
 
   async fetch<T>(
     key: string,
@@ -79,6 +111,7 @@ export class Cache {
           expiresAt: Date.now() + ttlMs,
           staleUntil: Date.now() + ttlMs + staleMs,
         });
+        this.#evict();
         return value;
       })
       .catch((error: unknown) => {
@@ -93,10 +126,9 @@ export class Cache {
     return promise;
   }
 
-  /** Age of a cached value in milliseconds, or null if absent. */
-  ageMs(key: string, ttlMs: number): number | null {
-    const entry = this.#entries.get(key);
-    return entry ? Date.now() - (entry.expiresAt - ttlMs) : null;
+  /** Number of retained entries. Exposed for tests and diagnostics. */
+  get size(): number {
+    return this.#entries.size;
   }
 
   clear(): void {
