@@ -125,6 +125,17 @@ const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX idx_constituent_symbol ON strategy_constituent (symbol);
   `,
+  // 6: snapshot timestamps in milliseconds.
+  //
+  // Seconds were too coarse in two ways. Two snapshots inside the same second
+  // collided on the unique taken_at, so the second silently overwrote the
+  // first's prices and the index level then chained against itself and
+  // flatlined for that interval. And a create response echoing an in-memory
+  // Date disagreed with every later read, because the stored value had lost
+  // its milliseconds.
+  `
+  UPDATE market_snapshot SET taken_at = taken_at * 1000;
+  `,
 ];
 
 export function migrate(db: Database): number {

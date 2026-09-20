@@ -84,6 +84,8 @@ export interface FakeOptions {
   readonly frozen?: readonly string[];
   /** Set to exercise the oracle-available branch. */
   readonly pythApiKey?: string;
+  /** Make the issuer statistics endpoint fail. */
+  readonly statsThrow?: boolean;
   /** Make the price feed fail, to exercise degraded paths. */
   readonly pricesThrow?: boolean;
   readonly priceUsd?: Readonly<Record<string, number>>;
@@ -196,6 +198,36 @@ export function fakeJupiter(options: FakeOptions = {}) {
 
 let dbCounter = 0;
 
+/**
+ * Issuer statistics, shaped as the real endpoint returns them: cumulative
+ * volume by day, holder counts by week.
+ */
+export function fakeIssuer(options: FakeOptions = {}) {
+  return {
+    tokens: async () => [],
+    stats: async () => {
+      if (options.statsThrow) throw new Error("prestocks: HTTP 429");
+      const symbols = UNIVERSE.map((t) => t.symbol);
+      // Three days of cumulative volume rising by 100 per day per symbol.
+      const volume = [0, 1, 2, 3].map((day) => ({
+        date: `2026-09-1${day}`,
+        ...Object.fromEntries(symbols.map((s) => [s, day * 100])),
+      }));
+      const holders = [0, 1].map((week) => ({
+        week: `2026-09-0${week + 1}`,
+        ...Object.fromEntries(symbols.map((s) => [s, (week + 1) * 50])),
+      }));
+      return {
+        volume,
+        holders,
+        launchDates: Object.fromEntries(symbols.map((s) => [s, "2025-08-07T02:00:00Z"])),
+        volumeSymbols: symbols,
+        holderSymbols: symbols,
+      };
+    },
+  };
+}
+
 export function makeServices(options: FakeOptions = {}): Services & { store: Store } {
   PAUSED.clear();
   for (const symbol of options.paused ?? []) PAUSED.add(symbol);
@@ -205,7 +237,7 @@ export function makeServices(options: FakeOptions = {}): Services & { store: Sto
   return {
     rpc: fakeRpc(options) as unknown as Services["rpc"],
     jupiter: fakeJupiter(options) as unknown as Services["jupiter"],
-    issuer: {} as Services["issuer"],
+    issuer: fakeIssuer(options) as unknown as Services["issuer"],
     // No key in tests, so the oracle reports itself unavailable and the
     // routes fall back to the issuer mark.
     pyth: new PythClient(options.pythApiKey),

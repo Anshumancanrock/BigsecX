@@ -114,7 +114,9 @@ export class Store {
     readonly epoch: number;
     readonly prices: readonly PriceRow[];
   }): number {
-    const takenAt = Math.floor(args.takenAt.getTime() / 1000);
+    // Milliseconds. See migration 6: seconds let two snapshots inside the
+    // same second collide on the unique index.
+    const takenAt = args.takenAt.getTime();
 
     return this.#db.transaction(() => {
       this.#db
@@ -162,7 +164,7 @@ export class Store {
     const row = this.#db
       .query("SELECT id, taken_at, epoch FROM market_snapshot ORDER BY taken_at DESC LIMIT 1")
       .get() as { id: number; taken_at: number; epoch: number } | null;
-    return row ? { id: row.id, takenAt: new Date(row.taken_at * 1000), epoch: row.epoch } : null;
+    return row ? { id: row.id, takenAt: new Date(row.taken_at), epoch: row.epoch } : null;
   }
 
   /** The snapshot closest to, but not after, `at`. */
@@ -172,10 +174,8 @@ export class Store {
         `SELECT id, taken_at, epoch FROM market_snapshot
          WHERE taken_at <= ? ORDER BY taken_at DESC LIMIT 1`,
       )
-      .get(Math.floor(at.getTime() / 1000)) as
-      | { id: number; taken_at: number; epoch: number }
-      | null;
-    return row ? { id: row.id, takenAt: new Date(row.taken_at * 1000), epoch: row.epoch } : null;
+      .get(at.getTime()) as { id: number; taken_at: number; epoch: number } | null;
+    return row ? { id: row.id, takenAt: new Date(row.taken_at), epoch: row.epoch } : null;
   }
 
   writeTrades(trades: readonly TradeRow[]): number {
@@ -417,6 +417,6 @@ export class Store {
          WHERE l.index_id = ? ORDER BY s.taken_at DESC LIMIT ?`,
       )
       .all(indexId, limit) as { takenAt: number; level: number }[];
-    return rows.reverse().map((r) => ({ takenAt: new Date(r.takenAt * 1000), level: r.level }));
+    return rows.reverse().map((r) => ({ takenAt: new Date(r.takenAt), level: r.level }));
   }
 }

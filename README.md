@@ -123,6 +123,22 @@ of the PRE8 basket where a single unconstrained attempt fills five.
 Verified end to end on mainnet: `POST /api/mirror/build` for the eight-token
 PRE8 basket returns seven transactions, and all seven simulate successfully.
 
+## Assets
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/assets` | Every asset: price, dislocation, liquidity, volume, holders, holder growth |
+| `GET /api/assets/:symbol` | One asset with its volume and holder history |
+
+Activity comes from `prestocks.com/api/stats`, which is undocumented but
+public and carries the only long history this market has: 412 days of
+cumulative volume and 60 weeks of holder counts per symbol. Volume is
+cumulative upstream and is differenced into daily figures here; the newest
+row is the day in progress, so "latest" uses the last complete day.
+
+`activityAvailable` is stated on every response, because an empty volume
+column must read as an upstream failure rather than as nobody trading.
+
 ## Strategies
 
 A thematic index, a user's own basket and a portfolio someone copies are the

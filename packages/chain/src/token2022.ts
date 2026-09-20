@@ -112,15 +112,6 @@ function parseMint(mint: string, account: ParsedAccount | null): MintState {
   };
 }
 
-/** Fetch one mint's state. */
-export async function getMintState(rpc: Rpc, mint: string): Promise<MintState> {
-  const result = await rpc.call<{ value: ParsedAccount | null }>("getAccountInfo", [
-    mint,
-    { encoding: "jsonParsed" },
-  ]);
-  return parseMint(mint, result.value);
-}
-
 /**
  * Fetch several mints in one round trip.
  *
@@ -141,38 +132,4 @@ export async function getMintStates(
     states.set(mint, parseMint(mint, result.value[i] ?? null));
   });
   return states;
-}
-
-/** A wallet's raw balance in one mint. */
-export interface TokenPosition {
-  readonly mint: string;
-  readonly tokenAccount: string;
-  readonly rawAmount: bigint;
-}
-
-/**
- * Read a wallet's PreStocks positions.
- *
- * Deliberately returns raw amounts. The RPC also reports a `uiAmount`, and for
- * a scaled mint that field is already multiplier-adjusted -- but it is a float
- * the node computed, and mixing it with our own conversions would give two
- * sources of truth for the same number. Convert from raw at the edge instead.
- */
-export async function getPositions(
-  rpc: Rpc,
-  owner: string,
-  programId: string,
-): Promise<TokenPosition[]> {
-  const result = await rpc.call<{
-    value: {
-      pubkey: string;
-      account: { data: { parsed: { info: { mint: string; tokenAmount: { amount: string } } } } };
-    }[];
-  }>("getTokenAccountsByOwner", [owner, { programId }, { encoding: "jsonParsed" }]);
-
-  return result.value.map((entry) => ({
-    mint: entry.account.data.parsed.info.mint,
-    tokenAccount: entry.pubkey,
-    rawAmount: BigInt(entry.account.data.parsed.info.tokenAmount.amount),
-  }));
 }

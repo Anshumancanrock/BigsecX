@@ -33,6 +33,7 @@ import { Unauthorized } from "./auth.ts";
 import { throttle } from "./throttle.ts";
 import { buildForTarget } from "./build-guards.ts";
 import { registerCopyRoutes } from "./copy.ts";
+import { registerAssetRoutes } from "./assets.ts";
 import { readPortfolio, registerPortfolioRoutes } from "./portfolio.ts";
 import { registerStrategyRoutes } from "./strategies.ts";
 import { registerTraderRoutes } from "./traders.ts";
@@ -57,6 +58,7 @@ app.use("/*", cors());
 // cached market read does.
 app.use("/*", throttle());
 
+registerAssetRoutes(app, services, market);
 registerStrategyRoutes(app, services);
 registerPortfolioRoutes(app, services, market);
 registerTraderRoutes(app, services, market);

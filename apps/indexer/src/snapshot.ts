@@ -13,7 +13,6 @@ import {
   UNIVERSE,
   basis,
   basisLabel,
-  byMint,
   currentMultiplier,
   epochFee,
   pendingFeeChange,
@@ -160,9 +159,4 @@ export async function takeSnapshot(
     degraded,
     priceFeedError,
   };
-}
-
-/** Resolve a mint to its symbol for display. */
-export function symbolOf(mint: string): string {
-  return byMint(mint)?.symbol ?? mint.slice(0, 6);
 }

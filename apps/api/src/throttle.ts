@@ -42,6 +42,7 @@ const COSTS: readonly { readonly prefix: string; readonly cost: number }[] = [
   { prefix: "/api/traders", cost: 2 },
   { prefix: "/api/price-truth", cost: 2 },
   // Served from cache or the local database.
+  { prefix: "/api/assets", cost: 2 },
   { prefix: "/api/market", cost: 1 },
   { prefix: "/api/indexes", cost: 1 },
   { prefix: "/api/strategies", cost: 1 },

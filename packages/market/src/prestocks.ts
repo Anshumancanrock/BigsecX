@@ -98,6 +98,54 @@ export function dailyVolume(
   return out;
 }
 
+/**
+ * Daily volume for one symbol, oldest first.
+ *
+ * Differenced from the cumulative series the issuer publishes, so the last
+ * entry is the most recent complete day.
+ */
+export function volumeSeries(
+  stats: IssuerStats,
+  symbol: string,
+  days = 90,
+): { readonly date: string; readonly usd: number }[] {
+  const daily = dailyVolume(stats);
+  return daily
+    .slice(-days)
+    .map((row) => ({ date: row.date, usd: row.bySymbol[symbol] ?? 0 }));
+}
+
+/** Weekly holder count for one symbol, oldest first. */
+export function holderSeries(
+  stats: IssuerStats,
+  symbol: string,
+  weeks = 52,
+): { readonly week: string; readonly holders: number }[] {
+  return stats.holders
+    .slice(-weeks)
+    .map((row) => ({ week: row.week, holders: Number(row[symbol] ?? 0) }));
+}
+
+/**
+ * The most recent complete day's volume per symbol.
+ *
+ * The issuer's newest row is the day in progress, so it is not comparable
+ * with earlier full days; the one before it is.
+ */
+export function latestDailyVolume(stats: IssuerStats): Readonly<Record<string, number>> {
+  const daily = dailyVolume(stats);
+  return daily[daily.length - 2]?.bySymbol ?? daily[daily.length - 1]?.bySymbol ?? {};
+}
+
+/** Latest holder count per symbol. */
+export function latestHolders(stats: IssuerStats): Readonly<Record<string, number>> {
+  const row = stats.holders[stats.holders.length - 1];
+  if (!row) return {};
+  const out: Record<string, number> = {};
+  for (const symbol of stats.holderSymbols) out[symbol] = Number(row[symbol] ?? 0);
+  return out;
+}
+
 /** Week-over-week holder growth, as a fraction, per symbol. */
 export function holderGrowth(stats: IssuerStats): Readonly<Record<string, number | null>> {
   const rows = stats.holders;
