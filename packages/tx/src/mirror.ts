@@ -52,6 +52,13 @@ const ROUTE_LADDER: readonly { readonly maxAccounts: number; readonly onlyDirect
 const COMPUTE_MARGIN = 1.25;
 /** Per-transaction ceiling the runtime enforces. */
 const MAX_COMPUTE_UNITS = 1_400_000;
+/**
+ * Placeholder price used only while measuring.
+ *
+ * SetComputeUnitPrice encodes a u64 whatever the value, so the size measured
+ * with this is the size of the transaction carrying the real fee.
+ */
+const MAX_PRIORITY_FEE = 1_000_000;
 
 export interface MirrorLeg {
   readonly symbol: string;
@@ -207,9 +214,17 @@ export async function buildMirrorBundle(
   const groups: InstructionGroup[] = [];
   const groupSymbols: string[] = [];
   const groupComputeUnits: number[] = [];
-  // Jupiter's own compute-budget instructions are kept only for the priority
-  // fee; the unit limit is recomputed per transaction once packing is known.
-  let priorityFeeInstructions: readonly JupiterInstruction[] = [];
+  /**
+   * Jupiter's recommended priority fee per leg, in micro-lamports.
+   *
+   * Recorded per leg because the recommendations differ by an order of
+   * magnitude -- three legs quoted together returned 94,706, 911,344 and
+   * 532,844 -- and each transaction needs the highest of the legs it
+   * actually carries. An earlier version kept whichever leg had the longest
+   * budget array, which is every leg, so the first leg's fee was applied to
+   * all of them and the expensive routes shipped ten times underpriced.
+   */
+  const groupPriorityFees: number[] = [];
 
   const ladder = request.maxAccounts === undefined
     ? ROUTE_LADDER
@@ -248,7 +263,7 @@ export async function buildMirrorBundle(
         blockhash: request.blockhash,
         instructions: [
           ComputeBudgetProgram.setComputeUnitLimit({ units: MAX_COMPUTE_UNITS }),
-          ...priorityFee(built.budget).map(toInstruction),
+          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: MAX_PRIORITY_FEE }),
           ...built.group.instructions,
         ],
         lookupTables: built.group.lookupTables,
@@ -258,12 +273,10 @@ export async function buildMirrorBundle(
         continue;
       }
 
-      if (built.budget.length > priorityFeeInstructions.length) {
-        priorityFeeInstructions = built.budget;
-      }
       groups.push(built.group);
       groupSymbols.push(leg.symbol);
       groupComputeUnits.push(built.computeUnits);
+      groupPriorityFees.push(priorityFeeOf(built.budget));
       placed = true;
       break;
     }
@@ -282,11 +295,13 @@ export async function buildMirrorBundle(
     };
   }
 
-  // Pack against a placeholder unit limit. A SetComputeUnitLimit instruction
-  // is a fixed five bytes whatever the value, so the real limit can be
-  // substituted afterwards without changing how anything fits.
-  const placeholder = ComputeBudgetProgram.setComputeUnitLimit({ units: MAX_COMPUTE_UNITS });
-  const preamble = [placeholder, ...priorityFee(priorityFeeInstructions).map(toInstruction)];
+  // Pack against placeholder budget instructions. Both encode a fixed-width
+  // integer, so their serialized size does not depend on the value and the
+  // real numbers can be substituted afterwards without changing what fits.
+  const preamble = [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: MAX_COMPUTE_UNITS }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: MAX_PRIORITY_FEE }),
+  ];
 
   const { packed, oversized } = packGroups({
     payer,
@@ -320,9 +335,19 @@ export async function buildMirrorBundle(
 
     const deduped = dedupeWithinTransaction(entry.instructions);
 
+    // The highest fee among the legs sharing this transaction. They settle
+    // together, so the cheapest leg cannot be allowed to set the price for
+    // the expensive one it travels with.
+    const microLamports = entry.groupIndices.reduce(
+      (highest, i) => Math.max(highest, groupPriorityFees[i] ?? 0),
+      0,
+    );
+
     const withBudget = [
       ComputeBudgetProgram.setComputeUnitLimit({ units }),
-      ...priorityFee(priorityFeeInstructions).map(toInstruction),
+      ...(microLamports > 0
+        ? [ComputeBudgetProgram.setComputeUnitPrice({ microLamports })]
+        : []),
       // Replaces the placeholder preamble that packing compiled in.
       ...deduped,
     ];
@@ -350,14 +375,17 @@ export async function buildMirrorBundle(
 }
 
 /**
- * Keep only the priority-fee half of Jupiter's compute budget instructions.
+ * The priority fee Jupiter recommends for a leg, in micro-lamports per unit.
  *
- * The unit limit is ours to set once packing is known; the price per unit is
- * Jupiter's recommendation and worth keeping.
+ * SetComputeUnitLimit is discriminator 0x02 and SetComputeUnitPrice is 0x03,
+ * followed by a little-endian u64.
  */
-function priorityFee(instructions: readonly JupiterInstruction[]): readonly JupiterInstruction[] {
-  // SetComputeUnitLimit is discriminator 0x02; SetComputeUnitPrice is 0x03.
-  return instructions.filter((ix) => Buffer.from(ix.data, "base64")[0] === 0x03);
+function priorityFeeOf(instructions: readonly JupiterInstruction[]): number {
+  for (const instruction of instructions) {
+    const data = Buffer.from(instruction.data, "base64");
+    if (data[0] === 0x03 && data.length >= 9) return Number(data.readBigUInt64LE(1));
+  }
+  return 0;
 }
 
 function serialize(transaction: VersionedTransaction): string {

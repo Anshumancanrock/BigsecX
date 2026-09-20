@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   AddressLookupTableAccount,
+  ComputeBudgetProgram,
   Keypair,
   PublicKey,
   TransactionInstruction,
@@ -298,5 +299,42 @@ describe("sell coverage", () => {
   test("ignores buy legs", () => {
     const legs = [{ symbol: "OPENAI", side: "buy" as const, usd: 1e9 }];
     expect(findUncoveredSells(legs, balance(0), prices)).toHaveLength(0);
+  });
+});
+
+describe("compute budget encoding", () => {
+  /**
+   * The budget instructions are substituted after packing, so their
+   * serialized size must not depend on the values chosen. If it did, a
+   * transaction measured as fitting could overflow once the real numbers
+   * went in.
+   */
+  test("budget instruction size is independent of its value", () => {
+    const sizes = new Set<number>();
+    for (const units of [1, 200_000, 1_400_000]) {
+      sizes.add(ComputeBudgetProgram.setComputeUnitLimit({ units }).data.length);
+    }
+    expect(sizes.size).toBe(1);
+
+    const priceSizes = new Set<number>();
+    for (const microLamports of [1, 94_706, 911_344, 4_000_000_000]) {
+      priceSizes.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports }).data.length);
+    }
+    expect(priceSizes.size).toBe(1);
+  });
+
+  test("a priority fee is decoded from its little-endian u64", () => {
+    // Regression: the fee was selected by comparing array lengths, which are
+    // equal for every leg, so the first leg's fee was applied to all of them.
+    // Three real legs quoted together returned 94,706, 911,344 and 532,844 --
+    // an order of magnitude apart, so the expensive routes shipped
+    // underpriced and would not land under congestion.
+    for (const microLamports of [94_706, 911_344, 532_844]) {
+      const data = Buffer.from(
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports }).data,
+      );
+      expect(data[0]).toBe(0x03);
+      expect(Number(data.readBigUInt64LE(1))).toBe(microLamports);
+    }
   });
 });
