@@ -178,6 +178,37 @@ describe("leaderboard over indexed trades", () => {
   });
 });
 
+describe("price truth", () => {
+  test("falls back to the issuer mark and says why the oracle is absent", async () => {
+    const res = await app({ priceUsd: { OPENAI: 1_000 } }).app.request("/api/price-truth");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      oracle: { available: boolean; covered: string[]; note: string };
+      tokens: { symbol: string; basisToMark: number; basisToOracle: number | null; verdict: string }[];
+    };
+
+    expect(body.oracle.available).toBe(false);
+    expect(body.oracle.covered).toEqual([]);
+    // A missing oracle column must read as coverage or configuration, never
+    // as a price of zero.
+    expect(body.oracle.note).toContain("PYTH_API_KEY");
+
+    const openai = body.tokens.find((t) => t.symbol === "OPENAI");
+    expect(openai?.basisToOracle).toBeNull();
+    // The fake marks 5% above market, so the token is cheap to the mark.
+    expect(openai?.basisToMark).toBeCloseTo(1 / 1.05 - 1, 6);
+    expect(openai?.verdict).toBe("token-cheap");
+  });
+
+  test("covers every token even without an oracle", async () => {
+    const body = (await (await app().app.request("/api/price-truth")).json()) as {
+      tokens: unknown[];
+    };
+    expect(body.tokens).toHaveLength(8);
+  });
+});
+
+
 describe("mirror/plan validation", () => {
   const cases: [string, unknown, string][] = [
     ["non-numeric deployUsd", { indexId: "prediction", deployUsd: "abc" }, "finite number"],

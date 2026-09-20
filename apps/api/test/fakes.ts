@@ -9,6 +9,7 @@
  */
 
 import { ALL_MINTS, UNIVERSE, type PreStock } from "@ps/core";
+import { PythClient } from "@ps/market";
 import type { Services } from "../src/context.ts";
 import { Store } from "@ps/db";
 
@@ -79,6 +80,8 @@ export interface FakeOptions {
   readonly paused?: readonly string[];
   /** Symbols whose associated account the issuer has frozen. */
   readonly frozen?: readonly string[];
+  /** Set to exercise the oracle-available branch. */
+  readonly pythApiKey?: string;
   /** Make the price feed fail, to exercise degraded paths. */
   readonly pricesThrow?: boolean;
   readonly priceUsd?: Readonly<Record<string, number>>;
@@ -201,6 +204,9 @@ export function makeServices(options: FakeOptions = {}): Services & { store: Sto
     rpc: fakeRpc(options) as unknown as Services["rpc"],
     jupiter: fakeJupiter(options) as unknown as Services["jupiter"],
     issuer: {} as Services["issuer"],
+    // No key in tests, so the oracle reports itself unavailable and the
+    // routes fall back to the issuer mark.
+    pyth: new PythClient(options.pythApiKey),
     store,
   };
 }

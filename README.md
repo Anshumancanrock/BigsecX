@@ -189,6 +189,27 @@ Each response carries its own limits. `coverageComplete` is false when any
 trade in the window had no observable cost, which makes the profit figure
 unreliable.
 
+## Price Truth
+
+`GET /api/price-truth` compares each token against every reference available
+for it.
+
+PreStocks publishes a mark, but that is the issuer valuing its own SPV. Pyth
+publishes a 24/7 price for some of the same private companies from an
+unrelated source — `Equity.Index.OPENAI/USD`, `ANTHROPIC/USD`, `SPCX/USD` —
+so where it has coverage the token can be judged against something the issuer
+does not control. Where the two references disagree, `referenceSpread` is
+itself the finding: the token can only be mispriced *relative to* a
+reference, and two references that disagree say the reference is uncertain.
+
+Coverage is three of eight names, which is a fact about Pyth. Feed ids are
+pinned rather than resolved by search, because a newly listed feed with a
+similar name must never silently become the price money is judged against.
+
+Hermes now rejects price reads without a key (HTTP 401) while leaving feed
+discovery open. Without `PYTH_API_KEY` the oracle column is absent and the
+response says so, rather than reporting a price of zero.
+
 ## What the API refuses, and why
 
 A build is refused with 409 and *every* applicable reason, not the first one:

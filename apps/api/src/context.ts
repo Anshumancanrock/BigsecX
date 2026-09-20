@@ -7,13 +7,14 @@
  */
 
 import { Rpc } from "@ps/chain";
-import { JupiterClient, PreStocksClient } from "@ps/market";
+import { JupiterClient, PreStocksClient, PythClient } from "@ps/market";
 import { Store } from "@ps/db";
 
 export interface Services {
   readonly rpc: Rpc;
   readonly jupiter: JupiterClient;
   readonly issuer: PreStocksClient;
+  readonly pyth: PythClient;
   readonly store: Store;
 }
 
@@ -24,6 +25,7 @@ export function createServices(): Services {
     }),
     jupiter: new JupiterClient(),
     issuer: new PreStocksClient(),
+    pyth: new PythClient(),
     store: new Store(),
   };
 }

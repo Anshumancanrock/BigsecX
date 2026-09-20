@@ -25,7 +25,7 @@ import {
   type TradeRecord,
   type Weight,
 } from "@ps/core";
-import { Cache, buildExecutionPlan } from "@ps/market";
+import { Cache, buildExecutionPlan, priceTruth } from "@ps/market";
 import { buildMirrorBundle, findUncoveredSells, getSellableBalances, getSpendable } from "@ps/tx";
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
 import type { Services } from "./context.ts";
@@ -130,6 +130,46 @@ app.get("/health", (c) => c.json({ ok: true }));
 app.get("/api/universe", (c) => c.json({ tokens: UNIVERSE }));
 
 app.get("/api/market", async (c) => c.json(toMarketDto(await market())));
+
+/**
+ * Price Truth: a token against every reference available for it.
+ *
+ * PreStocks publishes a mark, but that is the issuer valuing its own SPV.
+ * Pyth publishes a price for the same companies from an unrelated source, so
+ * where it has coverage the token can be judged against something the issuer
+ * does not control. Where the two references disagree, that spread is itself
+ * the finding.
+ */
+app.get("/api/price-truth", async (c) => {
+  const snapshot = await market();
+  const oracle = await services.pyth.prices(snapshot.tokens.map((t) => t.token.symbol));
+  const now = new Date();
+
+  const rows = snapshot.tokens.map((t) =>
+    priceTruth({
+      symbol: t.token.symbol,
+      marketUsd: t.marketUsd,
+      markUsd: t.markUsd,
+      oracle: oracle.get(t.token.symbol),
+      now,
+    }),
+  );
+
+  return c.json({
+    asOf: snapshot.takenAt.toISOString(),
+    oracle: {
+      source: "pyth",
+      available: services.pyth.available,
+      covered: [...oracle.keys()].sort(),
+      // Stated rather than implied: a missing oracle column is coverage or
+      // configuration, not a price of zero.
+      note: services.pyth.available
+        ? "Pyth carries a 24/7 reference for a subset of these companies."
+        : "No PYTH_API_KEY configured; Hermes rejects price reads without one, so only the issuer mark is available.",
+    },
+    tokens: rows,
+  });
+});
 
 app.get("/api/indexes", async (c) => {
   const snapshot = await market();
