@@ -10,5 +10,8 @@
     "@ps/db": "workspace:*",
     "@ps/tx": "workspace:*",
     "hono": "^4.13.8"
+  },
+  "scripts": {
+    "start": "bun run src/server.ts"
   }
 }

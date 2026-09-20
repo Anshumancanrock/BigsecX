@@ -4,6 +4,12 @@
  * Read endpoints serve the latest market view, the indexes and the
  * leaderboard. Write endpoints do not write anything on chain: they return
  * unsigned transactions for a wallet to sign. Nothing here holds a key.
+ *
+ * The app is built by a factory taking its services as an argument, rather
+ * than reaching for module-level singletons. That is what makes the routes
+ * testable: a test can hand in a fake chain and a fake aggregator and exercise
+ * every branch without a network, which hand-fuzzing a running server cannot
+ * do for error paths.
  */
 
 import { Hono } from "hono";
@@ -22,7 +28,7 @@ import {
 import { Cache, buildExecutionPlan } from "@ps/market";
 import { buildMirrorBundle, findUncoveredSells, getSellableBalances } from "@ps/tx";
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
-import { createServices } from "./context.ts";
+import type { Services } from "./context.ts";
 import { toMarketDto } from "./serialize.ts";
 import {
   BadRequest,
@@ -33,7 +39,11 @@ import {
   requireInt,
 } from "./validate.ts";
 
-const services = createServices();
+const MARKET_TTL_MS = 20_000;
+/** How long a snapshot may be served after expiry when upstreams are failing. */
+const MARKET_STALE_MS = 10 * 60_000;
+
+export function createApp(services: Services): Hono {
 const app = new Hono();
 
 app.use("/*", cors());
@@ -55,11 +65,10 @@ app.onError((error, c) => {
  * upstream 429 -- which both the issuer API and Jupiter return readily --
  * serves the last good snapshot rather than failing the request. During a
  * demo a slightly old price beats an error page.
+ *
+ * Scoped to the app instance so tests do not leak a snapshot between cases.
  */
 const marketCache = new Cache(4);
-const MARKET_TTL_MS = 20_000;
-/** How long a snapshot may be served after expiry when upstreams are failing. */
-const MARKET_STALE_MS = 10 * 60_000;
 
 function market() {
   return marketCache.fetch(
@@ -337,11 +346,36 @@ app.post("/api/mirror/build", async (c) => {
     return c.json({ error: "nothing to trade", skipped: rebalance.skipped }, 400);
   }
 
-  // Check what the wallet can actually sell before building anything. Jupiter
-  // spends from the associated token account, so a sell sized against a
-  // position held elsewhere fails on chain with custom program error 0x1788
-  // after the user has already signed.
-  if (rebalance.orders.some((o) => o.side === "sell")) {
+  // Both reasons a build can be refused are collected and reported together.
+  // Surfacing them one at a time misleads: a wallet can simultaneously be
+  // short of balance and be asking for a shape that cannot settle atomically,
+  // and fixing only the one named leaves the caller stuck on the next.
+  const sells = rebalance.orders.filter((o) => o.side === "sell");
+  const buys = rebalance.orders.filter((o) => o.side === "buy");
+  const buyNotional = buys.reduce((sum, o) => sum + o.usd, 0);
+  const problems: Record<string, unknown>[] = [];
+
+  if (sells.length > 0) {
+    // A basket is several independent transactions, so a sell meant to fund a
+    // buy can land after it. Note this is reached whenever a rebalance both
+    // sells and buys, because new capital minus sales always equals the buy
+    // notional -- there is no sell-and-buy shape that settles safely here.
+    if (buyNotional > deployUsd) {
+      problems.push({
+        kind: "not-atomic",
+        message: "this rebalance funds buys from sells, which cannot be done atomically here",
+        detail:
+          `${buys.length} buy legs need $${buyNotional.toFixed(2)} but only ` +
+          `$${deployUsd.toFixed(2)} of new capital was supplied. Execute the ${sells.length} ` +
+          "sell legs first, then request the buys.",
+        sells: sells.map((o) => ({ symbol: o.symbol, usd: o.usd })),
+        buys: buys.map((o) => ({ symbol: o.symbol, usd: o.usd })),
+      });
+    }
+
+    // Jupiter spends from the associated token account, so a sell sized
+    // against a position held elsewhere fails on chain with custom program
+    // error 0x1788 after the user has already signed.
     const balances = await getSellableBalances(
       services.rpc,
       owner,
@@ -350,38 +384,19 @@ app.post("/api/mirror/build", async (c) => {
     );
     const uncovered = findUncoveredSells(rebalance.orders, balances, price);
     if (uncovered.length > 0) {
-      return c.json(
-        {
-          error: "wallet does not hold enough to cover these sell legs",
-          detail:
-            "Jupiter sells from the associated token account. Balances held in other " +
-            "accounts are not spendable by this swap.",
-          uncovered,
-        },
-        409,
-      );
+      problems.push({
+        kind: "insufficient-balance",
+        message: "wallet does not hold enough to cover these sell legs",
+        detail:
+          "Jupiter sells from the associated token account. Balances held in other " +
+          "accounts are not spendable by this swap.",
+        uncovered,
+      });
     }
   }
 
-  // A basket is several independent transactions, so a sell meant to fund a
-  // buy can land after it. Refuse rather than hand back a bundle that fails
-  // halfway when the wallet lacks the stablecoin to cover the buys.
-  const sells = rebalance.orders.filter((o) => o.side === "sell");
-  const buys = rebalance.orders.filter((o) => o.side === "buy");
-  const buyNotional = buys.reduce((sum, o) => sum + o.usd, 0);
-  if (sells.length > 0 && buyNotional > deployUsd) {
-    return c.json(
-      {
-        error: "this rebalance funds buys from sells, which cannot be done atomically here",
-        detail:
-          `${buys.length} buy legs need $${buyNotional.toFixed(2)} but only ` +
-          `$${deployUsd.toFixed(2)} of new capital was supplied. Execute the ${sells.length} ` +
-          "sell legs first, then request the buys.",
-        sells: sells.map((o) => ({ symbol: o.symbol, usd: o.usd })),
-        buys: buys.map((o) => ({ symbol: o.symbol, usd: o.usd })),
-      },
-      409,
-    );
+  if (problems.length > 0) {
+    return c.json({ error: problems[0]?.["message"], problems }, 409);
   }
 
   // "confirmed", not "finalized". A blockhash lives about 150 blocks, and a
@@ -413,6 +428,9 @@ app.post("/api/mirror/build", async (c) => {
   });
 });
 
+return app;
+}
+
 /** Parse a JSON body, turning malformed JSON into a 400 rather than a 500. */
 async function safeJson(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown>> {
   let body: unknown;
@@ -427,7 +445,4 @@ async function safeJson(c: { req: { json: () => Promise<unknown> } }): Promise<R
   return body as Record<string, unknown>;
 }
 
-const port = Number(process.env["PORT"] ?? 3000);
-console.log(`API listening on http://localhost:${port}`);
 
-export default { port, fetch: app.fetch, idleTimeout: 120 };
