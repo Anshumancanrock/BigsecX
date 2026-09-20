@@ -150,6 +150,20 @@ address. That is workable for a demo and the ownership checks are real, but
 the assertion is not proof, and the routes need a signed message bound to the
 request before they are exposed publicly.
 
+## Portfolio
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/portfolio/:wallet` | Live holdings, value, weights, sectors, cash, frozen accounts |
+| `GET /api/portfolio/:wallet?compare=:id` | The same, measured against a saved strategy |
+| `GET /api/portfolio/:wallet/:symbol` | One position, for an asset page |
+
+Balances come from the associated token accounts, never from anything the
+caller supplies: a claimed holding is a hint, a chain balance is what can
+actually be sold. A position that cannot be priced is named in `unpriced` and
+left with a null weight rather than counted as worthless, and a frozen
+account is flagged rather than reported as sellable.
+
 ## What the API refuses, and why
 
 A build is refused with 409 and *every* applicable reason, not the first one:

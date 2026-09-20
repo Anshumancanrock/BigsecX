@@ -77,6 +77,8 @@ export interface FakeOptions {
   readonly lamports?: number;
   /** Symbols the issuer has paused. */
   readonly paused?: readonly string[];
+  /** Symbols whose associated account the issuer has frozen. */
+  readonly frozen?: readonly string[];
   /** Make the price feed fail, to exercise degraded paths. */
   readonly pricesThrow?: boolean;
   readonly priceUsd?: Readonly<Record<string, number>>;
@@ -143,7 +145,13 @@ export function fakeRpc(options: FakeOptions = {}) {
             if (raw === undefined) return null;
             return {
               data: {
-                parsed: { info: { mint: token.mint, tokenAmount: { amount: raw.toString() } } },
+                parsed: {
+                  info: {
+                    mint: token.mint,
+                    state: options.frozen?.includes(token.symbol) ? "frozen" : "initialized",
+                    tokenAmount: { amount: raw.toString() },
+                  },
+                },
               },
             };
           }),

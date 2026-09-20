@@ -30,6 +30,7 @@ import { buildMirrorBundle, findUncoveredSells, getSellableBalances, getSpendabl
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
 import type { Services } from "./context.ts";
 import { toMarketDto } from "./serialize.ts";
+import { registerPortfolioRoutes } from "./portfolio.ts";
 import { registerStrategyRoutes } from "./strategies.ts";
 import {
   BadRequest,
@@ -53,6 +54,7 @@ const app = new Hono();
 app.use("/*", cors());
 
 registerStrategyRoutes(app, services);
+registerPortfolioRoutes(app, services, market);
 
 app.onError((error, c) => {
   // A malformed request is the caller's to fix and gets a 400 with the
