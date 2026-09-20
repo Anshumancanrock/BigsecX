@@ -372,9 +372,14 @@ app.post("/api/mirror/build", async (c) => {
     );
   }
 
+  // "confirmed", not "finalized". A blockhash lives about 150 blocks, and a
+  // finalized one is already ~32 blocks old when handed out -- roughly 13
+  // seconds of the user's signing window spent before they see the prompt.
+  // Measured: building an eight-leg basket consumes another ~33 blocks, so
+  // the finalized path left about 46 seconds to approve.
   const { value } = await services.rpc.call<{
     value: { blockhash: string; lastValidBlockHeight: number };
-  }>("getLatestBlockhash", [{ commitment: "finalized" }]);
+  }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
 
   const bundle = await buildMirrorBundle(services.jupiter, {
     owner,
@@ -390,7 +395,9 @@ app.post("/api/mirror/build", async (c) => {
     target: target.name,
     ...bundle,
     atomic: false,
-    note: "Sign all transactions together. They settle independently, so a partial fill is possible.",
+    note:
+      "Sign all transactions together. They settle independently, so a partial fill is possible. " +
+      "Submit promptly: the blockhash expires at the block height given here.",
   });
 });
 
