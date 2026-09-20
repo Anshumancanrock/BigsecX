@@ -56,6 +56,15 @@ export interface IndexInput {
   readonly liquidityUsd: number;
   /** Market over mark, as a fraction. Null when no mark is published. */
   readonly basis: number | null;
+  /**
+   * True when the issuer has halted transfers on this mint.
+   *
+   * A paused constituent is not merely illiquid, it is untradeable: every
+   * swap touching it fails. Including one produces a basket that cannot be
+   * bought, so these are excluded before weighting rather than weighted to
+   * zero afterwards.
+   */
+  readonly paused?: boolean;
 }
 
 export const INDEX_DEFINITIONS: readonly IndexDefinition[] = [
@@ -116,6 +125,9 @@ function selectConstituents(
   definition: IndexDefinition,
   inputs: readonly IndexInput[],
 ): readonly IndexInput[] {
+  // Paused mints are dropped first, ahead of any theme or liquidity rule.
+  inputs = inputs.filter((i) => i.paused !== true);
+
   let selected = definition.symbols
     ? inputs.filter((i) => definition.symbols?.includes(i.symbol))
     : definition.sectors

@@ -237,10 +237,20 @@ export async function buildMirrorBundle(
 
       // Reject a route that cannot fit in a transaction by itself before
       // committing to it, so the ladder can try a narrower one.
+      //
+      // The compute-unit limit has to be in this measurement. The packer
+      // prepends one to every transaction, so leaving it out here
+      // under-measures each leg and lets a route through at, say, 1228 bytes
+      // that the packer then compiles at 1236 and reports as oversized --
+      // after the ladder has already stopped looking for a narrower one.
       const measured = compileAndMeasure({
         payer,
         blockhash: request.blockhash,
-        instructions: [...priorityFee(built.budget).map(toInstruction), ...built.group.instructions],
+        instructions: [
+          ComputeBudgetProgram.setComputeUnitLimit({ units: MAX_COMPUTE_UNITS }),
+          ...priorityFee(built.budget).map(toInstruction),
+          ...built.group.instructions,
+        ],
         lookupTables: built.group.lookupTables,
       });
       if (measured === null || measured.bytes > PACKET_DATA_SIZE) {

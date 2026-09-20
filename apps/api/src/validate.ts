@@ -19,6 +19,18 @@ export class BadRequest extends Error {
 
 /** Largest basket we will price. Guards against a request with 10,000 legs. */
 const MAX_WEIGHTS = 32;
+/**
+ * Largest position we will accept as a claimed holding.
+ *
+ * Without a ceiling, a frontend passing raw base units instead of UI shares
+ * sizes an order in the billions, and a value near Number.MAX_VALUE overflows
+ * to Infinity once multiplied by a price -- which then propagates through
+ * weighting and reaches BigInt conversion as the same "Not an integer" the
+ * deployUsd guard exists to prevent.
+ */
+const MAX_HOLDING_UI = 1e12;
+/** Positions a caller may claim. The universe has eight tokens. */
+const MAX_HOLDINGS = 32;
 /** Above this, quotes are meaningless against $2.6M of total liquidity. */
 const MAX_DEPLOY_USD = 10_000_000;
 
@@ -80,7 +92,12 @@ export function parseWeights(value: unknown): Weight[] {
     weights.push({ symbol: upper, weight: parsed });
   }
 
-  if (total <= 0) throw new BadRequest("weights must sum to a positive number");
+  if (!Number.isFinite(total) || total <= 0) {
+    // Individually finite weights can still sum to Infinity, which survives a
+    // "> 0" check and then normalises every weight to NaN, yielding a
+    // successful but completely empty plan.
+    throw new BadRequest("weights must sum to a positive finite number");
+  }
   return weights;
 }
 
@@ -90,6 +107,9 @@ export function parseHoldings(
 ): { readonly symbol: string; readonly uiAmount: number }[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new BadRequest("holdings must be an array");
+  if (value.length > MAX_HOLDINGS) {
+    throw new BadRequest(`holdings must contain at most ${MAX_HOLDINGS} entries`);
+  }
 
   return value.map((entry) => {
     const { symbol, uiAmount } = (entry ?? {}) as { symbol?: unknown; uiAmount?: unknown };
@@ -99,6 +119,11 @@ export function parseHoldings(
     const parsed = typeof uiAmount === "number" ? uiAmount : Number(uiAmount);
     if (!Number.isFinite(parsed) || parsed < 0) {
       throw new BadRequest(`uiAmount for ${symbol} must be a non-negative finite number`);
+    }
+    if (parsed > MAX_HOLDING_UI) {
+      throw new BadRequest(
+        `uiAmount for ${symbol} exceeds ${MAX_HOLDING_UI}; it should be shares, not base units`,
+      );
     }
     return { symbol: symbol.toUpperCase(), uiAmount: parsed };
   });

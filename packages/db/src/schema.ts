@@ -88,11 +88,21 @@ const MIGRATIONS: readonly string[] = [
   `
   DROP TABLE IF EXISTS holder_position;
   `,
+  // 4: the signature cursor keys on any address. Pool accounts are indexed
+  // alongside mints, because a mint's signature list is mostly transfers and
+  // account creations while a pool's is almost entirely trades.
+  `
+  ALTER TABLE index_cursor RENAME COLUMN mint TO address;
+  `,
 ];
 
 export function migrate(db: Database): number {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
+  // The API and the indexer both open this file and both run migrations at
+  // startup. Without a busy timeout, whichever loses the race to the write
+  // lock fails immediately with SQLITE_BUSY and that process dies at boot.
+  db.exec("PRAGMA busy_timeout = 5000");
 
   const current = (db.query("PRAGMA user_version").get() as { user_version: number }).user_version;
 

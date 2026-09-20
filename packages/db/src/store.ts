@@ -169,20 +169,21 @@ export class Store {
     })();
   }
 
-  cursorFor(mint: string): string | null {
+  /** Newest signature already indexed for an address, mint or pool. */
+  cursorFor(address: string): string | null {
     const row = this.#db
-      .query("SELECT last_signature AS sig FROM index_cursor WHERE mint = ?")
-      .get(mint) as { sig: string } | null;
+      .query("SELECT last_signature AS sig FROM index_cursor WHERE address = ?")
+      .get(address) as { sig: string } | null;
     return row?.sig ?? null;
   }
 
-  setCursor(mint: string, signature: string): void {
+  setCursor(address: string, signature: string): void {
     this.#db
       .query(
-        `INSERT OR REPLACE INTO index_cursor (mint, last_signature, updated_at)
+        `INSERT OR REPLACE INTO index_cursor (address, last_signature, updated_at)
          VALUES (?, ?, ?)`,
       )
-      .run(mint, signature, Math.floor(Date.now() / 1000));
+      .run(address, signature, Math.floor(Date.now() / 1000));
   }
 
   tradesByOwnerSince(sinceSlot: number): Map<string, TradeRow[]> {
@@ -221,6 +222,35 @@ export class Store {
       )
       .all(owner, limit) as (Omit<TradeRow, "deltaRaw"> & { deltaRaw: string })[];
     return rows.map((r) => ({ ...r, deltaRaw: BigInt(r.deltaRaw) }));
+  }
+
+  /**
+   * The level and weights last recorded for an index.
+   *
+   * The weights matter: a period's return must be measured with the basket
+   * that was actually held during it, not with one recomputed from today's
+   * valuations.
+   */
+  lastIndexState(indexId: string): {
+    readonly level: number;
+    readonly weights: { symbol: string; weight: number }[];
+  } | null {
+    const row = this.#db
+      .query(
+        `SELECT l.level AS level, l.weights AS weights
+         FROM index_level l JOIN market_snapshot s ON s.id = l.snapshot_id
+         WHERE l.index_id = ? ORDER BY s.taken_at DESC LIMIT 1`,
+      )
+      .get(indexId) as { level: number; weights: string } | null;
+    if (!row) return null;
+
+    try {
+      return { level: row.level, weights: JSON.parse(row.weights) };
+    } catch {
+      // A malformed row must not take the indexer down; treat it as absent
+      // and let the index restart from base.
+      return null;
+    }
   }
 
   indexHistory(indexId: string, limit = 500): { takenAt: Date; level: number }[] {

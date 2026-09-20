@@ -57,8 +57,9 @@ export interface TraderPnl {
   readonly returnFraction: number | null;
   readonly positions: readonly { readonly symbol: string; readonly uiAmount: number }[];
   /**
-   * False when the wallet sold shares it held before indexing started, which
-   * makes its cost basis incomplete and its profit figure unreliable.
+   * False when this wallet's profit figure cannot be trusted, either because
+   * it sold shares acquired before indexing began, or because one of its
+   * trades had no observable cost.
    */
   readonly coverageComplete: boolean;
 }
@@ -74,6 +75,7 @@ export function computeTraderPnl(
   let netInvestedUsd = 0;
   let peakInvestedUsd = 0;
   let volumeUsd = 0;
+  let unpriced = false;
 
   // Trades must be applied in execution order for the running-minimum check
   // to mean anything.
@@ -84,11 +86,17 @@ export function computeTraderPnl(
     const lowest = runningMinimum.get(trade.symbol);
     if (lowest === undefined || next < lowest) runningMinimum.set(trade.symbol, next);
 
-    if (trade.valueUsd !== null) {
-      netInvestedUsd += trade.valueUsd;
-      if (netInvestedUsd > peakInvestedUsd) peakInvestedUsd = netInvestedUsd;
-      volumeUsd += Math.abs(trade.valueUsd);
+    if (trade.valueUsd === null) {
+      // The shares moved but the cost did not: a SOL-routed swap or a plain
+      // transfer. Counting the shares in mark value while counting nothing in
+      // cost would manufacture profit out of a deposit, so the wallet is
+      // marked untrustworthy instead.
+      unpriced = true;
+      continue;
     }
+    netInvestedUsd += trade.valueUsd;
+    if (netInvestedUsd > peakInvestedUsd) peakInvestedUsd = netInvestedUsd;
+    volumeUsd += Math.abs(trade.valueUsd);
   }
 
   let markValueUsd = 0;
@@ -102,7 +110,8 @@ export function computeTraderPnl(
 
   // A position that went negative means shares were sold that this never saw
   // bought, so the cost basis is missing a leg.
-  const coverageComplete = [...runningMinimum.values()].every((low) => low >= -1e-9);
+  const coverageComplete =
+    !unpriced && [...runningMinimum.values()].every((low) => low >= -1e-9);
 
   const pnlUsd = markValueUsd - netInvestedUsd;
   // Return is profit over the most that was ever committed, not over what is

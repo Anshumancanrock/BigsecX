@@ -161,6 +161,7 @@ export async function getJson<T>(
   const maxRetries = options.maxRetries ?? 4;
 
   let lastStatus: number | null = null;
+  let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
       // Upstream 429s here are sustained, not bursty, so back off generously.
@@ -168,20 +169,32 @@ export async function getJson<T>(
     }
     await options.limiter?.acquire();
 
-    const response = await fetch(url, {
-      headers: { accept: "application/json", ...options.headers },
-      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
-    });
+    // The fetch has to sit inside the try. A dropped connection, a DNS
+    // failure or a timeout rejects rather than returning a status, and
+    // outside a catch that rejection escapes the retry loop entirely --
+    // making maxRetries cover only HTTP statuses, which is not where flaky
+    // conference wifi fails.
+    try {
+      const response = await fetch(url, {
+        headers: { accept: "application/json", ...options.headers },
+        signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
+      });
 
-    if (response.ok) return (await response.json()) as T;
-    lastStatus = response.status;
-    if (response.status !== 429 && response.status < 500) {
-      throw new UpstreamError(options.upstream, response.status, `HTTP ${response.status}`);
+      if (response.ok) return (await response.json()) as T;
+      lastStatus = response.status;
+      if (response.status !== 429 && response.status < 500) {
+        throw new UpstreamError(options.upstream, response.status, `HTTP ${response.status}`);
+      }
+    } catch (error) {
+      // A deliberate refusal is final; a transport failure is worth retrying.
+      if (error instanceof UpstreamError) throw error;
+      lastError = error as Error;
     }
   }
   throw new UpstreamError(
     options.upstream,
     lastStatus,
-    `gave up after ${maxRetries} retries (last status ${lastStatus})`,
+    `gave up after ${maxRetries} retries (last status ${lastStatus ?? "none"}` +
+      `${lastError ? `, last error ${lastError.message}` : ""})`,
   );
 }

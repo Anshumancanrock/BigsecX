@@ -27,6 +27,12 @@ export interface TokenDto {
   readonly multiplier: number;
   readonly transferFeeBps: number;
   readonly paused: boolean;
+  /** What the issuer can do to a holder's tokens. */
+  readonly issuerControl: {
+    readonly permanentDelegate: string | null;
+    readonly freezeAuthority: string | null;
+    readonly transferHookProgramId: string | null;
+  };
 }
 
 export function toTokenDto(view: TokenView): TokenDto {
@@ -45,6 +51,7 @@ export function toTokenDto(view: TokenView): TokenDto {
     multiplier: view.multiplier,
     transferFeeBps: view.transferFeeBps,
     paused: view.paused,
+    issuerControl: view.issuerControl,
   };
 }
 
@@ -56,5 +63,15 @@ export function toMarketDto(snapshot: MarketSnapshot) {
     totalLiquidityUsd: snapshot.totalLiquidityUsd,
     pendingFeeChange: snapshot.pendingFeeChange,
     degraded: snapshot.degraded,
+    priceFeedError: snapshot.priceFeedError,
+    // Stated on every market response rather than buried in documentation.
+    // These are not our powers, but a user trading through us is exposed to
+    // them and has no other way to learn of them from this API.
+    disclosures: [
+      "Each mint has a permanent delegate that can transfer holders' tokens without consent.",
+      "Each mint has a freeze authority that can immobilise any account.",
+      "Transfers can be paused for all holders at once.",
+      "The transfer fee is set by the issuer and can change at an epoch boundary.",
+    ],
   };
 }

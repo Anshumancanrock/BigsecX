@@ -158,8 +158,9 @@ export interface RebalanceRequest {
    */
   readonly minTicketUsd?: number;
   /**
-   * Leave weights alone while they are within this fraction of target.
-   * Prevents churn on noise in a market this thin.
+   * Leave a leg alone when the trade it needs is smaller than this fraction
+   * of the target portfolio value. Prevents churn on noise in a market this
+   * thin, where a rebalance costs spread plus a transfer fee.
    */
   readonly toleranceBps?: number;
   /** Sell positions that the target does not include. Defaults to true. */
@@ -172,6 +173,15 @@ export interface RebalancePlan {
   readonly targetValueUsd: number;
   /** Legs dropped for being below `minTicketUsd` or inside tolerance. */
   readonly skipped: readonly { readonly symbol: string; readonly usd: number; readonly reason: string }[];
+  /**
+   * Holdings that could not be valued.
+   *
+   * These contribute nothing to portfolio value, which means the plan treats
+   * them as worthless and will happily sell a priced name to buy more of a
+   * position the user already has plenty of. The caller must surface this
+   * rather than act on the plan.
+   */
+  readonly unpricedHoldings: readonly string[];
 }
 
 /**
@@ -196,13 +206,23 @@ export function planRebalance(request: RebalanceRequest): RebalancePlan {
   const { totalUsd: currentValueUsd } = currentWeights(holdings, priceUsdBySymbol);
   const targetValueUsd = currentValueUsd + deployUsd;
   if (targetValueUsd <= 0) {
-    return { orders: [], portfolioValueUsd: currentValueUsd, targetValueUsd: 0, skipped: [] };
+    return {
+      orders: [],
+      portfolioValueUsd: currentValueUsd,
+      targetValueUsd: 0,
+      skipped: [],
+      unpricedHoldings: [],
+    };
   }
 
   const currentUsdBySymbol = new Map<string, number>();
+  const unpricedHoldings: string[] = [];
   for (const h of holdings) {
     const price = priceUsdBySymbol.get(h.symbol);
-    if (price === undefined) continue;
+    if (price === undefined) {
+      if (h.uiAmount > 0) unpricedHoldings.push(h.symbol);
+      continue;
+    }
     currentUsdBySymbol.set(h.symbol, (currentUsdBySymbol.get(h.symbol) ?? 0) + h.uiAmount * price);
   }
 
@@ -224,10 +244,22 @@ export function planRebalance(request: RebalanceRequest): RebalancePlan {
     const deltaUsd = wantUsd - heldUsd;
     if (deltaUsd === 0) continue;
 
-    const fromWeight = currentValueUsd > 0 ? heldUsd / currentValueUsd : 0;
-    const weightGap = Math.abs(targetWeight - fromWeight);
+    // Weight of the existing position in the portfolio the plan is aiming
+    // at, so a top-up reads as a real move: putting $1,000 onto an at-target
+    // $1,000 book shows 0.25 -> 0.50 rather than 0.50 -> 0.50 beside a $500
+    // buy.
+    const fromWeight = heldUsd / targetValueUsd;
 
-    if (weightGap < tolerance && targetWeight > 0) {
+    // The churn guard is measured in dollars, not in weights.
+    //
+    // Comparing weights was wrong: the held weight is a share of the CURRENT
+    // book while the target weight is a share of the book AFTER new capital
+    // lands, so the two sit on different bases and `deployUsd` never reached
+    // the test. A wallet already at its target weights therefore had a gap of
+    // exactly zero and every leg was discarded, however much money the user
+    // had asked to deploy -- which is precisely the top-up case, the most
+    // common repeat action there is.
+    if (Math.abs(deltaUsd) < tolerance * targetValueUsd && targetWeight > 0) {
       skipped.push({ symbol, usd: Math.abs(deltaUsd), reason: "within tolerance" });
       continue;
     }
@@ -252,5 +284,5 @@ export function planRebalance(request: RebalanceRequest): RebalancePlan {
     a.side === b.side ? b.usd - a.usd : a.side === "sell" ? -1 : 1,
   );
 
-  return { orders, portfolioValueUsd: currentValueUsd, targetValueUsd, skipped };
+  return { orders, portfolioValueUsd: currentValueUsd, targetValueUsd, skipped, unpricedHoldings };
 }

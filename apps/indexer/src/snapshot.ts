@@ -40,6 +40,19 @@ export interface TokenView {
   /** Transfer fee in force this epoch, in basis points. */
   readonly transferFeeBps: number;
   readonly paused: boolean;
+  /**
+   * Powers the issuer holds over this mint.
+   *
+   * Parsed from chain and carried through to the API because it is a property
+   * of the asset a holder is entitled to know: a permanent delegate can move
+   * their tokens without consent, a freeze authority can immobilise them, and
+   * a pause authority can stop every transfer at once.
+   */
+  readonly issuerControl: {
+    readonly permanentDelegate: string | null;
+    readonly freezeAuthority: string | null;
+    readonly transferHookProgramId: string | null;
+  };
 }
 
 export interface MarketSnapshot {
@@ -52,6 +65,8 @@ export interface MarketSnapshot {
   readonly pendingFeeChange: { readonly fromBps: number; readonly toBps: number; readonly atEpoch: number } | null;
   /** Symbols whose data was incomplete; surfaced rather than hidden. */
   readonly degraded: readonly string[];
+  /** Set when the price feed failed outright and every price is missing. */
+  readonly priceFeedError: string | null;
 }
 
 function buildTokenView(
@@ -84,6 +99,11 @@ function buildTokenView(
     change24hPct: price?.priceChange24h ?? 0,
     transferFeeBps: epochFee(mint.transferFee, epoch).transferFeeBasisPoints,
     paused: mint.paused,
+    issuerControl: {
+      permanentDelegate: mint.permanentDelegate,
+      freezeAuthority: mint.freezeAuthority,
+      transferHookProgramId: mint.transferHookProgramId,
+    },
   };
 }
 
@@ -92,11 +112,23 @@ export async function takeSnapshot(
   jupiter: JupiterClient,
 ): Promise<MarketSnapshot> {
   // Pin the epoch and the clock before reading anything derived from them.
-  const [epoch, mints, prices] = await Promise.all([
+  //
+  // The price feed is allowed to fail. Every route depends on a snapshot, so
+  // letting a Jupiter 429 reject the whole call takes the entire API down
+  // with it -- and it made the `degraded` list below unreachable for the
+  // likeliest failure there is. Chain state is not optional: without mint
+  // state there is no scale multiplier and no fee, and every number would be
+  // wrong rather than missing.
+  const [epoch, mints, priceResult] = await Promise.all([
     rpc.epoch(),
     getMintStates(rpc, ALL_MINTS),
-    jupiter.prices(ALL_MINTS),
+    jupiter.prices(ALL_MINTS).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error: error as Error }),
+    ),
   ]);
+  const prices = priceResult.ok ? priceResult.value : {};
+  const priceFeedError = priceResult.ok ? null : priceResult.error.message;
   const takenAt = new Date();
   const unixSeconds = Math.floor(takenAt.getTime() / 1000);
 
@@ -126,6 +158,7 @@ export async function takeSnapshot(
     totalLiquidityUsd: tokens.reduce((sum, t) => sum + t.liquidityUsd, 0),
     pendingFeeChange: anyMint ? pendingFeeChange(anyMint.transferFee, epoch) : null,
     degraded,
+    priceFeedError,
   };
 }
 

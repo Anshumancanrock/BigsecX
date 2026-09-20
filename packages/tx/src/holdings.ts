@@ -11,7 +11,13 @@
  */
 
 import { rawToUi, type ScaledUiAmountConfig } from "@ps/core";
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, UNIVERSE } from "@ps/core";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  UNIVERSE,
+  USDC_DECIMALS,
+  USDC_MINT,
+} from "@ps/core";
 import { PublicKey } from "@solana/web3.js";
 
 /**
@@ -20,11 +26,15 @@ import { PublicKey } from "@solana/web3.js";
  * The token program id is part of the seeds, so passing the legacy program id
  * yields a different, wrong address.
  */
-export function associatedTokenAddress(owner: string, mint: string): string {
+export function associatedTokenAddress(
+  owner: string,
+  mint: string,
+  tokenProgramId: string = TOKEN_2022_PROGRAM_ID,
+): string {
   const [address] = PublicKey.findProgramAddressSync(
     [
       new PublicKey(owner).toBytes(),
-      new PublicKey(TOKEN_2022_PROGRAM_ID).toBytes(),
+      new PublicKey(tokenProgramId).toBytes(),
       new PublicKey(mint).toBytes(),
     ],
     new PublicKey(ASSOCIATED_TOKEN_PROGRAM_ID),
@@ -33,13 +43,24 @@ export function associatedTokenAddress(owner: string, mint: string): string {
 }
 
 interface ParsedTokenAccount {
-  data: { parsed: { info: { mint: string; tokenAmount: { amount: string } } } };
+  data: {
+    parsed: { info: { mint: string; state?: string; tokenAmount: { amount: string } } };
+  };
 }
 
 export interface SellableBalance {
   readonly symbol: string;
   readonly uiAmount: number;
   readonly rawAmount: bigint;
+  /**
+   * True when the issuer has frozen this account.
+   *
+   * A frozen account still reports its full balance, so a coverage check that
+   * only compares amounts passes it and the swap fails on chain after the
+   * user has signed. The issuer holds freeze authority on every one of these
+   * mints, so this is a real state, not a theoretical one.
+   */
+  readonly frozen: boolean;
 }
 
 /**
@@ -67,10 +88,12 @@ export async function getSellableBalances(
     const account = result.value[i];
     const rawAmount = account ? BigInt(account.data.parsed.info.tokenAmount.amount) : 0n;
     const scale = scaleBySymbol.get(token.symbol);
+    const frozen = account?.data.parsed.info.state === "frozen";
 
     balances.set(token.symbol, {
       symbol: token.symbol,
       rawAmount,
+      frozen,
       uiAmount: scale
         ? rawToUi(rawAmount, token.decimals, scale, atUnixSeconds)
         : Number(rawAmount) / 10 ** token.decimals,
@@ -79,10 +102,46 @@ export async function getSellableBalances(
   return balances;
 }
 
+/** Legacy SPL token program, which is what USDC is minted under. */
+const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+/**
+ * The stablecoin and lamport balances a buy leg spends.
+ *
+ * Sell legs were checked against the chain while buy legs were checked
+ * against nothing, so a wallet with no USDC -- or with USDC but no SOL for
+ * fees -- still received a signable bundle that could not land.
+ *
+ * USDC is a legacy SPL mint, so its associated account derives under a
+ * different token program than the PreStocks ones.
+ */
+export async function getSpendable(
+  rpc: {
+    call: <T>(method: string, params?: unknown[]) => Promise<T>;
+  },
+  owner: string,
+): Promise<{ readonly usdc: number; readonly lamports: number }> {
+  const usdcAta = associatedTokenAddress(owner, USDC_MINT, TOKEN_PROGRAM_ID);
+
+  const [accounts, balance] = await Promise.all([
+    rpc.call<{ value: (ParsedTokenAccount | null)[] }>("getMultipleAccounts", [
+      [usdcAta],
+      { encoding: "jsonParsed" },
+    ]),
+    rpc.call<{ value: number }>("getBalance", [owner]),
+  ]);
+
+  const account = accounts.value[0];
+  const raw = account ? BigInt(account.data.parsed.info.tokenAmount.amount) : 0n;
+  return { usdc: Number(raw) / 10 ** USDC_DECIMALS, lamports: balance.value };
+}
+
 export interface SellCheck {
   readonly symbol: string;
   readonly requestedUsd: number;
   readonly availableUsd: number;
+  /** Set when the shortfall is a freeze rather than a balance. */
+  readonly frozen?: boolean;
 }
 
 /**
@@ -105,7 +164,19 @@ export function findUncoveredSells(
     const price = priceUsdBySymbol.get(leg.symbol);
     if (price === undefined || price <= 0) continue;
 
-    const availableUsd = (balances.get(leg.symbol)?.uiAmount ?? 0) * price;
+    const balance = balances.get(leg.symbol);
+    const availableUsd = (balance?.uiAmount ?? 0) * price;
+
+    // A frozen account cannot move a single unit, whatever it reports.
+    if (balance?.frozen) {
+      uncovered.push({
+        symbol: leg.symbol,
+        requestedUsd: leg.usd,
+        availableUsd: 0,
+        frozen: true,
+      });
+      continue;
+    }
     if (leg.usd > availableUsd * (1 + tolerance)) {
       uncovered.push({ symbol: leg.symbol, requestedUsd: leg.usd, availableUsd });
     }

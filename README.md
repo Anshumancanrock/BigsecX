@@ -123,6 +123,24 @@ of the PRE8 basket where a single unconstrained attempt fills five.
 Verified end to end on mainnet: `POST /api/mirror/build` for the eight-token
 PRE8 basket returns seven transactions, and all seven simulate successfully.
 
+## What the API refuses, and why
+
+A build is refused with 409 and *every* applicable reason, not the first one:
+a wallet can simultaneously be short of balance and be asking for a shape that
+cannot settle here.
+
+| Refusal | Cause |
+| --- | --- |
+| `not-atomic` | The rebalance funds buys from sells. These are separate transactions, so the buy can land first. |
+| `insufficient-balance` | The associated token account cannot cover a sell leg. |
+| `insufficient-usdc` / `insufficient-sol` | Buy legs spend stablecoin, and every transaction pays a fee. |
+| `paused` | The issuer has halted transfers on a constituent. Paused mints are also excluded from every index. |
+| `unpriced-holding` | Part of the wallet could not be valued, so every other leg would be sized against a portfolio value that is too low. |
+
+Frozen accounts are detected too: a frozen account reports its full balance,
+so comparing amounts alone passes it and the swap fails on chain after the
+user has signed.
+
 ## Mirroring
 
 A portfolio is a set of target weights. `planRebalance` turns the gap between a

@@ -76,6 +76,19 @@ describe("read endpoints", () => {
     expect(Array.isArray(body.history)).toBe(true);
   });
 
+  test("a paused mint is kept out of every index", async () => {
+    const res = await app({ paused: ["SPACEX"] }).app.request("/api/indexes");
+    const body = (await res.json()) as {
+      indexes: { id: string; weights: { symbol: string }[] | null }[];
+    };
+    for (const index of body.indexes) {
+      expect((index.weights ?? []).map((w) => w.symbol)).not.toContain("SPACEX");
+    }
+    // defense-space is SpaceX plus Anduril, so it must survive on Anduril.
+    const defense = body.indexes.find((i) => i.id === "defense-space");
+    expect(defense?.weights?.map((w) => w.symbol)).toEqual(["ANDURIL"]);
+  });
+
   test("an unknown index is a 404, not a crash", async () => {
     const res = await app().app.request("/api/indexes/not-an-index");
     expect(res.status).toBe(404);
@@ -162,6 +175,29 @@ describe("mirror/plan validation", () => {
     });
   }
 
+  test("rejects holdings sized in base units rather than shares", async () => {
+    const res = await post(app().app, "/api/mirror/plan", {
+      indexId: "pre8",
+      holdings: [{ symbol: "OPENAI", uiAmount: 1e15 }],
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("base units");
+  });
+
+  test("rejects weights that individually pass but sum to infinity", async () => {
+    // Each value is finite, so a per-entry check lets them through; the sum
+    // then normalises every weight to NaN and the plan comes back empty.
+    const res = await post(app().app, "/api/mirror/plan", {
+      weights: [
+        { symbol: "SPACEX", weight: 1e308 },
+        { symbol: "OPENAI", weight: 1e308 },
+      ],
+      deployUsd: 1_000,
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("finite");
+  });
+
   test("rejects malformed JSON as a 400, not a 500", async () => {
     const res = await post(app().app, "/api/mirror/plan", "{not json");
     expect(res.status).toBe(400);
@@ -238,6 +274,62 @@ describe("mirror/build guards", () => {
     expect(balance?.uncovered?.[0]?.availableUsd).toBe(0);
   });
 
+  test("refuses when the wallet has no USDC for the buy legs", async () => {
+    // Sell legs were checked against the chain while buys were checked
+    // against nothing, so an empty wallet still received a signable bundle.
+    const res = await post(app({ usdcRaw: 0n }).app, "/api/mirror/build", {
+      indexId: "pre8",
+      deployUsd: 5_000,
+      owner: OWNER,
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { problems: { kind: string }[] };
+    expect(body.problems.map((p) => p.kind)).toContain("insufficient-usdc");
+  });
+
+  test("refuses when the wallet has no SOL for fees", async () => {
+    // USDC alone is not enough: every transaction pays a signature fee and
+    // may open accounts.
+    const res = await post(app({ lamports: 0 }).app, "/api/mirror/build", {
+      indexId: "pre8",
+      deployUsd: 1_000,
+      owner: OWNER,
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { problems: { kind: string }[] };
+    expect(body.problems.map((p) => p.kind)).toContain("insufficient-sol");
+  });
+
+  test("refuses when part of the wallet cannot be valued", async () => {
+    // An unpriced holding is silently worth zero to the rebalancer, which
+    // then sizes every other leg against a portfolio value that is too low.
+    const res = await post(app({ pricesThrow: true }).app, "/api/mirror/build", {
+      weights: [{ symbol: "POLYMARKET", weight: 1 }],
+      deployUsd: 1_000,
+      holdings: [{ symbol: "OPENAI", uiAmount: 20 }],
+      owner: OWNER,
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { problems: { kind: string; symbols?: string[] }[] };
+    const unpriced = body.problems.find((p) => p.kind === "unpriced-holding");
+    expect(unpriced?.symbols).toEqual(["OPENAI"]);
+  });
+
+
+  test("refuses a basket containing a paused mint", async () => {
+    // The issuer holds pause authority on every mint. A paused mint is not
+    // merely illiquid; every swap touching it fails.
+    const res = await post(app({ paused: ["SPACEX"] }).app, "/api/mirror/build", {
+      weights: [{ symbol: "SPACEX", weight: 1 }],
+      deployUsd: 1_000,
+      owner: OWNER,
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { problems: { kind: string; symbols?: string[] }[] };
+    expect(body.problems.find((p) => p.kind === "paused")?.symbols).toEqual(["SPACEX"]);
+  });
+
+
   test("refuses when there is nothing to trade", async () => {
     const res = await post(app().app, "/api/mirror/build", {
       indexId: "pre8",
@@ -250,11 +342,50 @@ describe("mirror/build guards", () => {
 });
 
 describe("failure handling", () => {
-  test("an upstream failure does not leak internals to the caller", async () => {
+  test("a price-feed failure degrades instead of taking the API down", async () => {
+    // Every route depends on a snapshot. Letting a Jupiter 429 reject the
+    // whole call 500s the entire API on a cold cache -- the exact condition
+    // seen when the indexer died on a rate limit.
     const res = await app({ pricesThrow: true }).app.request("/api/market");
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as {
+      priceFeedError: string | null;
+      degraded: string[];
+      tokens: { symbol: string; marketUsd: number | null; transferFeeBps: number }[];
+    };
+    // The failure is reported rather than hidden behind empty prices.
+    expect(body.priceFeedError).toBeTruthy();
+    expect(body.degraded).toHaveLength(8);
+    expect(body.tokens.every((t) => t.marketUsd === null)).toBe(true);
+    // Chain-derived facts still hold: those did not depend on the feed.
+    expect(body.tokens.every((t) => t.transferFeeBps === 50)).toBe(true);
+  });
+
+  test("indexes survive a price-feed failure without inventing weights", async () => {
+    const res = await app({ pricesThrow: true }).app.request("/api/indexes");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      indexes: { id: string; weights: { symbol: string; weight: number }[] | null }[];
+    };
+    // Valuation weighting has nothing to weigh, so those indexes report no
+    // basket rather than an arbitrary one. Equal-weighted ones still stand.
+    const equal = body.indexes.find((i) => i.id === "embodied");
+    expect(equal?.weights?.length).toBe(2);
+  });
+
+  test("an internal failure does not leak its message to the caller", async () => {
+    // Chain state is not optional, so a failure there is a real 500.
+    const services = makeServices();
+    open.push(services.store);
+    services.rpc.call = (async () => {
+      throw new Error("secret internal detail 429 at /var/run");
+    }) as typeof services.rpc.call;
+
+    const res = await createApp(services).request("/api/market");
     expect(res.status).toBe(500);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("internal error");
-    expect(body.error).not.toContain("429");
+    expect(body.error).not.toContain("secret");
   });
 });

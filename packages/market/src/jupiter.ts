@@ -223,35 +223,59 @@ export async function fetchSwapInstructions<T>(
 ): Promise<T> {
   const transport = jupiterTransport();
   const host = base ?? transport.base;
-  // Shares the same budget discipline as quoting. Building an eight-leg
-  // basket issues eight of these back to back, which is enough to draw a 429
-  // on its own.
-  await limiter.acquire();
-
-  const response = await fetch(`${host}/swap/v1/swap-instructions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-      ...transport.headers,
-    },
-    body: JSON.stringify({
-      quoteResponse: quote,
-      userPublicKey: options.userPublicKey,
-      wrapAndUnwrapSol: options.wrapAndUnwrapSol ?? true,
-      dynamicComputeUnitLimit: options.dynamicComputeUnitLimit ?? true,
-      useSharedAccounts: options.useSharedAccounts ?? true,
-    }),
-    signal: AbortSignal.timeout(30_000),
+  const body = JSON.stringify({
+    quoteResponse: quote,
+    userPublicKey: options.userPublicKey,
+    wrapAndUnwrapSol: options.wrapAndUnwrapSol ?? true,
+    dynamicComputeUnitLimit: options.dynamicComputeUnitLimit ?? true,
+    useSharedAccounts: options.useSharedAccounts ?? true,
   });
 
-  if (!response.ok) {
-    throw new JupiterSwapError(
-      `swap-instructions failed: HTTP ${response.status} ${await response.text()}`,
-      response.status,
-    );
+  // Retried like the quote path. Building an eight-leg basket issues eight of
+  // these back to back; without a retry a single transient 429 burns a rung
+  // of the route ladder, and four in a row drop the leg from the basket
+  // entirely -- a rate limit turning into a missing position.
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 600 * 2 ** (attempt - 1)));
+    await limiter.acquire();
+
+    try {
+      const response = await fetch(`${host}/swap/v1/swap-instructions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+          ...transport.headers,
+        },
+        body,
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      if (response.ok) return (await response.json()) as T;
+
+      const text = await response.text();
+      if (response.status !== 429 && response.status < 500) {
+        // A rejected route is final; retrying it wastes the budget.
+        throw new JupiterSwapError(
+          `swap-instructions failed: HTTP ${response.status} ${text}`,
+          response.status,
+        );
+      }
+      lastError = new JupiterSwapError(`HTTP ${response.status} ${text}`, response.status);
+    } catch (error) {
+      if (error instanceof JupiterSwapError && error.status !== null && error.status < 500 && error.status !== 429) {
+        throw error;
+      }
+      lastError = error as Error;
+    }
   }
-  return (await response.json()) as T;
+  throw new JupiterSwapError(
+    `swap-instructions failed after ${maxRetries} retries: ${lastError?.message}`,
+    null,
+  );
 }
 
 /** Venue labels seen carrying PreStocks flow, from live route plans. */

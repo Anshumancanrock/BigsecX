@@ -16,12 +16,37 @@ import {
   type Weight,
 } from "@ps/core";
 import { Rpc, fetchTrades, getMintStates, getSignaturesSince } from "@ps/chain";
-import type { JupiterClient } from "@ps/market";
+import { discoverVenues, type JupiterClient } from "@ps/market";
 import { Store, type TradeRow } from "@ps/db";
 import { takeSnapshot, type MarketSnapshot } from "./snapshot.ts";
 
 /** Index levels start here, so a chart reads as a percentage from launch. */
 const INDEX_BASE = 1_000;
+
+/** USDC has six decimals. */
+const USDC_DECIMALS = 6;
+
+/**
+ * What a trade cost, taken from the stablecoin that actually moved.
+ *
+ * Earlier this multiplied the share change by the CURRENT snapshot price,
+ * which destroys the measurement it exists to make: a buy and a later sell of
+ * the same shares get the same price, so profit reconstructs to roughly zero
+ * for everyone. Worse, the real figure was already being parsed out of the
+ * transaction and discarded.
+ *
+ * Sign convention matches the rest of the profit accounting: positive is
+ * money spent. A buy drains USDC, so the wallet's USDC delta is negative and
+ * the value is its negation.
+ *
+ * Returns null when no stablecoin leg is attributable -- a swap routed
+ * through SOL, or a plain transfer. Such a trade has no observable cost
+ * basis, and pricing it with a mark would invent one.
+ */
+function tradeValueUsd(usdcDeltaRaw: bigint | null): number | null {
+  if (usdcDeltaRaw === null || usdcDeltaRaw === 0n) return null;
+  return -Number(usdcDeltaRaw) / 10 ** USDC_DECIMALS;
+}
 
 export interface JobResult {
   readonly snapshotId: number;
@@ -31,12 +56,24 @@ export interface JobResult {
   readonly indexesWritten: number;
   /** Signatures whose fetch failed; their windows will be retried. */
   readonly missedSignatures: number;
+  /** Addresses whose backlog exceeded the page budget, leaving a gap. */
+  readonly skippedBacklog: number;
+  /** Pool accounts scanned this pass, on top of the mints. */
+  readonly venuesScanned: number;
   /** Set when trade indexing failed but the snapshot still succeeded. */
   readonly tradeError: string | null;
 }
 
-/** Signatures pulled per mint per pass. */
+/** Signatures pulled per address per pass. */
 const SIGNATURES_PER_MINT = Number(process.env["SIGNATURES_PER_MINT"] ?? 15);
+/**
+ * Pool accounts scanned per pass, on top of the eight mints.
+ *
+ * Bounded because each address costs at least one signature request and the
+ * free tier has little room. Venues are ordered by discovery, which follows
+ * the sizes probed, so the ones carrying real flow come first.
+ */
+const MAX_VENUES = Number(process.env["MAX_VENUES"] ?? 6);
 
 function indexInputs(snapshot: MarketSnapshot): IndexInput[] {
   return snapshot.tokens.map((t) => ({
@@ -45,23 +82,27 @@ function indexInputs(snapshot: MarketSnapshot): IndexInput[] {
     impliedValuationUsd: t.marketUsd === null ? null : t.marketUsd * t.supplyUi,
     liquidityUsd: t.liquidityUsd,
     basis: t.basis,
+    paused: t.paused,
   }));
 }
 
 /**
- * Value a weight set at current prices, as a level continuing from the last.
+ * Continue an index level by one period.
  *
- * The level is chained rather than recomputed from inception: weights change
- * as valuations move, and chaining period returns is what keeps a rebalancing
- * index comparable over time.
+ * The return of a finished period has to be measured with the basket that was
+ * held during it, which is the weight set persisted alongside the previous
+ * level -- not the weights just recomputed from today's valuations. Using
+ * today's weights back-dates every rebalance, crediting the index with
+ * holding more of whatever has since rallied.
  */
 function nextLevel(
-  weights: readonly Weight[],
+  weightsInForce: readonly Weight[],
   priceNow: ReadonlyMap<string, number>,
   pricePrevious: ReadonlyMap<string, number> | null,
   previousLevel: number | null,
 ): number {
   if (pricePrevious === null || previousLevel === null) return INDEX_BASE;
+  const weights = weightsInForce;
 
   let periodReturn = 0;
   let covered = 0;
@@ -115,8 +156,10 @@ export async function runJob(
   let tradeError: string | null = null;
   // Held until the trades are durably written, so a failure between parsing
   // and writing does not skip the window on the next run.
-  const pendingCursors: { mint: string; signature: string }[] = [];
+  const pendingCursors: { address: string; signature: string }[] = [];
   let missedSignatures = 0;
+  let venuesScanned = 0;
+  let skippedBacklog = 0;
 
   try {
     const mints = snapshot.tokens.map((t) => t.token.mint);
@@ -124,9 +167,21 @@ export async function runJob(
     const watched = new Set(mints);
     const rows: TradeRow[] = [];
 
-    for (const mint of mints) {
-      const cursor = store.cursorFor(mint);
-      const { signatures, complete } = await getSignaturesSince(rpc, mint, {
+    // Pools first: nearly everything touching them is a trade, whereas a
+    // mint's signature list is mostly transfers and account creations.
+    let venueAddresses: string[] = [];
+    try {
+      const venues = await discoverVenues(jupiter, snapshot.tokens.map((t) => t.token));
+      venueAddresses = venues.slice(0, MAX_VENUES).map((v) => v.ammKey);
+      venuesScanned = venueAddresses.length;
+    } catch {
+      // Venue discovery is an optimisation. Without it the mints still index.
+      venueAddresses = [];
+    }
+
+    for (const address of [...venueAddresses, ...mints]) {
+      const cursor = store.cursorFor(address);
+      const { signatures, complete } = await getSignaturesSince(rpc, address, {
         until: cursor ?? undefined,
         pageSize: SIGNATURES_PER_MINT,
       });
@@ -155,10 +210,16 @@ export async function runJob(
       // A batch that failed to fetch leaves a hole in this window, so the
       // cursor stays put and the window is read again next pass. Writes are
       // keyed on signature, so re-reading costs a request, not a duplicate.
+      // Advance whenever the window was read cleanly. An incomplete scan
+      // leaves a gap, and that gap is reported -- but refusing to advance
+      // stalls the address forever: after any downtime the backlog exceeds
+      // the page budget on every pass, so `complete` is never true and the
+      // same signatures are re-read indefinitely while new ones pile up.
+      // Forward progress with a counted gap beats a permanent stall.
       const newest = signatures[0];
-      const isBootstrap = cursor === null;
-      if (newest && missed === 0 && (complete || isBootstrap)) {
-        pendingCursors.push({ mint, signature: newest.signature });
+      if (newest && missed === 0) {
+        pendingCursors.push({ address, signature: newest.signature });
+        if (!complete) skippedBacklog++;
       }
       if (missed > 0) missedSignatures += missed;
 
@@ -177,8 +238,6 @@ export async function runJob(
           snapshot.unixSeconds,
         );
         const uiAmount = trade.deltaRaw < 0n ? -uiMagnitude : uiMagnitude;
-        const price = priceNow.get(token.symbol);
-
         rows.push({
           signature: trade.signature,
           owner: trade.owner,
@@ -187,14 +246,14 @@ export async function runJob(
           blockTime: trade.blockTime,
           deltaRaw: trade.deltaRaw,
           uiAmount,
-          valueUsd: price === undefined ? null : uiAmount * price,
+          valueUsd: tradeValueUsd(trade.usdcDeltaRaw),
         });
       }
     }
 
     tradesWritten = store.writeTrades(rows);
     tradersSeen = new Set(rows.map((r) => r.owner)).size;
-    for (const cursor of pendingCursors) store.setCursor(cursor.mint, cursor.signature);
+    for (const cursor of pendingCursors) store.setCursor(cursor.address, cursor.signature);
   } catch (error) {
     // Trade indexing is the most fragile part of the job. Losing it must not
     // cost the snapshot and index levels that already succeeded.
@@ -208,11 +267,13 @@ export async function runJob(
     const portfolio = buildIndex(definition, inputs);
     if (!portfolio) continue;
 
-    const previousLevel = previous ? lastLevel(store, definition.id) : null;
+    // The previous level and the basket that earned it travel together.
+    const last = previous ? store.lastIndexState(definition.id) : null;
     store.writeIndexLevel({
       indexId: definition.id,
       snapshotId,
-      level: nextLevel(portfolio.weights, priceNow, previousPrices, previousLevel),
+      level: nextLevel(last?.weights ?? portfolio.weights, priceNow, previousPrices, last?.level ?? null),
+      // Tomorrow's period is earned by the basket chosen today.
       weights: portfolio.weights,
     });
     indexesWritten++;
@@ -225,6 +286,8 @@ export async function runJob(
     tradersSeen,
     indexesWritten,
     missedSignatures,
+    skippedBacklog,
+    venuesScanned,
     tradeError,
   };
 }
@@ -238,13 +301,3 @@ function priceMapFor(store: Store, snapshotId: number): Map<string, number> {
   return prices;
 }
 
-function lastLevel(store: Store, indexId: string): number | null {
-  const row = store.raw
-    .query(
-      `SELECT l.level AS level FROM index_level l
-       JOIN market_snapshot s ON s.id = l.snapshot_id
-       WHERE l.index_id = ? ORDER BY s.taken_at DESC LIMIT 1`,
-    )
-    .get(indexId) as { level: number } | null;
-  return row?.level ?? null;
-}

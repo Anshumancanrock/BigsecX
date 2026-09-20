@@ -167,11 +167,24 @@ function extractTrades(
     byOwnerMint.set(key, (byOwnerMint.get(key) ?? 0n) + entry.delta);
   }
 
+  // How many watched mints each owner moved in this transaction. A stablecoin
+  // leg can only be attributed to a token leg when there is exactly one; a
+  // basket swap moves several against a single USDC delta, and pinning that
+  // delta to each leg would count the same money once per leg.
+  const legsPerOwner = new Map<string, number>();
+  for (const [key, delta] of byOwnerMint) {
+    const [owner, mint] = key.split("\u0000") as [string, string];
+    if (!watchedMints.has(mint) || delta === 0n) continue;
+    legsPerOwner.set(owner, (legsPerOwner.get(owner) ?? 0) + 1);
+  }
+
   const trades: Trade[] = [];
   for (const [key, delta] of byOwnerMint) {
     const [owner, mint] = key.split("\u0000") as [string, string];
     if (!watchedMints.has(mint) || delta === 0n) continue;
     if (isCounterparty(owner, signers)) continue;
+
+    const usdc = byOwnerMint.get(`${owner}\u0000${USDC_MINT}`) ?? null;
     trades.push({
       signature,
       slot: response.slot,
@@ -179,7 +192,7 @@ function extractTrades(
       owner,
       mint,
       deltaRaw: delta,
-      usdcDeltaRaw: byOwnerMint.get(`${owner}\u0000${USDC_MINT}`) ?? null,
+      usdcDeltaRaw: legsPerOwner.get(owner) === 1 ? usdc : null,
     });
   }
   return trades;

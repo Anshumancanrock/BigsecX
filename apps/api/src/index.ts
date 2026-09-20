@@ -26,7 +26,7 @@ import {
   type Weight,
 } from "@ps/core";
 import { Cache, buildExecutionPlan } from "@ps/market";
-import { buildMirrorBundle, findUncoveredSells, getSellableBalances } from "@ps/tx";
+import { buildMirrorBundle, findUncoveredSells, getSellableBalances, getSpendable } from "@ps/tx";
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
 import type { Services } from "./context.ts";
 import { toMarketDto } from "./serialize.ts";
@@ -38,6 +38,9 @@ import {
   requireFiniteUsd,
   requireInt,
 } from "./validate.ts";
+
+/** Enough lamports to submit several transactions and open accounts. */
+const MIN_LAMPORTS = 3_000_000;
 
 const MARKET_TTL_MS = 20_000;
 /** How long a snapshot may be served after expiry when upstreams are failing. */
@@ -86,6 +89,7 @@ function indexInputs(snapshot: Awaited<ReturnType<typeof takeSnapshot>>): IndexI
     impliedValuationUsd: t.marketUsd === null ? null : t.marketUsd * t.supplyUi,
     liquidityUsd: t.liquidityUsd,
     basis: t.basis,
+    paused: t.paused,
   }));
 }
 
@@ -293,6 +297,7 @@ app.post("/api/mirror/plan", async (c) => {
     target: target.name,
     weights: target.weights,
     skipped: rebalance.skipped,
+    unpricedHoldings: rebalance.unpricedHoldings,
     legs: plan.legs.map((l) => ({
       symbol: l.order.symbol,
       side: l.order.side,
@@ -395,6 +400,62 @@ app.post("/api/mirror/build", async (c) => {
     }
   }
 
+  // A paused mint cannot be swapped at all. Indexes already exclude them, but
+  // a caller-supplied weight set or an existing holding can still name one.
+  // A holding we could not price contributes nothing to portfolio value, so
+  // the plan treats it as worthless and will sell a priced name to buy more
+  // of a position the user already holds. Refuse rather than act on it.
+  if (rebalance.unpricedHoldings.length > 0) {
+    problems.push({
+      kind: "unpriced-holding",
+      message: "part of this wallet could not be valued",
+      detail:
+        "A holding with no available price is treated as worthless by the rebalancer, " +
+        "which would size every other leg wrongly.",
+      symbols: rebalance.unpricedHoldings,
+    });
+  }
+
+  const pausedSymbols = new Set(
+    snapshot.tokens.filter((t) => t.paused).map((t) => t.token.symbol),
+  );
+  const pausedLegs = rebalance.orders.filter((o) => pausedSymbols.has(o.symbol));
+  if (pausedLegs.length > 0) {
+    problems.push({
+      kind: "paused",
+      message: "the issuer has halted transfers on part of this basket",
+      detail: "Every swap touching a paused mint fails, so no bundle is built for it.",
+      symbols: pausedLegs.map((o) => o.symbol),
+    });
+  }
+
+  // Buy legs spend stablecoin and lamports. These were checked against
+  // nothing while sells were checked against the chain, so a wallet with no
+  // USDC, or with USDC but no SOL for fees, still received a signable bundle
+  // that could not land.
+  if (buys.length > 0) {
+    const spendable = await getSpendable(services.rpc, owner);
+    if (spendable.usdc + 1e-6 < buyNotional) {
+      problems.push({
+        kind: "insufficient-usdc",
+        message: "wallet does not hold enough USDC to cover the buy legs",
+        detail: "Buys are quoted from the associated USDC account.",
+        requiredUsd: buyNotional,
+        availableUsd: spendable.usdc,
+      });
+    }
+    // Each transaction pays a signature fee and may open accounts. A wallet
+    // with no lamports cannot submit anything, however much USDC it holds.
+    if (spendable.lamports < MIN_LAMPORTS) {
+      problems.push({
+        kind: "insufficient-sol",
+        message: "wallet does not hold enough SOL to pay transaction fees",
+        detail: `At least ${MIN_LAMPORTS / 1e9} SOL is needed to submit and open accounts.`,
+        lamports: spendable.lamports,
+      });
+    }
+  }
+
   if (problems.length > 0) {
     return c.json({ error: problems[0]?.["message"], problems }, 409);
   }
@@ -417,6 +478,19 @@ app.post("/api/mirror/build", async (c) => {
     lastValidBlockHeight: value.lastValidBlockHeight,
     slippageBps,
   });
+
+  // Every leg failing is not a success with nothing in it. Returning 200 with
+  // an empty array and a note telling the user to sign them reads as "done".
+  if (bundle.transactions.length === 0) {
+    return c.json(
+      {
+        error: "no leg of this basket could be built",
+        detail: "Every route was refused or could not be quoted; nothing is signable.",
+        failed: bundle.failed,
+      },
+      502,
+    );
+  }
 
   return c.json({
     target: target.name,

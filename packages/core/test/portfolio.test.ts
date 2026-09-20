@@ -209,6 +209,81 @@ describe("planRebalance", () => {
     expect(plan.orders.some((o) => o.symbol === "SPACEX")).toBe(false);
   });
 
+  test("tops up a portfolio that is already exactly at target", () => {
+    // Regression. The churn guard used to compare the held weight, a share of
+    // the CURRENT book, against the target weight, a share of the book after
+    // new capital lands. Those sit on different bases, so deployUsd never
+    // reached the test: a wallet already at target had a gap of exactly zero
+    // and every leg was discarded however much was being deployed. This is
+    // the top-up path, the most common repeat action a user has, and it
+    // surfaced as HTTP 400 "nothing to trade".
+    const plan = planRebalance({
+      target,
+      holdings: [
+        { symbol: "OPENAI", uiAmount: 0.5 },
+        { symbol: "ANTHROPIC", uiAmount: 0.5 },
+      ],
+      priceUsdBySymbol: prices,
+      deployUsd: 1_000,
+    });
+
+    expect(plan.orders).toHaveLength(2);
+    expect(plan.orders.every((o) => o.side === "buy")).toBe(true);
+    for (const order of plan.orders) expect(order.usd).toBeCloseTo(500, 9);
+    expect(plan.skipped).toHaveLength(0);
+  });
+
+  test("a top-up reports the dilution, not a flat weight", () => {
+    const plan = planRebalance({
+      target,
+      holdings: [
+        { symbol: "OPENAI", uiAmount: 0.5 },
+        { symbol: "ANTHROPIC", uiAmount: 0.5 },
+      ],
+      priceUsdBySymbol: prices,
+      deployUsd: 1_000,
+    });
+    // Half the book today becomes a quarter of the book being aimed at;
+    // showing 50% -> 50% beside a $500 buy would read as a no-op.
+    expect(plan.orders[0]?.fromWeight).toBeCloseTo(0.25, 9);
+    expect(plan.orders[0]?.toWeight).toBeCloseTo(0.5, 9);
+  });
+
+  test("still refuses to churn on drift when no capital is deployed", () => {
+    // The guard must survive the fix: sub-tolerance drift with no new money
+    // is still not worth a spread plus a transfer fee.
+    const plan = planRebalance({
+      target,
+      holdings: [
+        { symbol: "OPENAI", uiAmount: 0.502 },
+        { symbol: "ANTHROPIC", uiAmount: 0.498 },
+      ],
+      priceUsdBySymbol: prices,
+      deployUsd: 0,
+      toleranceBps: 50,
+      minTicketUsd: 0,
+    });
+    expect(plan.orders).toHaveLength(0);
+    expect(plan.skipped.every((s) => s.reason === "within tolerance")).toBe(true);
+  });
+
+  test("a tiny top-up is still skipped as churn", () => {
+    // Dollars are what the guard measures, so a trivial deposit does not
+    // force a trade just because new money arrived.
+    const plan = planRebalance({
+      target,
+      holdings: [
+        { symbol: "OPENAI", uiAmount: 0.5 },
+        { symbol: "ANTHROPIC", uiAmount: 0.5 },
+      ],
+      priceUsdBySymbol: prices,
+      deployUsd: 2,
+      toleranceBps: 50,
+      minTicketUsd: 0,
+    });
+    expect(plan.orders).toHaveLength(0);
+  });
+
   test("does nothing for an empty wallet with no capital to deploy", () => {
     const plan = planRebalance({ target, holdings: [], priceUsdBySymbol: prices });
     expect(plan.orders).toHaveLength(0);

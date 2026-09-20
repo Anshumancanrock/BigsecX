@@ -24,6 +24,7 @@ async function tick(): Promise<void> {
         `from ${result.tradersSeen} wallets · ${result.indexesWritten} indexes · ` +
         `${Date.now() - started}ms` +
         (result.missedSignatures > 0 ? ` · ${result.missedSignatures} signatures retried next pass` : "") +
+        (result.skippedBacklog > 0 ? ` · ${result.skippedBacklog} addresses left a backlog gap` : "") +
         (result.tradeError ? ` · trades degraded: ${result.tradeError}` : ""),
     );
   } catch (error) {

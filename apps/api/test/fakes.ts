@@ -20,6 +20,9 @@ export const MULTIPLIERS: Readonly<Record<string, number>> = {
 
 export const FAKE_EPOCH = 1038;
 
+/** Symbols the current fake marks as paused. Set by makeServices. */
+const PAUSED = new Set<string>();
+
 function mintAccount(token: PreStock) {
   const multiplier = MULTIPLIERS[token.symbol] ?? 1;
   return {
@@ -56,7 +59,7 @@ function mintAccount(token: PreStock) {
                 },
               },
             },
-            { extension: "pausableConfig", state: { paused: false } },
+            { extension: "pausableConfig", state: { paused: PAUSED.has(token.symbol) } },
           ],
         },
       },
@@ -68,6 +71,12 @@ function mintAccount(token: PreStock) {
 export interface FakeOptions {
   /** Raw ATA balances by symbol, for the sell-coverage check. */
   readonly balances?: Readonly<Record<string, bigint>>;
+  /** Raw USDC balance in the owner's associated account. */
+  readonly usdcRaw?: bigint;
+  /** Lamport balance, for the fee check. */
+  readonly lamports?: number;
+  /** Symbols the issuer has paused. */
+  readonly paused?: readonly string[];
   /** Make the price feed fail, to exercise degraded paths. */
   readonly pricesThrow?: boolean;
   readonly priceUsd?: Readonly<Record<string, number>>;
@@ -83,6 +92,12 @@ export function fakeRpc(options: FakeOptions = {}) {
       calls.push(method);
 
       if (method === "getEpochInfo") return { epoch: FAKE_EPOCH } as T;
+
+      if (method === "getBalance") {
+        // Default to a funded wallet so fee checks do not dominate every
+        // unrelated assertion.
+        return { value: options.lamports ?? 50_000_000 } as T;
+      }
 
       if (method === "getLatestBlockhash") {
         return {
@@ -105,6 +120,21 @@ export function fakeRpc(options: FakeOptions = {}) {
             }),
           } as T;
         }
+        // A single address is the USDC associated account; the spendable
+        // check asks for it on its own.
+        if (addresses.length === 1) {
+          const raw = options.usdcRaw ?? 100_000_000_000n; // 100k USDC
+          return {
+            value: [
+              {
+                data: {
+                  parsed: { info: { mint: "usdc", tokenAmount: { amount: raw.toString() } } },
+                },
+              },
+            ],
+          } as T;
+        }
+
         // Balances are returned in universe order, matching how the caller
         // derived the addresses.
         return {
@@ -154,6 +184,9 @@ export function fakeJupiter(options: FakeOptions = {}) {
 let dbCounter = 0;
 
 export function makeServices(options: FakeOptions = {}): Services & { store: Store } {
+  PAUSED.clear();
+  for (const symbol of options.paused ?? []) PAUSED.add(symbol);
+
   // A distinct file per call: tests must not share leaderboard state.
   const store = new Store(`/tmp/ps-api-test-${process.pid}-${dbCounter++}.db`);
   return {
