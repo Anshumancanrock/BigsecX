@@ -40,6 +40,9 @@ interface TransactionResponse {
   blockTime: number | null;
   meta: {
     err: unknown;
+    fee: number;
+    preBalances?: number[];
+    postBalances?: number[];
     preTokenBalances?: TokenBalance[];
     postTokenBalances?: TokenBalance[];
   } | null;
@@ -68,6 +71,19 @@ export interface Trade {
    * the SOL side discards three quarters of the observable cost basis.
    */
   readonly wsolDeltaRaw: bigint | null;
+  /**
+   * Fee payer's native lamport change, with the transaction fee added back.
+   *
+   * This is where a SOL-routed swap actually shows up. Jupiter wraps and
+   * unwraps SOL inside the transaction, so the wrapped account opens at zero
+   * and closes at zero and its token delta is nothing -- while the real
+   * movement, measured on mainnet at 2.75, 0.25 and 1.01 SOL across three
+   * consecutive pool trades, sits in the native balance. Reading only token
+   * balances leaves every such trade with no observable cost.
+   *
+   * Only set when the fee payer is also the owner of the token leg.
+   */
+  readonly lamportDeltaRaw: bigint | null;
 }
 
 /** Owners that are program-controlled rather than people. */
@@ -144,6 +160,16 @@ function extractTrades(
   const meta = response.meta;
   if (!meta || meta.err) return [];
 
+  // The fee payer is the first account key. Its native balance is the only
+  // place a SOL-routed swap is visible.
+  const feePayer = response.transaction.message.accountKeys[0]?.pubkey ?? null;
+  const preLamports = meta.preBalances?.[0];
+  const postLamports = meta.postBalances?.[0];
+  const lamportDelta =
+    preLamports !== undefined && postLamports !== undefined
+      ? BigInt(postLamports) - BigInt(preLamports) + BigInt(meta.fee)
+      : null;
+
   // Only balance changes belonging to a signer count as that wallet trading.
   // Every swap also moves the pool's balance, and without this filter the
   // liquidity pools dominate any ranking built on the result.
@@ -206,6 +232,7 @@ function extractTrades(
       deltaRaw: delta,
       usdcDeltaRaw: single ? usdc : null,
       wsolDeltaRaw: single ? wsol : null,
+      lamportDeltaRaw: single && owner === feePayer ? lamportDelta : null,
     });
   }
   return trades;

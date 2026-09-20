@@ -213,11 +213,19 @@ app.get("/api/leaderboard", async (c) => {
     );
   }
 
-  const board = buildLeaderboard(records, prices, { limit, sortBy });
+  // Exposed because the right floor depends on how much history has been
+  // indexed. With a thin dataset a $100 default hides every wallet.
+  const minVolumeUsd = requireInt(c.req.query("minVolumeUsd"), "minVolumeUsd", {
+    min: 0,
+    max: 1_000_000,
+    fallback: 100,
+  });
+  const board = buildLeaderboard(records, prices, { limit, sortBy, minVolumeUsd });
 
   return c.json({
     window: `${hours}h`,
     sortBy,
+    minVolumeUsd,
     sinceSlot,
     walletsConsidered: records.size,
     entries: board.map((row) => ({

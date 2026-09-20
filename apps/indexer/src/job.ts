@@ -27,6 +27,15 @@ const INDEX_BASE = 1_000;
 const USDC_DECIMALS = 6;
 const WSOL_DECIMALS = 9;
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
+const LAMPORTS_PER_SOL = 1_000_000_000;
+/**
+ * Below this, a lamport change is rent, not a trade.
+ *
+ * Opening an associated token account costs about 0.00204 SOL and closing it
+ * returns the same, so small balance movements are account churn rather than
+ * consideration. Only used for the native-SOL fallback.
+ */
+const MIN_LAMPORT_TRADE = 5_000_000;
 
 /**
  * What a trade cost, taken from the stablecoin that actually moved.
@@ -48,6 +57,7 @@ const WSOL_MINT = "So11111111111111111111111111111111111111112";
 function tradeValueUsd(
   usdcDeltaRaw: bigint | null,
   wsolDeltaRaw: bigint | null,
+  lamportDeltaRaw: bigint | null,
   solUsd: number | null,
 ): number | null {
   if (usdcDeltaRaw !== null && usdcDeltaRaw !== 0n) {
@@ -63,6 +73,18 @@ function tradeValueUsd(
   // liquid pair moving far less than these thin tokens do.
   if (wsolDeltaRaw !== null && wsolDeltaRaw !== 0n && solUsd !== null && solUsd > 0) {
     return (-Number(wsolDeltaRaw) / 10 ** WSOL_DECIMALS) * solUsd;
+  }
+  // Native lamports last, and only for movements too large to be rent.
+  // Measured on mainnet: SOL-routed swaps show nothing in the wrapped account
+  // because Jupiter wraps and unwraps within the transaction, so this is the
+  // only place their cost appears.
+  if (
+    lamportDeltaRaw !== null &&
+    solUsd !== null &&
+    solUsd > 0 &&
+    (lamportDeltaRaw > BigInt(MIN_LAMPORT_TRADE) || lamportDeltaRaw < BigInt(-MIN_LAMPORT_TRADE))
+  ) {
+    return (-Number(lamportDeltaRaw) / LAMPORTS_PER_SOL) * solUsd;
   }
   return null;
 }
@@ -92,7 +114,17 @@ const SIGNATURES_PER_MINT = Number(process.env["SIGNATURES_PER_MINT"] ?? 15);
  * free tier has little room. Venues are ordered by discovery, which follows
  * the sizes probed, so the ones carrying real flow come first.
  */
-const MAX_VENUES = Number(process.env["MAX_VENUES"] ?? 6);
+const MAX_VENUES = Number(process.env["MAX_VENUES"] ?? 10);
+/**
+ * Pages of signatures spent on a mint, versus a pool.
+ *
+ * Measured on mainnet from ten signatures each: the OPENAI mint yielded
+ * seven failed transactions, three with no token movement, and zero trades,
+ * while its DLMM pool yielded three. A mint's signature list is dominated by
+ * bot spam and account churn, so it gets a single page and the pools get the
+ * budget.
+ */
+const MINT_PAGES = 1;
 
 function indexInputs(snapshot: MarketSnapshot): IndexInput[] {
   return snapshot.tokens.map((t) => ({
@@ -208,11 +240,13 @@ export async function runJob(
       venueAddresses = [];
     }
 
+    const venueSet = new Set(venueAddresses);
     for (const address of [...venueAddresses, ...mints]) {
       const cursor = store.cursorFor(address);
       const { signatures, complete } = await getSignaturesSince(rpc, address, {
         until: cursor ?? undefined,
         pageSize: SIGNATURES_PER_MINT,
+        ...(venueSet.has(address) ? {} : { maxPages: MINT_PAGES }),
       });
       if (signatures.length === 0) continue;
 
@@ -275,7 +309,12 @@ export async function runJob(
           blockTime: trade.blockTime,
           deltaRaw: trade.deltaRaw,
           uiAmount,
-          valueUsd: tradeValueUsd(trade.usdcDeltaRaw, trade.wsolDeltaRaw, solUsd),
+          valueUsd: tradeValueUsd(
+            trade.usdcDeltaRaw,
+            trade.wsolDeltaRaw,
+            trade.lamportDeltaRaw,
+            solUsd,
+          ),
         });
       }
     }
