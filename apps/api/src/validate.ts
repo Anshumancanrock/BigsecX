@@ -34,14 +34,16 @@ const MAX_HOLDINGS = 32;
 /** Above this, quotes are meaningless against $2.6M of total liquidity. */
 const MAX_DEPLOY_USD = 10_000_000;
 
-export function requireFiniteUsd(value: unknown, field: string, { min = 0 } = {}): number {
+export function requireFiniteUsd(
+  value: unknown,
+  field: string,
+  { min = 0, max = MAX_DEPLOY_USD }: { min?: number; max?: number } = {},
+): number {
   if (value === undefined || value === null) throw new BadRequest(`${field} is required`);
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) throw new BadRequest(`${field} must be a finite number`);
   if (parsed < min) throw new BadRequest(`${field} must be at least ${min}`);
-  if (parsed > MAX_DEPLOY_USD) {
-    throw new BadRequest(`${field} must be at most ${MAX_DEPLOY_USD}`);
-  }
+  if (parsed > max) throw new BadRequest(`${field} must be at most ${max}`);
   return parsed;
 }
 

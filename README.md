@@ -237,6 +237,25 @@ next mirror.
 Copy builds run through the same refusals as every other build, so a copy
 cannot ship a bundle that mirroring an index would have rejected.
 
+## Plan and build agree by construction
+
+`/api/mirror/plan` and `/api/mirror/build` price the same legs through the
+same execution policy, and `/build` executes the plan rather than the raw
+orders. This was not always true, and the gap was the sharpest failure mode
+in the system: planning resized legs for depth and impact and deferred what
+the pools could not absorb, while building sent the unresized orders. A user
+saw "reduced to $30, this one deferred" and signed a bundle doing neither.
+
+The same applies to copying. `POST /api/copy/build` deploys the stated
+capital into the leader's allocation and passes no existing holdings, so the
+rebalancer produces exactly weight x capital per leg — the preview by
+construction. Passing the follower's other positions made the target
+(existing + capital): a follower holding $5,000 elsewhere was shown $600 and
+$400 and would have signed a bundle selling $5,000 of an untouched position
+and buying $3,600 and $2,400.
+
+Copying adds a sleeve. It does not rebalance the whole wallet.
+
 ## What the API refuses, and why
 
 A build is refused with 409 and *every* applicable reason, not the first one:

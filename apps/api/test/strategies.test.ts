@@ -211,6 +211,35 @@ describe("editing", () => {
   });
 });
 
+describe("retracting", () => {
+  test("a creator can unpublish a strategy", async () => {
+    // Or-ing the request with the stored value made publication permanent.
+    const a = app();
+    const created = (await (
+      await send(a, "POST", "/api/strategies", draft({ published: true }))
+    ).json()) as { id: string };
+    expect(((await (await a.request("/api/strategies")).json()) as { strategies: unknown[] }).strategies).toHaveLength(1);
+
+    const updated = (await (
+      await send(a, "PUT", `/api/strategies/${created.id}`, { creator: ALICE, published: false })
+    ).json()) as { published: boolean };
+    expect(updated.published).toBe(false);
+    expect(((await (await a.request("/api/strategies")).json()) as { strategies: unknown[] }).strategies).toHaveLength(0);
+  });
+
+  test("omitting published leaves it as it was", async () => {
+    const a = app();
+    const created = (await (
+      await send(a, "POST", "/api/strategies", draft({ published: true }))
+    ).json()) as { id: string };
+    const updated = (await (
+      await send(a, "PUT", `/api/strategies/${created.id}`, { creator: ALICE, name: "Renamed" })
+    ).json()) as { published: boolean };
+    expect(updated.published).toBe(true);
+  });
+});
+
+
 describe("overlap", () => {
   test("reveals concentration hidden across baskets", async () => {
     const a = app();

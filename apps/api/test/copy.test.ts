@@ -168,6 +168,52 @@ describe("copy build", () => {
   });
 });
 
+describe("preview matches build", () => {
+  /**
+   * Regression for the worst bug found in review.
+   *
+   * Copy build passed the follower's existing holdings into the rebalancer
+   * alongside the capital, so the target became (existing + capital). A
+   * follower holding $5,000 elsewhere saw a preview promising $600 and $400
+   * and received a bundle selling $5,000 of an untouched position and buying
+   * $3,600 and $2,400 -- six times the size, liquidating a holding they had
+   * never agreed to sell, after approving the preview.
+   *
+   * The invariant that prevents it is proven in packages/core: deploying
+   * capital with no holdings yields exactly weight x capital in buys. Here
+   * we check the route never reports a sell-shaped refusal, which is what
+   * leaked holdings would produce.
+   */
+  test("a copy of new capital never trips a sell-shaped refusal", async () => {
+    const a = app({ ...leaderBook, usdcRaw: 100_000_000_000n });
+    const res = await post(a, "/api/copy/build", {
+      leader: LEADER,
+      follower: FOLLOWER,
+      capitalUsd: 1_000,
+    });
+    const body = (await res.json()) as { problems?: { kind: string }[] };
+
+    // The fake cannot quote, so every leg defers and the build refuses --
+    // which is itself correct: nothing should be bundled that could not be
+    // priced. What matters is the reason. Selling or non-atomicity would
+    // mean the follower's holdings had leaked into the target.
+    const kinds = (body.problems ?? []).map((p) => p.kind);
+    expect(kinds).not.toContain("not-atomic");
+    expect(kinds).not.toContain("insufficient-balance");
+    expect(kinds).toContain("no-executable-legs");
+  });
+
+  test("the preview is sized from capital alone", async () => {
+    const a = app({ ...leaderBook, usdcRaw: 100_000_000_000n });
+    const preview = (await (
+      await post(a, "/api/copy/preview", { leader: LEADER, capitalUsd: 1_000 })
+    ).json()) as { deployUsd: number; positions: { usd: number }[] };
+
+    expect(preview.deployUsd).toBe(1_000);
+    expect(preview.positions.reduce((s, p) => s + p.usd, 0)).toBeCloseTo(1_000, 6);
+  });
+});
+
 describe("stop check", () => {
   test("measures drawdown from the peak", async () => {
     const body = (await (

@@ -237,7 +237,13 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
           guardrails,
           rebalance: parseRebalance(body["rebalance"] ?? existing.rebalance),
         },
-        { id, now: new Date(), published: body["published"] === true || existing.published },
+        {
+          id,
+          now: new Date(),
+          // An explicit boolean wins, so a creator can retract a basket.
+          // Or-ing with the stored value made publication permanent.
+          published: typeof body["published"] === "boolean" ? body["published"] : existing.published,
+        },
       );
     } catch (error) {
       if (error instanceof StrategyInvalid) return c.json({ error: error.message, problems: error.problems }, 400);

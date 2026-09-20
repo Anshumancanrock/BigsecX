@@ -11,7 +11,8 @@
  * one leaves the caller stuck on the next.
  */
 
-import { planRebalance, type Weight } from "@ps/core";
+import { planRebalance, type ExecutionPlan, type Weight } from "@ps/core";
+import { buildExecutionPlan } from "@ps/market";
 import { buildMirrorBundle, findUncoveredSells, getSellableBalances, getSpendable } from "@ps/tx";
 import type { Services } from "./context.ts";
 import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
@@ -35,10 +36,13 @@ export type BuildOutcome =
       readonly kind: "built";
       readonly bundle: Awaited<ReturnType<typeof buildMirrorBundle>>;
       readonly orders: readonly { readonly symbol: string; readonly side: string; readonly usd: number }[];
+      /** The priced plan the bundle was built from. */
+      readonly plan: ExecutionPlan;
     };
 
 function priceMaps(snapshot: MarketSnapshot) {
   const price = new Map<string, number>();
+  const liquidity = new Map<string, number>();
   const scale = new Map<string, number>();
   const scaleConfig = new Map<
     string,
@@ -46,6 +50,7 @@ function priceMaps(snapshot: MarketSnapshot) {
   >();
   for (const t of snapshot.tokens) {
     if (t.marketUsd !== null) price.set(t.token.symbol, t.marketUsd);
+    liquidity.set(t.token.symbol, t.liquidityUsd);
     scale.set(t.token.symbol, t.multiplier);
     scaleConfig.set(t.token.symbol, {
       multiplier: t.multiplier,
@@ -53,7 +58,7 @@ function priceMaps(snapshot: MarketSnapshot) {
       newMultiplierEffectiveTimestamp: 0,
     });
   }
-  return { price, scale, scaleConfig };
+  return { price, liquidity, scale, scaleConfig };
 }
 
 export async function buildForTarget(
@@ -61,7 +66,7 @@ export async function buildForTarget(
   request: BuildRequest,
 ): Promise<BuildOutcome> {
   const { snapshot } = request;
-  const { price, scale, scaleConfig } = priceMaps(snapshot);
+  const { price, liquidity, scale, scaleConfig } = priceMaps(snapshot);
 
   const rebalance = planRebalance({
     target: request.target,
@@ -167,6 +172,35 @@ export async function buildForTarget(
 
   if (problems.length > 0) return { kind: "refused", problems };
 
+  // Price the plan against live depth, and build from THAT.
+  //
+  // This step used to be missing here: the planning endpoint resized legs
+  // for depth and impact and deferred the ones the pools could not absorb,
+  // and the build endpoint then sent the raw unresized orders. A user saw
+  // "NEURALINK reduced to $30, KALSHI deferred" and signed a bundle doing
+  // neither. The whole execution policy existed only in the preview.
+  const plan = await buildExecutionPlan(services.jupiter, {
+    orders: rebalance.orders,
+    liquidityUsdBySymbol: liquidity,
+    priceUsdBySymbol: price,
+    scaleBySymbol: scale,
+    transferFeeBps: snapshot.tokens[0]?.transferFeeBps ?? 0,
+  });
+
+  if (plan.legs.length === 0) {
+    return {
+      kind: "refused",
+      problems: [
+        {
+          kind: "no-executable-legs",
+          message: "no leg of this basket can be executed at this size",
+          detail: "Every leg exceeded its depth or impact limit against current liquidity.",
+          deferred: plan.deferred,
+        },
+      ],
+    };
+  }
+
   // "confirmed", not "finalized". A blockhash lives about 150 blocks and a
   // finalized one is already ~32 blocks old when handed out, spending part
   // of the user's signing window before they see the prompt.
@@ -174,9 +208,15 @@ export async function buildForTarget(
     value: { blockhash: string; lastValidBlockHeight: number };
   }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
 
+  const legs = plan.legs.map((l) => ({
+    symbol: l.order.symbol,
+    side: l.order.side,
+    usd: l.usd,
+  }));
+
   const bundle = await buildMirrorBundle(services.jupiter, {
     owner: request.owner,
-    legs: rebalance.orders.map((o) => ({ symbol: o.symbol, side: o.side, usd: o.usd })),
+    legs,
     priceUsdBySymbol: price,
     scaleBySymbol: scale,
     blockhash: value.blockhash,
@@ -184,9 +224,5 @@ export async function buildForTarget(
     slippageBps: request.slippageBps,
   });
 
-  return {
-    kind: "built",
-    bundle,
-    orders: rebalance.orders.map((o) => ({ symbol: o.symbol, side: o.side, usd: o.usd })),
-  };
+  return { kind: "built", bundle, orders: legs, plan };
 }

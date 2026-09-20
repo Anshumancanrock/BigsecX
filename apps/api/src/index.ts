@@ -423,6 +423,13 @@ app.post("/api/mirror/build", async (c) => {
   return c.json({
     target: target.name,
     ...outcome.bundle,
+    // The sizes actually built, after depth and impact limits. These are
+    // what the transactions do, and they are what the plan endpoint shows.
+    legs: outcome.orders,
+    deferred: outcome.plan.deferred,
+    totalUsd: outcome.plan.totalUsd,
+    totalCostUsd: outcome.plan.totalCostUsd,
+    costFraction: outcome.plan.costFraction,
     atomic: false,
     note:
       "Sign all transactions together. They settle independently, so a partial fill is possible. " +

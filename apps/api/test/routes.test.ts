@@ -398,6 +398,30 @@ describe("mirror/build guards", () => {
   });
 });
 
+describe("plan and build agree", () => {
+  /**
+   * Regression. The planning endpoint resized legs for depth and impact and
+   * deferred the ones the pools could not absorb; the build endpoint then
+   * sent the raw unresized orders. A user saw "NEURALINK reduced, KALSHI
+   * deferred" and signed a bundle doing neither -- the entire execution
+   * policy existed only in the preview.
+   */
+  test("a build that can price nothing refuses rather than bundling raw orders", async () => {
+    const res = await post(app({ usdcRaw: 100_000_000_000n }).app, "/api/mirror/build", {
+      indexId: "prediction",
+      deployUsd: 1_000,
+      owner: "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL",
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { problems: { kind: string; deferred?: unknown[] }[] };
+    const problem = body.problems.find((p) => p.kind === "no-executable-legs");
+    expect(problem).toBeDefined();
+    // The legs that could not be executed are named, not swallowed.
+    expect(Array.isArray(problem?.deferred)).toBe(true);
+  });
+});
+
+
 describe("failure handling", () => {
   test("a price-feed failure degrades instead of taking the API down", async () => {
     // Every route depends on a snapshot. Letting a Jupiter 429 reject the

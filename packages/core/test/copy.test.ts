@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { planRebalance } from "../src/portfolio.ts";
 import {
   CopyLimitsInvalid,
   DEFAULT_COPY_LIMITS,
@@ -239,5 +240,75 @@ describe("stopLossTriggered", () => {
       stopLossFraction: 0.15,
     });
     expect(result.drawdownFraction).toBe(0);
+  });
+});
+
+describe("a copy preview is exactly what a rebalance will do", () => {
+  /**
+   * The invariant behind copy trading, proven rather than assumed.
+   *
+   * Deploying capital with no existing holdings must produce one buy per
+   * target weight, each sized weight x capital. When that holds, the preview
+   * a follower approves and the orders the builder emits are the same thing
+   * by construction.
+   *
+   * It stopped holding once, when the builder also passed the follower's
+   * unrelated positions: the target became (existing + capital), and a
+   * follower was shown $600 and $400 while the bundle sold $5,000 of an
+   * untouched holding and bought $3,600 and $2,400.
+   */
+  const prices = new Map([
+    ["OPENAI", 100],
+    ["ANTHROPIC", 100],
+    ["SPACEX", 100],
+    ["KALSHI", 100],
+  ]);
+
+  test("every preview position becomes an identically sized buy", () => {
+    const preview = previewCopy({ leader: LEADER, leaderWeights, limits: limits() });
+    const plan = planRebalance({
+      target: preview.targetWeights,
+      holdings: [],
+      priceUsdBySymbol: prices,
+      deployUsd: preview.deployUsd,
+    });
+
+    expect(plan.orders).toHaveLength(preview.positions.length);
+    for (const position of preview.positions) {
+      const order = plan.orders.find((o) => o.symbol === position.symbol);
+      expect(order?.side).toBe("buy");
+      expect(order?.usd).toBeCloseTo(position.usd, 9);
+    }
+  });
+
+  test("holds at a reduced copy ratio too", () => {
+    const preview = previewCopy({
+      leader: LEADER,
+      leaderWeights,
+      limits: limits({ copyRatio: 0.3 }),
+    });
+    const plan = planRebalance({
+      target: preview.targetWeights,
+      holdings: [],
+      priceUsdBySymbol: prices,
+      deployUsd: preview.deployUsd,
+    });
+    expect(plan.orders.reduce((s, o) => s + o.usd, 0)).toBeCloseTo(300, 6);
+    expect(plan.orders.every((o) => o.side === "buy")).toBe(true);
+  });
+
+  test("unrelated holdings would break it, which is why none are passed", () => {
+    // Demonstrates the failure mode directly: the same target with the
+    // follower's other position included produces a sell and six times the
+    // notional.
+    const preview = previewCopy({ leader: LEADER, leaderWeights, limits: limits() });
+    const wrong = planRebalance({
+      target: preview.targetWeights,
+      holdings: [{ symbol: "KALSHI", uiAmount: 50 }], // $5,000
+      priceUsdBySymbol: prices,
+      deployUsd: preview.deployUsd,
+    });
+    expect(wrong.orders.some((o) => o.side === "sell")).toBe(true);
+    expect(wrong.targetValueUsd).toBe(6_000);
   });
 });

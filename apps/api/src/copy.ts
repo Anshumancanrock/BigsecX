@@ -24,6 +24,9 @@ import type { Services } from "./context.ts";
 import { readPortfolio } from "./portfolio.ts";
 import { buildForTarget } from "./build-guards.ts";
 import { BadRequest, requireBase58Address, requireFiniteUsd, requireInt } from "./validate.ts";
+
+/** Matches the ceiling the copy domain enforces, against ~$2.6M of depth. */
+const MAX_COPY_CAPITAL_USD = 1_000_000;
 import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
 
 function parseLimits(body: Record<string, unknown>): CopyLimits {
@@ -43,7 +46,13 @@ function parseLimits(body: Record<string, unknown>): CopyLimits {
 
   const stopLossRaw = body["stopLossFraction"];
   const limits: CopyLimits = {
-    capitalUsd: requireFiniteUsd(body["capitalUsd"], "capitalUsd", { min: 1 }),
+    // Checked against the copy ceiling here rather than the generic deploy
+    // ceiling, so an oversized request is refused at the edge with one
+    // message instead of passing validation and failing later with another.
+    capitalUsd: requireFiniteUsd(body["capitalUsd"], "capitalUsd", {
+      min: 1,
+      max: MAX_COPY_CAPITAL_USD,
+    }),
     copyRatio: fraction("copyRatio", 1),
     maxPositionWeight: fraction("maxPositionWeight", 1),
     maxSlippageBps: requireInt(body["maxSlippageBps"], "maxSlippageBps", {
@@ -172,21 +181,30 @@ export function registerCopyRoutes(
       );
     }
 
-    // The follower's own holdings are read from chain, not taken on trust,
-    // because they decide the size of every leg.
-    const followerBook = await readPortfolio(services, follower, snapshot);
-
+    // Deliberately no holdings.
+    //
+    // Copying with $1,000 deploys $1,000 into the leader's allocation. It is
+    // not a rebalance of everything the follower owns. Passing their existing
+    // positions here made planRebalance target (existing + capital), so a
+    // follower holding $5,000 elsewhere saw a preview promising $600 and
+    // $400 and got a bundle selling $5,000 of an untouched position and
+    // buying $3,600 and $2,400 -- six times the size, liquidating a holding
+    // they never agreed to sell, after they had already approved the
+    // preview.
+    //
+    // With no holdings, planRebalance produces exactly weight x deployUsd per
+    // leg, which is the preview by construction rather than by coincidence.
     const outcome = await buildForTarget(services, {
       owner: follower,
       target: preview.targetWeights,
       deployUsd: preview.deployUsd,
-      holdings: followerBook.positions.map((p) => ({ symbol: p.symbol, uiAmount: p.uiAmount })),
+      holdings: [],
       slippageBps: limits.maxSlippageBps,
       snapshot,
     });
 
     if (outcome.kind === "empty") {
-      return c.json({ error: "already matching this leader; nothing to trade", skipped: outcome.skipped }, 400);
+      return c.json({ error: "nothing to trade at this size", skipped: outcome.skipped }, 400);
     }
     if (outcome.kind === "refused") {
       return c.json({ error: outcome.problems[0]?.["message"], problems: outcome.problems }, 409);
@@ -206,6 +224,14 @@ export function registerCopyRoutes(
       leader,
       follower,
       preview: { positions: preview.positions, excluded: preview.excluded, notes: preview.notes },
+      // What the transactions actually do, after depth and impact limits.
+      legs: outcome.orders,
+      deferred: outcome.plan.deferred,
+      totalUsd: outcome.plan.totalUsd,
+      costFraction: outcome.plan.costFraction,
+      // Stated because it is the one thing a follower could reasonably get
+      // wrong: this adds a sleeve, it does not rebalance the whole wallet.
+      scope: "Deploys the stated capital into the leader's allocation. Existing holdings are left untouched.",
       ...outcome.bundle,
       atomic: false,
       note:
