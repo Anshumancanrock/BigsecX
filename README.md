@@ -123,6 +123,33 @@ of the PRE8 basket where a single unconstrained attempt fills five.
 Verified end to end on mainnet: `POST /api/mirror/build` for the eight-token
 PRE8 basket returns seven transactions, and all seven simulate successfully.
 
+## Strategies
+
+A thematic index, a user's own basket and a portfolio someone copies are the
+same object with different authors, so they share one type. Authoring is the
+creator side of the product:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/strategies` | Published strategies, or a creator's own including drafts |
+| `GET /api/strategies/:id` | One strategy with weights, guardrails and sector exposure |
+| `POST /api/strategies` | Create. Returns every validation problem at once |
+| `PUT /api/strategies/:id` | Replace. Scoped to the creator |
+| `DELETE /api/strategies/:id` | Remove. Scoped to the creator |
+| `POST /api/strategies/overlap` | Combined exposure across several held strategies |
+| `POST /api/strategies/:id/drift` | Whether a wallet has drifted past the threshold |
+
+Guardrails — position cap, position floor, sector ceiling, drift threshold —
+are the author's promises and are opt-in. A default never reshapes an
+allocation: a position over the cap is scaled down, but a position under the
+floor is *rejected* rather than raised, because raising it would ship weights
+the author did not choose.
+
+**These routes have no authentication.** A caller asserts its own wallet
+address. That is workable for a demo and the ownership checks are real, but
+the assertion is not proof, and the routes need a signed message bound to the
+request before they are exposed publicly.
+
 ## What the API refuses, and why
 
 A build is refused with 409 and *every* applicable reason, not the first one:

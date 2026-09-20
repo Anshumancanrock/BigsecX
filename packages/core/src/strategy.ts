@@ -63,6 +63,12 @@ export interface StrategyDraft {
 }
 
 export interface Strategy extends Portfolio {
+  /**
+   * Narrower than Portfolio's kind: a strategy is authored, so it is either
+   * a system index or a user's own. A trader's live holdings are a portfolio
+   * but not a strategy, because nobody wrote them down as an intention.
+   */
+  readonly kind: "index" | "user";
   readonly description: string;
   readonly creator: string | null;
   readonly guardrails: Guardrails;
