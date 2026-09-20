@@ -287,12 +287,16 @@ describe("mirror/build guards", () => {
   test("refuses a rebalance that funds buys from sells", async () => {
     // Nothing is atomic here, so a buy can land before the sell meant to fund
     // it. Better to refuse than to hand back a bundle that half-executes.
-    const res = await post(app().app, "/api/mirror/build", {
-      weights: [{ symbol: "POLYMARKET", weight: 1 }],
-      deployUsd: 0,
-      holdings: [{ symbol: "OPENAI", uiAmount: 20 }],
-      owner: OWNER,
-    });
+    // Holdings come from chain, so the wallet really holds the OPENAI.
+    const res = await post(
+      app({ balances: { OPENAI: 20_000_000_000n }, priceUsd: { OPENAI: 100, POLYMARKET: 100 } }).app,
+      "/api/mirror/build",
+      {
+        weights: [{ symbol: "POLYMARKET", weight: 1 }],
+        deployUsd: 0,
+        owner: OWNER,
+      },
+    );
     expect(res.status).toBe(409);
     const body = (await res.json()) as {
       problems: { kind: string; sells?: unknown[]; buys?: unknown[] }[];
@@ -303,32 +307,29 @@ describe("mirror/build guards", () => {
     expect((atomic?.buys ?? []).length).toBeGreaterThan(0);
   });
 
-  test("refuses sell legs the wallet cannot cover", async () => {
-    // Holds 20 shares by claim, but the associated token account is empty --
-    // exactly the mainnet case that failed with 0x1788 after signing.
+  test("refuses a sell leg against a frozen account", async () => {
+    // A frozen account reports its full balance, so comparing amounts alone
+    // passes it and the swap fails on chain after the user has signed.
     const res = await post(
-      app({ balances: { OPENAI: 0n }, priceUsd: { OPENAI: 100, POLYMARKET: 100 } }).app,
+      app({
+        balances: { OPENAI: 20_000_000_000n },
+        frozen: ["OPENAI"],
+        priceUsd: { OPENAI: 100, POLYMARKET: 100 },
+      }).app,
       "/api/mirror/build",
       {
         weights: [{ symbol: "POLYMARKET", weight: 1 }],
         deployUsd: 3_000,
-        holdings: [{ symbol: "OPENAI", uiAmount: 20 }],
         owner: OWNER,
       },
     );
     expect(res.status).toBe(409);
     const body = (await res.json()) as {
-      problems: { kind: string; uncovered?: { symbol: string; availableUsd: number }[] }[];
+      problems: { kind: string; uncovered?: { symbol: string; frozen?: boolean }[] }[];
     };
-    // Both problems apply here and both must be reported: the shape cannot
-    // settle atomically AND the wallet cannot cover the sell.
-    expect(body.problems.map((p) => p.kind).sort()).toEqual([
-      "insufficient-balance",
-      "not-atomic",
-    ]);
     const balance = body.problems.find((p) => p.kind === "insufficient-balance");
     expect(balance?.uncovered?.[0]?.symbol).toBe("OPENAI");
-    expect(balance?.uncovered?.[0]?.availableUsd).toBe(0);
+    expect(balance?.uncovered?.[0]?.frozen).toBe(true);
   });
 
   test("refuses when the wallet has no USDC for the buy legs", async () => {
@@ -360,16 +361,36 @@ describe("mirror/build guards", () => {
   test("refuses when part of the wallet cannot be valued", async () => {
     // An unpriced holding is silently worth zero to the rebalancer, which
     // then sizes every other leg against a portfolio value that is too low.
-    const res = await post(app({ pricesThrow: true }).app, "/api/mirror/build", {
-      weights: [{ symbol: "POLYMARKET", weight: 1 }],
-      deployUsd: 1_000,
-      holdings: [{ symbol: "OPENAI", uiAmount: 20 }],
-      owner: OWNER,
-    });
+    const res = await post(
+      app({ balances: { OPENAI: 20_000_000_000n }, pricesThrow: true }).app,
+      "/api/mirror/build",
+      {
+        weights: [{ symbol: "POLYMARKET", weight: 1 }],
+        deployUsd: 1_000,
+        owner: OWNER,
+      },
+    );
     expect(res.status).toBe(409);
     const body = (await res.json()) as { problems: { kind: string; symbols?: string[] }[] };
     const unpriced = body.problems.find((p) => p.kind === "unpriced-holding");
     expect(unpriced?.symbols).toEqual(["OPENAI"]);
+  });
+
+  test("ignores holdings asserted in the request body", async () => {
+    // Holdings size every leg. An asserted figure is either a mistake or a
+    // lie: a fabricated position turns a simple purchase into a refused
+    // rebalance, and a real one the caller omitted would be ignored.
+    const res = await post(app({ usdcRaw: 100_000_000_000n }).app, "/api/mirror/build", {
+      indexId: "prediction",
+      deployUsd: 100,
+      owner: OWNER,
+      holdings: [{ symbol: "OPENAI", uiAmount: 1_000 }],
+    });
+    const body = (await res.json()) as { problems?: { kind: string }[] };
+    // The chain says the wallet holds nothing, so no sell-shaped refusal.
+    for (const kind of (body.problems ?? []).map((p) => p.kind)) {
+      expect(["not-atomic", "insufficient-balance"]).not.toContain(kind);
+    }
   });
 
 

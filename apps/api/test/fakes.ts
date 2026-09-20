@@ -9,7 +9,9 @@
  */
 
 import { ALL_MINTS, UNIVERSE, type PreStock } from "@ps/core";
+import { Keypair } from "@solana/web3.js";
 import { PythClient } from "@ps/market";
+import { canonicalMessage } from "../src/auth.ts";
 import type { Services } from "../src/context.ts";
 import { Store } from "@ps/db";
 
@@ -209,4 +211,44 @@ export function makeServices(options: FakeOptions = {}): Services & { store: Sto
     pyth: new PythClient(options.pythApiKey),
     store,
   };
+}
+
+/**
+ * A wallet that can actually sign, for exercising the auth path.
+ *
+ * Tests use real Ed25519 keys rather than disabling signature checks, so the
+ * verification code is covered by the same tests that cover the routes.
+ */
+export class TestWallet {
+  readonly #keypair = Keypair.generate();
+
+  get address(): string {
+    return this.#keypair.publicKey.toBase58();
+  }
+
+  /** Sign the canonical message for an action and return body fields. */
+  async sign(
+    action: string,
+    resource: string,
+    issuedAt = Date.now(),
+  ): Promise<{ signature: string; issuedAt: number }> {
+    const message = new TextEncoder().encode(
+      canonicalMessage({ action, resource, wallet: this.address, issuedAt }),
+    );
+    // Ed25519 seeds are the first 32 bytes; wrap in the PKCS8 prefix that
+    // WebCrypto expects.
+    const seed = this.#keypair.secretKey.slice(0, 32);
+    const pkcs8 = new Uint8Array(
+      new ArrayBuffer(16 + seed.length),
+    );
+    pkcs8.set(
+      [0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20],
+      0,
+    );
+    pkcs8.set(seed, 16);
+
+    const key = await crypto.subtle.importKey("pkcs8", pkcs8, "Ed25519", false, ["sign"]);
+    const signature = new Uint8Array(await crypto.subtle.sign("Ed25519", key, message));
+    return { signature: btoa(String.fromCharCode(...signature)), issuedAt };
+  }
 }

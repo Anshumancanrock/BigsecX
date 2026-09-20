@@ -29,9 +29,11 @@ import { Cache, buildExecutionPlan, priceTruth } from "@ps/market";
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
 import type { Services } from "./context.ts";
 import { toMarketDto } from "./serialize.ts";
+import { Unauthorized } from "./auth.ts";
+import { throttle } from "./throttle.ts";
 import { buildForTarget } from "./build-guards.ts";
 import { registerCopyRoutes } from "./copy.ts";
-import { registerPortfolioRoutes } from "./portfolio.ts";
+import { readPortfolio, registerPortfolioRoutes } from "./portfolio.ts";
 import { registerStrategyRoutes } from "./strategies.ts";
 import { registerTraderRoutes } from "./traders.ts";
 import {
@@ -51,6 +53,9 @@ export function createApp(services: Services): Hono {
 const app = new Hono();
 
 app.use("/*", cors());
+// Weighted, because a build costs the upstream quota forty times what a
+// cached market read does.
+app.use("/*", throttle());
 
 registerStrategyRoutes(app, services);
 registerPortfolioRoutes(app, services, market);
@@ -62,6 +67,7 @@ app.onError((error, c) => {
   // reason. Anything else is ours, and the client learns nothing useful from
   // our stack trace.
   if (error instanceof BadRequest) return c.json({ error: error.message }, 400);
+  if (error instanceof Unauthorized) return c.json({ error: error.message }, 401);
   console.error("request failed:", error);
   return c.json({ error: "internal error" }, 500);
 });
@@ -323,13 +329,23 @@ async function resolveTarget(body: {
 app.post("/api/mirror/plan", async (c) => {
   const body = await safeJson(c);
   const target = await resolveTarget(body);
-  const deployUsd = requireFiniteUsd(body.deployUsd ?? 0, "deployUsd");
-  const holdings = parseHoldings(body.holdings);
+  const deployUsd = requireFiniteUsd(body["deployUsd"] ?? 0, "deployUsd");
+
+  const snapshot = await market();
+  // With an owner, read the chain so the plan matches what a build will do.
+  // Without one this is a hypothetical, and supplied holdings are the
+  // premise of the question rather than a claim about a real wallet.
+  const owner = body["owner"] === undefined ? null : requireBase58Address(body["owner"], "owner");
+  const holdings = owner
+    ? (await readPortfolio(services, owner, snapshot)).positions.map((p) => ({
+        symbol: p.symbol,
+        uiAmount: p.uiAmount,
+      }))
+    : parseHoldings(body["holdings"]);
+
   if (deployUsd === 0 && holdings.length === 0) {
     throw new BadRequest("provide deployUsd, holdings, or both");
   }
-
-  const snapshot = await market();
   const { price, liquidity, scale } = priceMaps(snapshot);
 
   const rebalance = planRebalance({
@@ -385,20 +401,27 @@ app.post("/api/mirror/build", async (c) => {
   const owner = requireBase58Address(body["owner"], "owner");
   const target = await resolveTarget(body);
   const deployUsd = requireFiniteUsd(body["deployUsd"] ?? 0, "deployUsd");
-  const holdings = parseHoldings(body["holdings"]);
   const slippageBps = requireInt(body["slippageBps"], "slippageBps", {
     min: 1,
     max: 5_000,
     fallback: 100,
   });
 
+  const snapshot = await market();
+  // Holdings are read from chain, never taken from the request. They size
+  // every leg, and an asserted figure is either a mistake or a lie: a
+  // fabricated position inflates the target and turns a simple purchase
+  // into a refused rebalance, while a real one the caller forgot to send
+  // would be ignored.
+  const held = await readPortfolio(services, owner, snapshot);
+
   const outcome = await buildForTarget(services, {
     owner,
     target: target.weights,
     deployUsd,
-    holdings,
+    holdings: held.positions.map((p) => ({ symbol: p.symbol, uiAmount: p.uiAmount })),
     slippageBps,
-    snapshot: await market(),
+    snapshot,
   });
 
   if (outcome.kind === "empty") {

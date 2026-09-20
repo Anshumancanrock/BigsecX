@@ -6,10 +6,10 @@
  * enforced on every mutation: a strategy id is public, so nothing may be
  * changed or removed on the strength of knowing one.
  *
- * There is no authentication here yet, so a caller asserts its own wallet.
- * That is honest for a demo and clearly marked, but it means these routes
- * must not be exposed publicly without signature verification -- see the
- * note on `requireCreator`.
+ * Mutations require a signature from the wallet they claim. Asserting an
+ * address was not merely unauthenticated, it was forgeable: anyone could
+ * publish a basket attributed to any wallet, and on a product that ranks
+ * traders by verified record, forged authorship destroys the record.
  */
 
 import { Hono } from "hono";
@@ -26,20 +26,28 @@ import {
 } from "@ps/core";
 import type { StrategyRow } from "@ps/db";
 import type { Services } from "./context.ts";
+import { authorize, canonicalMessage, signatureRequired } from "./auth.ts";
 import { BadRequest, parseWeights, requireBase58Address, requireInt } from "./validate.ts";
 
 const REBALANCE: readonly RebalanceFrequency[] = ["manual", "daily", "weekly", "monthly"];
+/** Nothing legitimate overlaps more baskets than this. */
+const MAX_OVERLAP_HOLDINGS = 32;
 
 /**
- * Identify the caller.
+ * Identify the caller and prove it.
  *
- * A wallet address in the body is an assertion, not proof. Before this is
- * public it needs a signed message bound to the request; until then the
- * routes are usable only in a trusted setting, and saying so plainly beats
- * implying an authentication that does not exist.
+ * The signature is bound to the action and the resource, so one authorising
+ * a create cannot be lifted onto a delete, and one for another strategy
+ * cannot be replayed here.
  */
-function requireCreator(body: Record<string, unknown>): string {
-  return requireBase58Address(body["creator"], "creator");
+async function requireCreator(
+  body: Record<string, unknown>,
+  action: string,
+  resource: string,
+): Promise<string> {
+  const wallet = requireBase58Address(body["creator"], "creator");
+  await authorize(body, { action, resource, wallet });
+  return wallet;
 }
 
 function toRow(strategy: Strategy): StrategyRow {
@@ -141,6 +149,27 @@ function strategyId(name: string): string {
 }
 
 export function registerStrategyRoutes(app: Hono, services: Services): void {
+  /**
+   * The exact message a wallet must sign for a given action.
+   *
+   * Served rather than documented so a client cannot derive it slightly
+   * differently and get an opaque verification failure.
+   */
+  app.get("/api/auth/message", (c) => {
+    const action = c.req.query("action") ?? "";
+    const resource = c.req.query("resource") ?? "";
+    const wallet = requireBase58Address(c.req.query("wallet"), "wallet");
+    if (!action) throw new BadRequest("action is required");
+
+    const issuedAt = Date.now();
+    return c.json({
+      message: canonicalMessage({ action, resource, wallet, issuedAt }),
+      issuedAt,
+      required: signatureRequired(),
+      note: "Sign these exact bytes with the wallet, then send signature (base64) and issuedAt with the request.",
+    });
+  });
+
   /** Published strategies, or a creator's own including drafts. */
   app.get("/api/strategies", (c) => {
     const creator = c.req.query("creator");
@@ -163,7 +192,7 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
 
   app.post("/api/strategies", async (c) => {
     const body = await readJson(c);
-    const creator = requireCreator(body);
+    const creator = await requireCreator(body, "create-strategy", "new");
 
     // parseWeights rejects unknown symbols, duplicates and non-positive
     // values before the domain sees them, so the domain reports allocation
@@ -206,7 +235,7 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
   app.put("/api/strategies/:id", async (c) => {
     const id = c.req.param("id");
     const body = await readJson(c);
-    const creator = requireCreator(body);
+    const creator = await requireCreator(body, "update-strategy", id);
 
     const existing = services.store.getStrategy(id);
     if (!existing) return c.json({ error: "unknown strategy" }, 404);
@@ -259,7 +288,7 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
 
   app.delete("/api/strategies/:id", async (c) => {
     const body = await readJson(c);
-    const creator = requireCreator(body);
+    const creator = await requireCreator(body, "delete-strategy", c.req.param("id"));
 
     const existing = services.store.getStrategy(c.req.param("id"));
     if (!existing) return c.json({ error: "unknown strategy" }, 404);
@@ -281,6 +310,11 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     const entries = body["holdings"];
     if (!Array.isArray(entries) || entries.length === 0) {
       throw new BadRequest("holdings must be a non-empty array of { strategyId, usd }");
+    }
+    // Each entry costs a database read, and nothing legitimate needs more
+    // than a handful.
+    if (entries.length > MAX_OVERLAP_HOLDINGS) {
+      throw new BadRequest(`holdings must contain at most ${MAX_OVERLAP_HOLDINGS} entries`);
     }
 
     const resolved: { weights: readonly Weight[]; usd: number; id: string; name: string }[] = [];

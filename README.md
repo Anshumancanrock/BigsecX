@@ -145,10 +145,19 @@ allocation: a position over the cap is scaled down, but a position under the
 floor is *rejected* rather than raised, because raising it would ship weights
 the author did not choose.
 
-**These routes have no authentication.** A caller asserts its own wallet
-address. That is workable for a demo and the ownership checks are real, but
-the assertion is not proof, and the routes need a signed message bound to the
-request before they are exposed publicly.
+**Mutations require a wallet signature.** `GET /api/auth/message` returns the
+exact bytes to sign; send the base64 `signature` and the `issuedAt` alongside
+the request. The signature is bound to the action *and* the resource, so one
+authorising a create cannot be lifted onto a delete, and it expires after
+five minutes so a captured one cannot be replayed.
+
+Asserting an address was not merely unauthenticated, it was forgeable:
+anyone could publish a basket attributed to any wallet, and on a product that
+ranks traders by verified record a forged authorship destroys the record.
+Verification uses Ed25519 through WebCrypto, which is what Solana keys are,
+so it needs no dependency. `REQUIRE_WALLET_SIGNATURE=0` disables it for local
+work; it defaults to on, so a deployment that forgets to configure it is
+closed rather than open.
 
 ## Portfolio
 
@@ -255,6 +264,23 @@ $400 and would have signed a bundle selling $5,000 of an untouched position
 and buying $3,600 and $2,400.
 
 Copying adds a sleeve. It does not rebalance the whole wallet.
+
+## Limits
+
+Requests are throttled per client and **weighted by what they cost upstream**:
+a build spends forty times what a cached market read does, because it quotes
+every leg and then fetches instructions for each. The keyless Jupiter tier
+reports a remaining quota in single digits, so an unthrottled build endpoint
+is not only a denial of service against this deployment — it is a way for
+anyone to exhaust the quota a demo is running on. `/health` is never
+throttled, so a probe cannot lock itself out.
+
+Holdings are always read from chain, never taken from a request. They size
+every leg, and an asserted figure is either a mistake or a lie: a fabricated
+position turns a simple purchase into a refused rebalance, while a real one
+the caller omitted would be ignored. `POST /api/mirror/plan` accepts
+hypothetical holdings only when no `owner` is given, where the question is
+explicitly a what-if.
 
 ## What the API refuses, and why
 

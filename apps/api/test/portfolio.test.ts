@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/index.ts";
-import { makeServices, type FakeOptions } from "./fakes.ts";
+import { TestWallet, makeServices, type FakeOptions } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
 const open: Store[] = [];
@@ -95,12 +95,14 @@ describe("portfolio", () => {
 describe("portfolio compared to a strategy", () => {
   async function withStrategy(options: FakeOptions) {
     const { app: a } = app(options);
+    const author = new TestWallet();
     const created = (await (
       await a.request("/api/strategies", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          creator: WALLET,
+          creator: author.address,
+          ...(await author.sign("create-strategy", "new")),
           name: "Even",
           weights: [
             { symbol: "OPENAI", weight: 50 },

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/index.ts";
-import { makeServices } from "./fakes.ts";
+import { TestWallet, makeServices } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
 const open: Store[] = [];
@@ -13,8 +13,10 @@ afterEach(() => {
   while (open.length) open.pop()?.close();
 });
 
-const ALICE = "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL";
-const BOB = "4acSCrTSNXQPHVENCJNXaVmBhuFPNrDRYCqLLNqJvuQY";
+const alice = new TestWallet();
+const bob = new TestWallet();
+const ALICE = alice.address;
+const BOB = bob.address;
 
 const send = (a: ReturnType<typeof createApp>, method: string, path: string, body?: unknown) =>
   a.request(path, {
@@ -23,8 +25,17 @@ const send = (a: ReturnType<typeof createApp>, method: string, path: string, bod
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-const draft = (over: Record<string, unknown> = {}) => ({
-  creator: ALICE,
+/** Sign as Alice for an action, merging the proof into a request body. */
+async function signed(
+  wallet: TestWallet,
+  action: string,
+  resource: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return { ...body, creator: wallet.address, ...(await wallet.sign(action, resource)) };
+}
+
+const draftBody = (over: Record<string, unknown> = {}) => ({
   name: "Humanoid Revolution",
   description: "robots that act on the world",
   weights: [
@@ -34,9 +45,13 @@ const draft = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/** A signed create request from Alice. */
+const draft = async (over: Record<string, unknown> = {}) =>
+  signed(alice, "create-strategy", "new", draftBody(over));
+
 describe("creating strategies", () => {
   test("stores exactly the allocation the author asked for", async () => {
-    const res = await send(app(), "POST", "/api/strategies", draft());
+    const res = await send(app(), "POST", "/api/strategies", await draft());
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
       id: string;
@@ -58,7 +73,7 @@ describe("creating strategies", () => {
       app(),
       "POST",
       "/api/strategies",
-      draft({
+      await draft({
         name: "Defense",
         weights: [
           { symbol: "SPACEX", weight: 50 },
@@ -77,7 +92,7 @@ describe("creating strategies", () => {
       app(),
       "POST",
       "/api/strategies",
-      draft({
+      await draft({
         name: "",
         weights: [
           { symbol: "OPENAI", weight: 1 },
@@ -94,33 +109,120 @@ describe("creating strategies", () => {
   });
 
   test("rejects an unknown symbol before the domain sees it", async () => {
-    const res = await send(app(), "POST", "/api/strategies", draft({ weights: [{ symbol: "NVDA", weight: 1 }, { symbol: "OPENAI", weight: 1 }] }));
+    const res = await send(app(), "POST", "/api/strategies", await draft({ weights: [{ symbol: "NVDA", weight: 1 }, { symbol: "OPENAI", weight: 1 }] }));
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("unknown symbol");
   });
 
   test("requires a valid creator address", async () => {
-    const res = await send(app(), "POST", "/api/strategies", draft({ creator: "nope" }));
+    const res = await send(app(), "POST", "/api/strategies", {
+      ...draftBody(),
+      creator: "nope",
+      signature: "AA==",
+      issuedAt: Date.now(),
+    });
     expect(res.status).toBe(400);
   });
 
   test("rejects an unknown rebalance frequency", async () => {
-    const res = await send(app(), "POST", "/api/strategies", draft({ rebalance: "hourly" }));
+    const res = await send(app(), "POST", "/api/strategies", await draft({ rebalance: "hourly" }));
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("rebalance must be");
   });
 
   test("rejects a guardrail outside 0..1", async () => {
-    const res = await send(app(), "POST", "/api/strategies", draft({ guardrails: { maxWeight: 40 } }));
+    const res = await send(app(), "POST", "/api/strategies", await draft({ guardrails: { maxWeight: 40 } }));
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toContain("fraction");
+  });
+});
+
+describe("authentication", () => {
+  /**
+   * Before signatures, a caller asserted its own address. That was not a
+   * missing feature but forgery: anyone could publish a basket attributed to
+   * any wallet, and on a product that ranks traders by verified record a
+   * forged authorship destroys the record.
+   */
+  test("refuses to attribute a strategy to a wallet the caller cannot sign for", async () => {
+    // Alice signs, but claims to be Bob.
+    const proof = await alice.sign("create-strategy", "new");
+    const res = await send(app(), "POST", "/api/strategies", {
+      ...draftBody(),
+      creator: bob.address,
+      ...proof,
+    });
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { error: string }).error).toContain("does not match");
+  });
+
+  test("refuses an unsigned mutation", async () => {
+    const res = await send(app(), "POST", "/api/strategies", {
+      ...draftBody(),
+      creator: alice.address,
+    });
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { error: string }).error).toContain("must be signed");
+  });
+
+  test("refuses a stale signature", async () => {
+    // Replaying a captured signature indefinitely must not work.
+    const stale = await alice.sign("create-strategy", "new", Date.now() - 60 * 60_000);
+    const res = await send(app(), "POST", "/api/strategies", {
+      ...draftBody(),
+      creator: alice.address,
+      ...stale,
+    });
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { error: string }).error).toContain("window");
+  });
+
+  test("refuses a signature bound to a different action", async () => {
+    // A signature authorising a delete must not authorise a create.
+    const wrong = await alice.sign("delete-strategy", "new");
+    const res = await send(app(), "POST", "/api/strategies", {
+      ...draftBody(),
+      creator: alice.address,
+      ...wrong,
+    });
+    expect(res.status).toBe(401);
+  });
+
+  test("refuses a signature bound to a different resource", async () => {
+    const a = app();
+    const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as {
+      id: string;
+    };
+    // Signed for a different strategy id.
+    const res = await send(
+      a,
+      "DELETE",
+      `/api/strategies/${created.id}`,
+      await signed(alice, "delete-strategy", "some-other-id", {}),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  test("serves the exact message a client must sign", async () => {
+    const res = await app().request(
+      `/api/auth/message?action=create-strategy&resource=new&wallet=${alice.address}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { message: string; issuedAt: number; required: boolean };
+    expect(body.message).toContain("action:create-strategy");
+    expect(body.message).toContain(`wallet:${alice.address}`);
+    expect(body.required).toBe(true);
+  });
+
+  test("reads are not gated", async () => {
+    expect((await app().request("/api/strategies")).status).toBe(200);
   });
 });
 
 describe("visibility and ownership", () => {
   test("a draft is private to its author", async () => {
     const a = app();
-    const created = (await (await send(a, "POST", "/api/strategies", draft())).json()) as { id: string };
+    const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as { id: string };
 
     const publicList = (await (await a.request("/api/strategies")).json()) as { strategies: unknown[] };
     expect(publicList.strategies).toHaveLength(0);
@@ -133,7 +235,7 @@ describe("visibility and ownership", () => {
 
   test("publishing makes it visible to everyone", async () => {
     const a = app();
-    const created = (await (await send(a, "POST", "/api/strategies", draft({ published: true }))).json()) as {
+    const created = (await (await send(a, "POST", "/api/strategies", await draft({ published: true }))).json()) as {
       id: string;
     };
     const list = (await (await a.request("/api/strategies")).json()) as { strategies: { id: string }[] };
@@ -142,31 +244,57 @@ describe("visibility and ownership", () => {
 
   test("another wallet cannot edit it", async () => {
     const a = app();
-    const created = (await (await send(a, "POST", "/api/strategies", draft())).json()) as { id: string };
-    const res = await send(a, "PUT", `/api/strategies/${created.id}`, {
-      creator: BOB,
-      name: "Stolen",
-      weights: [
-        { symbol: "OPENAI", weight: 1 },
-        { symbol: "ANTHROPIC", weight: 1 },
-      ],
-    });
+    const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as { id: string };
+    const res = await send(
+      a,
+      "PUT",
+      `/api/strategies/${created.id}`,
+      await signed(bob, "update-strategy", created.id, {
+        name: "Stolen",
+        weights: [
+          { symbol: "OPENAI", weight: 1 },
+          { symbol: "ANTHROPIC", weight: 1 },
+        ],
+      }),
+    );
     expect(res.status).toBe(403);
   });
 
   test("another wallet cannot delete it", async () => {
     const a = app();
-    const created = (await (await send(a, "POST", "/api/strategies", draft())).json()) as { id: string };
-    expect((await send(a, "DELETE", `/api/strategies/${created.id}`, { creator: BOB })).status).toBe(403);
-    expect((await send(a, "DELETE", `/api/strategies/${created.id}`, { creator: ALICE })).status).toBe(200);
+    const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as { id: string };
+    expect(
+      (
+        await send(
+          a,
+          "DELETE",
+          `/api/strategies/${created.id}`,
+          await signed(bob, "delete-strategy", created.id, {}),
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(
+          a,
+          "DELETE",
+          `/api/strategies/${created.id}`,
+          await signed(alice, "delete-strategy", created.id, {}),
+        )
+      ).status,
+    ).toBe(200);
     expect((await a.request(`/api/strategies/${created.id}`)).status).toBe(404);
   });
 
   test("an unknown id is a 404 on every route", async () => {
     const a = app();
     expect((await a.request("/api/strategies/nope")).status).toBe(404);
-    expect((await send(a, "PUT", "/api/strategies/nope", draft())).status).toBe(404);
-    expect((await send(a, "DELETE", "/api/strategies/nope", { creator: ALICE })).status).toBe(404);
+    expect(
+      (await send(a, "PUT", "/api/strategies/nope", await signed(alice, "update-strategy", "nope", draftBody()))).status,
+    ).toBe(404);
+    expect(
+      (await send(a, "DELETE", "/api/strategies/nope", await signed(alice, "delete-strategy", "nope", {}))).status,
+    ).toBe(404);
   });
 });
 
@@ -175,7 +303,7 @@ describe("response consistency", () => {
     // Timestamps persist to the second, so echoing the in-memory value gave
     // the caller a createdAt that changed on the next fetch.
     const a = app();
-    const created = (await (await send(a, "POST", "/api/strategies", draft())).json()) as {
+    const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as {
       id: string;
     };
     const fetched = await (await a.request(`/api/strategies/${created.id}`)).json();
@@ -187,11 +315,11 @@ describe("editing", () => {
   test("an edit keeps the original creation time and the stored guardrails", async () => {
     const a = app();
     const created = (await (
-      await send(a, "POST", "/api/strategies", draft({ guardrails: { maxWeight: 0.7, driftBps: 111 } }))
+      await send(a, "POST", "/api/strategies", await draft({ guardrails: { maxWeight: 0.7, driftBps: 111 } }))
     ).json()) as { id: string; createdAt: string };
 
     const updated = (await (
-      await send(a, "PUT", `/api/strategies/${created.id}`, { creator: ALICE, name: "Renamed" })
+      await send(a, "PUT", `/api/strategies/${created.id}`, await signed(alice, "update-strategy", created.id, { name: "Renamed" }))
     ).json()) as {
       name: string;
       createdAt: string;
@@ -216,12 +344,12 @@ describe("retracting", () => {
     // Or-ing the request with the stored value made publication permanent.
     const a = app();
     const created = (await (
-      await send(a, "POST", "/api/strategies", draft({ published: true }))
+      await send(a, "POST", "/api/strategies", await draft({ published: true }))
     ).json()) as { id: string };
     expect(((await (await a.request("/api/strategies")).json()) as { strategies: unknown[] }).strategies).toHaveLength(1);
 
     const updated = (await (
-      await send(a, "PUT", `/api/strategies/${created.id}`, { creator: ALICE, published: false })
+      await send(a, "PUT", `/api/strategies/${created.id}`, await signed(alice, "update-strategy", created.id, { published: false }))
     ).json()) as { published: boolean };
     expect(updated.published).toBe(false);
     expect(((await (await a.request("/api/strategies")).json()) as { strategies: unknown[] }).strategies).toHaveLength(0);
@@ -230,10 +358,10 @@ describe("retracting", () => {
   test("omitting published leaves it as it was", async () => {
     const a = app();
     const created = (await (
-      await send(a, "POST", "/api/strategies", draft({ published: true }))
+      await send(a, "POST", "/api/strategies", await draft({ published: true }))
     ).json()) as { id: string };
     const updated = (await (
-      await send(a, "PUT", `/api/strategies/${created.id}`, { creator: ALICE, name: "Renamed" })
+      await send(a, "PUT", `/api/strategies/${created.id}`, await signed(alice, "update-strategy", created.id, { name: "Renamed" }))
     ).json()) as { published: boolean };
     expect(updated.published).toBe(true);
   });
@@ -248,7 +376,7 @@ describe("overlap", () => {
         a,
         "POST",
         "/api/strategies",
-        draft({
+        await draft({
           name: "AI",
           published: true,
           weights: [
@@ -263,7 +391,7 @@ describe("overlap", () => {
         a,
         "POST",
         "/api/strategies",
-        draft({
+        await draft({
           name: "Frontier",
           published: true,
           weights: [
@@ -291,6 +419,15 @@ describe("overlap", () => {
     expect(body.exposure[0]?.usd).toBeCloseTo(600, 9);
   });
 
+  test("caps the number of holdings it will price", async () => {
+    // Each entry costs a database read; without a cap this is a cheap
+    // denial of service.
+    const many = Array.from({ length: 5_000 }, () => ({ strategyId: "x", usd: 1 }));
+    const res = await send(app(), "POST", "/api/strategies/overlap", { holdings: many });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("at most");
+  });
+
   test("rejects an empty or malformed request", async () => {
     const a = app();
     expect((await send(a, "POST", "/api/strategies/overlap", { holdings: [] })).status).toBe(400);
@@ -311,7 +448,7 @@ describe("drift", () => {
   test("reports whether a wallet has drifted past the strategy threshold", async () => {
     const a = app();
     const created = (await (
-      await send(a, "POST", "/api/strategies", draft({ guardrails: { driftBps: 300 } }))
+      await send(a, "POST", "/api/strategies", await draft({ guardrails: { driftBps: 300 } }))
     ).json()) as { id: string };
 
     const inside = (await (
