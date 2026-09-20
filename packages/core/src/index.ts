@@ -7,3 +7,4 @@ export * from "./execution.ts";
 export * from "./indexes.ts";
 export * from "./trader-pnl.ts";
 export * from "./strategy.ts";
+export * from "./copy.ts";

@@ -26,10 +26,11 @@ import {
   type Weight,
 } from "@ps/core";
 import { Cache, buildExecutionPlan, priceTruth } from "@ps/market";
-import { buildMirrorBundle, findUncoveredSells, getSellableBalances, getSpendable } from "@ps/tx";
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
 import type { Services } from "./context.ts";
 import { toMarketDto } from "./serialize.ts";
+import { buildForTarget } from "./build-guards.ts";
+import { registerCopyRoutes } from "./copy.ts";
 import { registerPortfolioRoutes } from "./portfolio.ts";
 import { registerStrategyRoutes } from "./strategies.ts";
 import { registerTraderRoutes } from "./traders.ts";
@@ -41,9 +42,6 @@ import {
   requireFiniteUsd,
   requireInt,
 } from "./validate.ts";
-
-/** Enough lamports to submit several transactions and open accounts. */
-const MIN_LAMPORTS = 3_000_000;
 
 const MARKET_TTL_MS = 20_000;
 /** How long a snapshot may be served after expiry when upstreams are failing. */
@@ -57,6 +55,7 @@ app.use("/*", cors());
 registerStrategyRoutes(app, services);
 registerPortfolioRoutes(app, services, market);
 registerTraderRoutes(app, services, market);
+registerCopyRoutes(app, services, market);
 
 app.onError((error, c) => {
   // A malformed request is the caller's to fix and gets a 400 with the
@@ -383,165 +382,39 @@ app.post("/api/mirror/plan", async (c) => {
  */
 app.post("/api/mirror/build", async (c) => {
   const body = await safeJson(c);
-  const owner = requireBase58Address(body.owner, "owner");
+  const owner = requireBase58Address(body["owner"], "owner");
   const target = await resolveTarget(body);
-  const deployUsd = requireFiniteUsd(body.deployUsd ?? 0, "deployUsd");
-  const holdings = parseHoldings(body.holdings);
-  const slippageBps = requireInt(body.slippageBps, "slippageBps", {
+  const deployUsd = requireFiniteUsd(body["deployUsd"] ?? 0, "deployUsd");
+  const holdings = parseHoldings(body["holdings"]);
+  const slippageBps = requireInt(body["slippageBps"], "slippageBps", {
     min: 1,
     max: 5_000,
     fallback: 100,
   });
 
-  const snapshot = await market();
-  const { price, scale, scaleConfig } = priceMaps(snapshot);
-
-  const rebalance = planRebalance({
-    target: target.weights,
-    holdings,
-    priceUsdBySymbol: price,
-    deployUsd,
-  });
-  if (rebalance.orders.length === 0) {
-    return c.json({ error: "nothing to trade", skipped: rebalance.skipped }, 400);
-  }
-
-  // Both reasons a build can be refused are collected and reported together.
-  // Surfacing them one at a time misleads: a wallet can simultaneously be
-  // short of balance and be asking for a shape that cannot settle atomically,
-  // and fixing only the one named leaves the caller stuck on the next.
-  const sells = rebalance.orders.filter((o) => o.side === "sell");
-  const buys = rebalance.orders.filter((o) => o.side === "buy");
-  const buyNotional = buys.reduce((sum, o) => sum + o.usd, 0);
-  const problems: Record<string, unknown>[] = [];
-
-  if (sells.length > 0) {
-    // A basket is several independent transactions, so a sell meant to fund a
-    // buy can land after it. Note this is reached whenever a rebalance both
-    // sells and buys, because new capital minus sales always equals the buy
-    // notional -- there is no sell-and-buy shape that settles safely here.
-    if (buyNotional > deployUsd) {
-      problems.push({
-        kind: "not-atomic",
-        message: "this rebalance funds buys from sells, which cannot be done atomically here",
-        detail:
-          `${buys.length} buy legs need $${buyNotional.toFixed(2)} but only ` +
-          `$${deployUsd.toFixed(2)} of new capital was supplied. Execute the ${sells.length} ` +
-          "sell legs first, then request the buys.",
-        sells: sells.map((o) => ({ symbol: o.symbol, usd: o.usd })),
-        buys: buys.map((o) => ({ symbol: o.symbol, usd: o.usd })),
-      });
-    }
-
-    // Jupiter spends from the associated token account, so a sell sized
-    // against a position held elsewhere fails on chain with custom program
-    // error 0x1788 after the user has already signed.
-    const balances = await getSellableBalances(
-      services.rpc,
-      owner,
-      scaleConfig,
-      snapshot.unixSeconds,
-    );
-    const uncovered = findUncoveredSells(rebalance.orders, balances, price);
-    if (uncovered.length > 0) {
-      problems.push({
-        kind: "insufficient-balance",
-        message: "wallet does not hold enough to cover these sell legs",
-        detail:
-          "Jupiter sells from the associated token account. Balances held in other " +
-          "accounts are not spendable by this swap.",
-        uncovered,
-      });
-    }
-  }
-
-  // A paused mint cannot be swapped at all. Indexes already exclude them, but
-  // a caller-supplied weight set or an existing holding can still name one.
-  // A holding we could not price contributes nothing to portfolio value, so
-  // the plan treats it as worthless and will sell a priced name to buy more
-  // of a position the user already holds. Refuse rather than act on it.
-  if (rebalance.unpricedHoldings.length > 0) {
-    problems.push({
-      kind: "unpriced-holding",
-      message: "part of this wallet could not be valued",
-      detail:
-        "A holding with no available price is treated as worthless by the rebalancer, " +
-        "which would size every other leg wrongly.",
-      symbols: rebalance.unpricedHoldings,
-    });
-  }
-
-  const pausedSymbols = new Set(
-    snapshot.tokens.filter((t) => t.paused).map((t) => t.token.symbol),
-  );
-  const pausedLegs = rebalance.orders.filter((o) => pausedSymbols.has(o.symbol));
-  if (pausedLegs.length > 0) {
-    problems.push({
-      kind: "paused",
-      message: "the issuer has halted transfers on part of this basket",
-      detail: "Every swap touching a paused mint fails, so no bundle is built for it.",
-      symbols: pausedLegs.map((o) => o.symbol),
-    });
-  }
-
-  // Buy legs spend stablecoin and lamports. These were checked against
-  // nothing while sells were checked against the chain, so a wallet with no
-  // USDC, or with USDC but no SOL for fees, still received a signable bundle
-  // that could not land.
-  if (buys.length > 0) {
-    const spendable = await getSpendable(services.rpc, owner);
-    if (spendable.usdc + 1e-6 < buyNotional) {
-      problems.push({
-        kind: "insufficient-usdc",
-        message: "wallet does not hold enough USDC to cover the buy legs",
-        detail: "Buys are quoted from the associated USDC account.",
-        requiredUsd: buyNotional,
-        availableUsd: spendable.usdc,
-      });
-    }
-    // Each transaction pays a signature fee and may open accounts. A wallet
-    // with no lamports cannot submit anything, however much USDC it holds.
-    if (spendable.lamports < MIN_LAMPORTS) {
-      problems.push({
-        kind: "insufficient-sol",
-        message: "wallet does not hold enough SOL to pay transaction fees",
-        detail: `At least ${MIN_LAMPORTS / 1e9} SOL is needed to submit and open accounts.`,
-        lamports: spendable.lamports,
-      });
-    }
-  }
-
-  if (problems.length > 0) {
-    return c.json({ error: problems[0]?.["message"], problems }, 409);
-  }
-
-  // "confirmed", not "finalized". A blockhash lives about 150 blocks, and a
-  // finalized one is already ~32 blocks old when handed out -- roughly 13
-  // seconds of the user's signing window spent before they see the prompt.
-  // Measured: building an eight-leg basket consumes another ~33 blocks, so
-  // the finalized path left about 46 seconds to approve.
-  const { value } = await services.rpc.call<{
-    value: { blockhash: string; lastValidBlockHeight: number };
-  }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
-
-  const bundle = await buildMirrorBundle(services.jupiter, {
+  const outcome = await buildForTarget(services, {
     owner,
-    legs: rebalance.orders.map((o) => ({ symbol: o.symbol, side: o.side, usd: o.usd })),
-    priceUsdBySymbol: price,
-    scaleBySymbol: scale,
-    blockhash: value.blockhash,
-    lastValidBlockHeight: value.lastValidBlockHeight,
+    target: target.weights,
+    deployUsd,
+    holdings,
     slippageBps,
+    snapshot: await market(),
   });
 
-  // Every leg failing is not a success with nothing in it. Returning 200 with
-  // an empty array and a note telling the user to sign them reads as "done".
-  if (bundle.transactions.length === 0) {
+  if (outcome.kind === "empty") {
+    return c.json({ error: "nothing to trade", skipped: outcome.skipped }, 400);
+  }
+  if (outcome.kind === "refused") {
+    return c.json({ error: outcome.problems[0]?.["message"], problems: outcome.problems }, 409);
+  }
+
+  // Every leg failing is not a success with nothing in it.
+  if (outcome.bundle.transactions.length === 0) {
     return c.json(
       {
         error: "no leg of this basket could be built",
         detail: "Every route was refused or could not be quoted; nothing is signable.",
-        failed: bundle.failed,
+        failed: outcome.bundle.failed,
       },
       502,
     );
@@ -549,7 +422,7 @@ app.post("/api/mirror/build", async (c) => {
 
   return c.json({
     target: target.name,
-    ...bundle,
+    ...outcome.bundle,
     atomic: false,
     note:
       "Sign all transactions together. They settle independently, so a partial fill is possible. " +

@@ -210,6 +210,33 @@ Hermes now rejects price reads without a key (HTTP 401) while leaving feed
 discovery open. Without `PYTH_API_KEY` the oracle column is absent and the
 response says so, rather than reporting a price of zero.
 
+## Copying
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/copy/preview` | What a follower would hold if they started copying now |
+| `POST /api/copy/build` | Unsigned transactions that move a follower onto a leader's allocation |
+| `POST /api/copy/stop-check` | Whether a drawdown has reached the follower's stop |
+
+Copying mirrors a leader's **allocation**, not their last transaction. A
+leader spending $700 out of a $100,000 book moved 0.7% of their portfolio; a
+follower with $1,000 copying the dollar amount would move 70% of theirs.
+Weights make the relationship proportional at any size, and a follower who
+joins late arrives at the leader's current position rather than at whatever
+they happened to do most recently.
+
+Copying is faithful by default. A position cap is a risk limit the follower
+chooses, and when one is set the preview names where it changed the
+allocation — otherwise a follower who picked a leader would quietly receive
+a different portfolio. Every dropped position is listed with its reason.
+
+Nothing is custodial and there is no stop endpoint that revokes anything:
+no standing authority is ever granted, so stopping means not signing the
+next mirror.
+
+Copy builds run through the same refusals as every other build, so a copy
+cannot ship a bundle that mirroring an index would have rejected.
+
 ## What the API refuses, and why
 
 A build is refused with 409 and *every* applicable reason, not the first one:

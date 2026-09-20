@@ -35,6 +35,7 @@ const MAX_HOLDINGS = 32;
 const MAX_DEPLOY_USD = 10_000_000;
 
 export function requireFiniteUsd(value: unknown, field: string, { min = 0 } = {}): number {
+  if (value === undefined || value === null) throw new BadRequest(`${field} is required`);
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) throw new BadRequest(`${field} must be a finite number`);
   if (parsed < min) throw new BadRequest(`${field} must be at least ${min}`);
