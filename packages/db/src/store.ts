@@ -247,6 +247,14 @@ export class Store {
     return row.slot;
   }
 
+  /** Distinct wallets seen trading at or after a slot. */
+  activeTraderCount(sinceSlot: number): number {
+    const row = this.#db
+      .query("SELECT COUNT(DISTINCT owner) AS n FROM trade WHERE slot >= ?")
+      .get(sinceSlot) as { n: number };
+    return row.n;
+  }
+
   tradesFor(owner: string, limit = 100): TradeRow[] {
     const rows = this.#db
       .query(

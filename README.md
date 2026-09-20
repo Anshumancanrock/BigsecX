@@ -164,6 +164,31 @@ actually be sold. A position that cannot be priced is named in `unpriced` and
 left with a null weight rather than counted as worthless, and a frozen
 account is flagged rather than reported as sellable.
 
+## Traders
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/leaderboard` | Wallets ranked by profit, return or volume |
+| `GET /api/traders/:wallet` | Profile: profit, return, win rate, allocation, sectors |
+| `GET /api/traders/:wallet/trades` | Raw trade history |
+
+Nobody reports their own performance; it is reconstructed from indexed
+on-chain activity. Positions on a profile come from trades, not from chain
+balances, because attaching profit to shares whose cost was never observed
+would invent it.
+
+Win rate counts closed round trips, not individual trades — a position is
+closed when its quantity returns to zero, and it wins if more cash came out
+than went in. Counting sells would score every exit a win.
+
+Return is measured against peak capital committed, not the closing balance:
+after a round trip the closing balance *is* the profit or loss, so dividing
+by it reports every loss as exactly -100%.
+
+Each response carries its own limits. `coverageComplete` is false when any
+trade in the window had no observable cost, which makes the profit figure
+unreliable.
+
 ## What the API refuses, and why
 
 A build is refused with 409 and *every* applicable reason, not the first one:
