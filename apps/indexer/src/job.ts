@@ -23,8 +23,10 @@ import { takeSnapshot, type MarketSnapshot } from "./snapshot.ts";
 /** Index levels start here, so a chart reads as a percentage from launch. */
 const INDEX_BASE = 1_000;
 
-/** USDC has six decimals. */
+/** USDC has six decimals; wrapped SOL has nine. */
 const USDC_DECIMALS = 6;
+const WSOL_DECIMALS = 9;
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 /**
  * What a trade cost, taken from the stablecoin that actually moved.
@@ -43,9 +45,26 @@ const USDC_DECIMALS = 6;
  * through SOL, or a plain transfer. Such a trade has no observable cost
  * basis, and pricing it with a mark would invent one.
  */
-function tradeValueUsd(usdcDeltaRaw: bigint | null): number | null {
-  if (usdcDeltaRaw === null || usdcDeltaRaw === 0n) return null;
-  return -Number(usdcDeltaRaw) / 10 ** USDC_DECIMALS;
+function tradeValueUsd(
+  usdcDeltaRaw: bigint | null,
+  wsolDeltaRaw: bigint | null,
+  solUsd: number | null,
+): number | null {
+  if (usdcDeltaRaw !== null && usdcDeltaRaw !== 0n) {
+    return -Number(usdcDeltaRaw) / 10 ** USDC_DECIMALS;
+  }
+  // Most routes hop through SOL rather than stablecoin, so falling back to
+  // the SOL leg is the difference between pricing a quarter of observed
+  // trades and pricing nearly all of them.
+  //
+  // The SOL amount is the one that actually moved in that transaction, and it
+  // differs between a buy and a later sell -- which is what keeps profit
+  // measurable. Only the SOL/USD rate is taken as of now, and that is a
+  // liquid pair moving far less than these thin tokens do.
+  if (wsolDeltaRaw !== null && wsolDeltaRaw !== 0n && solUsd !== null && solUsd > 0) {
+    return (-Number(wsolDeltaRaw) / 10 ** WSOL_DECIMALS) * solUsd;
+  }
+  return null;
 }
 
 export interface JobResult {
@@ -167,6 +186,16 @@ export async function runJob(
     const watched = new Set(mints);
     const rows: TradeRow[] = [];
 
+    // SOL is priced once per pass and used to value the SOL side of trades.
+    let solUsd: number | null = null;
+    try {
+      const solPrice = await jupiter.prices([WSOL_MINT]);
+      solUsd = solPrice[WSOL_MINT]?.usdPrice ?? null;
+    } catch {
+      // Without a SOL price, only stablecoin-legged trades get a cost.
+      solUsd = null;
+    }
+
     // Pools first: nearly everything touching them is a trade, whereas a
     // mint's signature list is mostly transfers and account creations.
     let venueAddresses: string[] = [];
@@ -246,7 +275,7 @@ export async function runJob(
           blockTime: trade.blockTime,
           deltaRaw: trade.deltaRaw,
           uiAmount,
-          valueUsd: tradeValueUsd(trade.usdcDeltaRaw),
+          valueUsd: tradeValueUsd(trade.usdcDeltaRaw, trade.wsolDeltaRaw, solUsd),
         });
       }
     }

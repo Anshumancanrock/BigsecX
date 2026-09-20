@@ -18,6 +18,8 @@
 import type { Rpc } from "./rpc.ts";
 
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+/** Wrapped SOL. Most PreStocks routes hop through it rather than stablecoin. */
+export const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 export interface SignatureRef {
   readonly signature: string;
@@ -58,6 +60,14 @@ export interface Trade {
   readonly deltaRaw: bigint;
   /** Matching USDC change, negative when the wallet spent. Null if absent. */
   readonly usdcDeltaRaw: bigint | null;
+  /**
+   * Matching wrapped-SOL change, negative when the wallet spent.
+   *
+   * Carried because most routes here hop through SOL rather than stablecoin:
+   * of eight trades sampled from mainnet, only two had a USDC leg. Ignoring
+   * the SOL side discards three quarters of the observable cost basis.
+   */
+  readonly wsolDeltaRaw: bigint | null;
 }
 
 /** Owners that are program-controlled rather than people. */
@@ -184,7 +194,9 @@ function extractTrades(
     if (!watchedMints.has(mint) || delta === 0n) continue;
     if (isCounterparty(owner, signers)) continue;
 
+    const single = legsPerOwner.get(owner) === 1;
     const usdc = byOwnerMint.get(`${owner}\u0000${USDC_MINT}`) ?? null;
+    const wsol = byOwnerMint.get(`${owner}\u0000${WSOL_MINT}`) ?? null;
     trades.push({
       signature,
       slot: response.slot,
@@ -192,7 +204,8 @@ function extractTrades(
       owner,
       mint,
       deltaRaw: delta,
-      usdcDeltaRaw: legsPerOwner.get(owner) === 1 ? usdc : null,
+      usdcDeltaRaw: single ? usdc : null,
+      wsolDeltaRaw: single ? wsol : null,
     });
   }
   return trades;
