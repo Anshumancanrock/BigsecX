@@ -160,9 +160,9 @@ describe("buildStrategy", () => {
     ).toContain("sector cap");
   });
 
-  test("a two-name basket is allowed under the adaptive default cap", () => {
-    // Prediction Markets is Kalshi and Polymarket at half each. A fixed 40%
-    // default cap would reject it as impossible.
+  test("a two-name basket is allowed by default", () => {
+    // Prediction Markets is Kalshi and Polymarket at half each. A default cap
+    // of 40% would reject it as impossible.
     const strategy = build({
       name: "Prediction Markets",
       constituents: [
@@ -171,6 +171,32 @@ describe("buildStrategy", () => {
       ],
     });
     expect(strategy.weights.map((w) => w.weight)).toEqual([0.5, 0.5]);
+  });
+
+  test("keeps the allocation the author asked for", () => {
+    // Regression. A default cap silently turned a 60/40 pair into 50/50 --
+    // the same silent mutation the minimum-weight floor exists to refuse.
+    const strategy = build({
+      name: "Humanoid Revolution",
+      creator: "WALLET1",
+      constituents: [
+        { symbol: "FIGUREAI", weight: 60 },
+        { symbol: "NEURALINK", weight: 40 },
+      ],
+    });
+    expect(strategy.weights.find((w) => w.symbol === "FIGUREAI")?.weight).toBeCloseTo(0.6, 12);
+    expect(strategy.weights.find((w) => w.symbol === "NEURALINK")?.weight).toBeCloseTo(0.4, 12);
+  });
+
+  test("a lopsided allocation survives when no cap is set", () => {
+    const strategy = build({
+      name: "x",
+      constituents: [
+        { symbol: "OPENAI", weight: 90 },
+        { symbol: "ANTHROPIC", weight: 10 },
+      ],
+    });
+    expect(strategy.weights.find((w) => w.symbol === "OPENAI")?.weight).toBeCloseTo(0.9, 12);
   });
 
   test("an explicit cap is enforced, never widened", () => {
@@ -210,10 +236,8 @@ describe("buildStrategy", () => {
     });
     expect(strategy.rebalance).toBe("manual");
     expect(strategy.published).toBe(false);
-    // The default cap widens to an equal split so a two-name basket is
-    // possible; the rest of the defaults stand.
-    expect(strategy.guardrails.maxWeight).toBeCloseTo(0.5, 12);
-    expect(strategy.guardrails.driftBps).toBe(DEFAULT_GUARDRAILS.driftBps);
+    // Defaults constrain nothing about the allocation.
+    expect(strategy.guardrails).toEqual(DEFAULT_GUARDRAILS);
   });
 });
 

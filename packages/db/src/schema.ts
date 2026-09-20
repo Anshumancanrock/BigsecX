@@ -94,6 +94,37 @@ const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE index_cursor RENAME COLUMN mint TO address;
   `,
+  // 5: authored strategies. Constituents live in their own table rather than
+  // a JSON column so a strategy can be found by what it holds -- "who else
+  // holds SpaceX" is a question the product asks constantly.
+  `
+  CREATE TABLE strategy (
+    id                TEXT    PRIMARY KEY,
+    kind              TEXT    NOT NULL,
+    name              TEXT    NOT NULL,
+    description       TEXT    NOT NULL DEFAULT '',
+    -- Null for system indexes, a wallet address for authored ones.
+    creator           TEXT,
+    rebalance         TEXT    NOT NULL,
+    max_weight        REAL    NOT NULL,
+    min_weight        REAL    NOT NULL,
+    max_sector_weight REAL,
+    drift_bps         INTEGER NOT NULL,
+    published         INTEGER NOT NULL DEFAULT 0,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+  );
+  CREATE INDEX idx_strategy_creator   ON strategy (creator, updated_at);
+  CREATE INDEX idx_strategy_published ON strategy (published, updated_at);
+
+  CREATE TABLE strategy_constituent (
+    strategy_id TEXT NOT NULL REFERENCES strategy (id) ON DELETE CASCADE,
+    symbol      TEXT NOT NULL,
+    weight      REAL NOT NULL,
+    PRIMARY KEY (strategy_id, symbol)
+  );
+  CREATE INDEX idx_constituent_symbol ON strategy_constituent (symbol);
+  `,
 ];
 
 export function migrate(db: Database): number {

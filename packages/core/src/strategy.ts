@@ -35,9 +35,20 @@ export interface Guardrails {
   readonly driftBps: number;
 }
 
+/**
+ * Defaults that constrain nothing about the allocation.
+ *
+ * Guardrails are the author's promises, so they are opt-in. A default cap
+ * reshapes the basket silently: a 60/40 pair under a 40% cap comes back
+ * 50/50, which is not what was asked for and is the same silent mutation the
+ * minimum-weight floor is explicitly a rejection to avoid.
+ *
+ * `driftBps` is different and does have a default, because it governs when
+ * to rebalance rather than what to hold. It changes no weight.
+ */
 export const DEFAULT_GUARDRAILS: Guardrails = {
-  maxWeight: 0.4,
-  minWeight: 0.05,
+  maxWeight: 1,
+  minWeight: 0,
   driftBps: 300,
 };
 
@@ -78,26 +89,17 @@ export class StrategyInvalid extends Error {
 /**
  * Fill in guardrails the author did not set.
  *
- * The default cap adapts to the basket size, because a fixed one describes an
- * impossible basket for small baskets: two positions cannot sum to 100% under
- * a 40% cap, and a two-name basket is perfectly legitimate -- Prediction
- * Markets is exactly Kalshi and Polymarket at half each.
- *
- * An explicitly chosen cap is never widened. The author asked for it, and
- * quietly raising it would ship an allocation they did not agree to; if it is
- * infeasible they are told so.
+ * Only values the author actually supplied constrain the basket. An
+ * explicitly chosen cap is enforced exactly and never widened to make a
+ * basket fit: they asked for it, and raising it would ship an allocation
+ * they did not agree to. If it is infeasible they are told so.
  */
-function resolveGuardrails(
-  partial: Partial<Guardrails> | undefined,
-  count: number,
-): Guardrails {
-  const equalSplit = count > 0 ? 1 / count : 1;
+function resolveGuardrails(partial: Partial<Guardrails> | undefined): Guardrails {
   return {
-    ...DEFAULT_GUARDRAILS,
-    maxWeight: partial?.maxWeight ?? Math.max(DEFAULT_GUARDRAILS.maxWeight, equalSplit),
-    minWeight: partial?.minWeight ?? Math.min(DEFAULT_GUARDRAILS.minWeight, equalSplit),
+    maxWeight: partial?.maxWeight ?? DEFAULT_GUARDRAILS.maxWeight,
+    minWeight: partial?.minWeight ?? DEFAULT_GUARDRAILS.minWeight,
+    driftBps: partial?.driftBps ?? DEFAULT_GUARDRAILS.driftBps,
     ...(partial?.maxSectorWeight !== undefined ? { maxSectorWeight: partial.maxSectorWeight } : {}),
-    ...(partial?.driftBps !== undefined ? { driftBps: partial.driftBps } : {}),
   };
 }
 
@@ -114,7 +116,7 @@ function guardrailProblems(rails: Guardrails, count: number): string[] {
   if (!(rails.maxWeight > 0 && rails.maxWeight <= 1)) {
     problems.push("maxWeight must be between 0 and 1");
   }
-  if (!(rails.minWeight >= 0 && rails.minWeight < 1)) {
+  if (!(rails.minWeight >= 0 && rails.minWeight <= 1)) {
     problems.push("minWeight must be at least 0 and below 1");
   }
   if (rails.minWeight >= rails.maxWeight) {
@@ -202,7 +204,7 @@ export function buildStrategy(
     }
   }
 
-  const rails = resolveGuardrails(draft.guardrails, seen.size);
+  const rails = resolveGuardrails(draft.guardrails);
   problems.push(...guardrailProblems(rails, seen.size));
 
   // Stop here when the inputs cannot be weighted at all; anything further

@@ -32,6 +32,40 @@ export interface PriceRow {
   readonly transferFeeBps: number;
 }
 
+export interface StrategyRow {
+  readonly id: string;
+  readonly kind: "index" | "user";
+  readonly name: string;
+  readonly description: string;
+  readonly creator: string | null;
+  readonly rebalance: string;
+  readonly maxWeight: number;
+  readonly minWeight: number;
+  readonly maxSectorWeight: number | null;
+  readonly driftBps: number;
+  readonly published: boolean;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly weights: readonly { readonly symbol: string; readonly weight: number }[];
+}
+
+/** The strategy table's column names, as SQLite returns them. */
+interface RawStrategyRow {
+  id: string;
+  kind: string;
+  name: string;
+  description: string;
+  creator: string | null;
+  rebalance: string;
+  max_weight: number;
+  min_weight: number;
+  max_sector_weight: number | null;
+  drift_bps: number;
+  published: number;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface TradeRow {
   readonly signature: string;
   readonly owner: string;
@@ -222,6 +256,120 @@ export class Store {
       )
       .all(owner, limit) as (Omit<TradeRow, "deltaRaw"> & { deltaRaw: string })[];
     return rows.map((r) => ({ ...r, deltaRaw: BigInt(r.deltaRaw) }));
+  }
+
+  /**
+   * Save a strategy and its constituents atomically.
+   *
+   * A strategy whose weights half-saved would be a basket nobody authored,
+   * so the constituent rows are replaced wholesale inside the transaction
+   * rather than merged.
+   */
+  writeStrategy(strategy: StrategyRow): void {
+    this.#db.transaction(() => {
+      this.#db
+        .query(
+          `INSERT OR REPLACE INTO strategy
+             (id, kind, name, description, creator, rebalance,
+              max_weight, min_weight, max_sector_weight, drift_bps,
+              published, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          strategy.id,
+          strategy.kind,
+          strategy.name,
+          strategy.description,
+          strategy.creator,
+          strategy.rebalance,
+          strategy.maxWeight,
+          strategy.minWeight,
+          strategy.maxSectorWeight,
+          strategy.driftBps,
+          strategy.published ? 1 : 0,
+          Math.floor(strategy.createdAt.getTime() / 1000),
+          Math.floor(strategy.updatedAt.getTime() / 1000),
+        );
+
+      this.#db.query("DELETE FROM strategy_constituent WHERE strategy_id = ?").run(strategy.id);
+      const insert = this.#db.query(
+        "INSERT INTO strategy_constituent (strategy_id, symbol, weight) VALUES (?, ?, ?)",
+      );
+      for (const w of strategy.weights) insert.run(strategy.id, w.symbol, w.weight);
+    })();
+  }
+
+  #hydrate(row: RawStrategyRow): StrategyRow {
+    const weights = this.#db
+      .query(
+        "SELECT symbol, weight FROM strategy_constituent WHERE strategy_id = ? ORDER BY weight DESC",
+      )
+      .all(row.id) as { symbol: string; weight: number }[];
+
+    return {
+      id: row.id,
+      kind: row.kind as StrategyRow["kind"],
+      name: row.name,
+      description: row.description,
+      creator: row.creator,
+      rebalance: row.rebalance,
+      maxWeight: row.max_weight,
+      minWeight: row.min_weight,
+      maxSectorWeight: row.max_sector_weight,
+      driftBps: row.drift_bps,
+      published: row.published === 1,
+      createdAt: new Date(row.created_at * 1000),
+      updatedAt: new Date(row.updated_at * 1000),
+      weights,
+    };
+  }
+
+  getStrategy(id: string): StrategyRow | null {
+    const row = this.#db.query("SELECT * FROM strategy WHERE id = ?").get(id) as
+      | RawStrategyRow
+      | null;
+    return row ? this.#hydrate(row) : null;
+  }
+
+  /**
+   * List strategies, newest first.
+   *
+   * `creator` returns that wallet's own drafts as well as its published work;
+   * without it only published strategies are visible, because an unpublished
+   * draft belongs to its author alone.
+   */
+  listStrategies(
+    options: { readonly creator?: string; readonly limit?: number; readonly holding?: string } = {},
+  ): StrategyRow[] {
+    const limit = options.limit ?? 50;
+    const clauses: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (options.creator) {
+      clauses.push("creator = ?");
+      params.push(options.creator);
+    } else {
+      clauses.push("published = 1");
+    }
+    if (options.holding) {
+      clauses.push("id IN (SELECT strategy_id FROM strategy_constituent WHERE symbol = ?)");
+      params.push(options.holding.toUpperCase());
+    }
+
+    const rows = this.#db
+      .query(
+        `SELECT * FROM strategy WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC LIMIT ?`,
+      )
+      .all(...params, limit) as RawStrategyRow[];
+    return rows.map((row) => this.#hydrate(row));
+  }
+
+  deleteStrategy(id: string, creator: string): boolean {
+    // Scoped to the creator so an id alone cannot delete someone else's work.
+    const result = this.#db
+      .query("DELETE FROM strategy WHERE id = ? AND creator = ?")
+      .run(id, creator);
+    return result.changes > 0;
   }
 
   /**
