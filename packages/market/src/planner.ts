@@ -206,9 +206,9 @@ export async function buildExecutionPlan(
       order,
       usd,
       priceImpact: probe.impact,
-      // Rescale the share count if a depth recheck shrank the leg after the
-      // last quote was taken.
-      expectedOutUi: probe.outUi === null ? null : probe.outUi * (usd / measuredAtUsd),
+      // Always a measured figure. If the leg moved after its last quote, the
+      // quote was retaken above or the estimate was dropped entirely.
+      expectedOutUi: measuredAtUsd === usd ? probe.outUi : null,
       effectivePriceUsd: probe.effectivePriceUsd,
       referencePriceUsd: reference ?? null,
       costVsReference: costVsReference(order.side, probe.effectivePriceUsd, reference),

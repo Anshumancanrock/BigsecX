@@ -27,7 +27,12 @@ bun run apps/indexer/src/index.ts            # indexing job (INDEXER_ONCE=1 for 
 bun run apps/api/src/index.ts                # HTTP API on :3000
 ```
 
-`SOLANA_RPC_URL` overrides the default public endpoint.
+Configuration is environment-driven; see `.env.example`. Two variables matter
+most. `SOLANA_RPC_URL` raises the ceiling for the trade indexer, which the free
+tier starves. `JUPITER_API_KEY` moves quoting onto the keyed host and lets the
+client raise its own rate budget — without it, the keyless tier reports a
+remaining quota in single digits while a single eight-leg basket needs sixteen
+calls.
 
 ## Facts this codebase is built on
 

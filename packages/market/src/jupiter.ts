@@ -16,6 +16,23 @@
 import { Cache, RateLimiter, getJson } from "./http.ts";
 
 const LITE = "https://lite-api.jup.ag";
+/** Keyed tier. Same paths, far higher limits. */
+const PRO = "https://api.jup.ag";
+
+/**
+ * Resolve the base URL and auth header from the environment.
+ *
+ * The keyless tier reports a remaining quota in single digits, which is the
+ * binding constraint on everything here: an eight-leg basket needs sixteen
+ * calls, and the indexer competes for the same budget. Setting JUPITER_API_KEY
+ * moves both onto the keyed host without any other change.
+ */
+export function jupiterTransport(): { base: string; headers: Record<string, string> } {
+  const key = process.env["JUPITER_API_KEY"];
+  return key
+    ? { base: PRO, headers: { "x-api-key": key } }
+    : { base: LITE, headers: {} };
+}
 
 /** One venue hop inside a route. */
 export interface RouteStep {
@@ -103,11 +120,22 @@ export interface QuoteRequest {
 
 export class JupiterClient {
   readonly #cache = new Cache();
-  // Observed headers reported a remaining quota in single digits, so this is
-  // deliberately conservative. Raise it only alongside an API key.
-  readonly #limiter = new RateLimiter(4, 1);
+  readonly #limiter: RateLimiter;
+  readonly #headers: Record<string, string>;
+  private readonly base: string;
 
-  constructor(private readonly base: string = LITE) {}
+  /**
+   * Without a key the keyless host allows only a few requests at a time, so
+   * the bucket is deliberately small. A key raises both the host and the
+   * budget together; keeping the conservative rate anyway would waste it.
+   */
+  constructor(base?: string) {
+    const transport = jupiterTransport();
+    this.base = base ?? transport.base;
+    this.#headers = transport.headers;
+    const keyed = Object.keys(transport.headers).length > 0;
+    this.#limiter = keyed ? new RateLimiter(40, 20) : new RateLimiter(4, 1);
+  }
 
   /**
    * Prices for many mints in one call.
@@ -123,6 +151,7 @@ export class JupiterClient {
       getJson<Record<string, PriceEntry>>(`${this.base}/price/v3?ids=${ids}`, {
         upstream: "jupiter-price",
         limiter: this.#limiter,
+        headers: this.#headers,
       }),
     );
   }
@@ -147,7 +176,11 @@ export class JupiterClient {
 
     const url = `${this.base}/swap/v1/quote?${params.toString()}`;
     return this.#cache.fetch(`quote:${params.toString()}`, ttlMs, () =>
-      getJson<Quote>(url, { upstream: "jupiter-quote", limiter: this.#limiter }),
+      getJson<Quote>(url, {
+        upstream: "jupiter-quote",
+        limiter: this.#limiter,
+        headers: this.#headers,
+      }),
     );
   }
 }
@@ -185,17 +218,23 @@ export class JupiterSwapError extends Error {
 export async function fetchSwapInstructions<T>(
   quote: Quote,
   options: SwapInstructionsOptions,
-  base: string = LITE,
+  base?: string,
   limiter: RateLimiter = SWAP_LIMITER,
 ): Promise<T> {
+  const transport = jupiterTransport();
+  const host = base ?? transport.base;
   // Shares the same budget discipline as quoting. Building an eight-leg
   // basket issues eight of these back to back, which is enough to draw a 429
   // on its own.
   await limiter.acquire();
 
-  const response = await fetch(`${base}/swap/v1/swap-instructions`, {
+  const response = await fetch(`${host}/swap/v1/swap-instructions`, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      ...transport.headers,
+    },
     body: JSON.stringify({
       quoteResponse: quote,
       userPublicKey: options.userPublicKey,

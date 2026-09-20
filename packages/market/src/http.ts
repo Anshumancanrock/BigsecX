@@ -155,6 +155,7 @@ export async function getJson<T>(
     readonly limiter?: RateLimiter;
     readonly maxRetries?: number;
     readonly timeoutMs?: number;
+    readonly headers?: Readonly<Record<string, string>>;
   },
 ): Promise<T> {
   const maxRetries = options.maxRetries ?? 4;
@@ -168,7 +169,7 @@ export async function getJson<T>(
     await options.limiter?.acquire();
 
     const response = await fetch(url, {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", ...options.headers },
       signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
     });
 
