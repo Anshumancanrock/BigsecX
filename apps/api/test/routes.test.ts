@@ -144,6 +144,32 @@ describe("leaderboard over indexed trades", () => {
     expect(body.entries[0]?.owner).toBe("winner");
   });
 
+  test("an empty query param means unset, not zero", async () => {
+    // Any frontend produces "" from an unset form field. Number("") is 0,
+    // which clamps to the minimum and silently answers a different question.
+    const { app: a, services } = app({ priceUsd: { OPENAI: 100 } });
+    seed(services.store);
+    const res = await a.request("/api/leaderboard?hours=&limit=&minVolumeUsd=");
+    const body = (await res.json()) as { window: string; minVolumeUsd: number };
+    expect(body.window).toBe("24h");
+    expect(body.minVolumeUsd).toBe(100);
+  });
+
+  test("the volume floor can be lowered for a thin dataset", async () => {
+    const { app: a, services } = app({ priceUsd: { OPENAI: 100 } });
+    services.store.writeTrades([
+      { signature: "tiny", owner: "small", symbol: "OPENAI", slot: 5, blockTime: 1, deltaRaw: 1n, uiAmount: 1, valueUsd: 50 },
+    ]);
+    const hidden = (await (await a.request("/api/leaderboard")).json()) as { entries: unknown[] };
+    expect(hidden.entries).toHaveLength(0);
+
+    const shown = (await (await a.request("/api/leaderboard?minVolumeUsd=10")).json()) as {
+      entries: { owner: string }[];
+    };
+    expect(shown.entries.map((e) => e.owner)).toContain("small");
+  });
+
+
   test("clamps a hostile window instead of failing", async () => {
     const { app: a, services } = app({ priceUsd: { OPENAI: 100 } });
     seed(services.store);

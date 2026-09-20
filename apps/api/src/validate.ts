@@ -134,7 +134,10 @@ export function requireInt(
   field: string,
   { min, max, fallback }: { min: number; max: number; fallback: number },
 ): number {
-  if (value === undefined || value === null) return fallback;
+  // An empty string is an unset form field, not a request for zero. Number("")
+  // is 0, which then clamps to the minimum and silently answers a different
+  // question than the caller asked.
+  if (value === undefined || value === null || value === "") return fallback;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new BadRequest(`${field} must be a number`);
   return Math.min(max, Math.max(min, Math.trunc(parsed)));

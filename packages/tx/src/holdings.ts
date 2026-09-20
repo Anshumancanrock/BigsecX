@@ -147,15 +147,18 @@ export interface SellCheck {
 /**
  * Find sell legs the wallet cannot cover.
  *
- * A small tolerance absorbs the gap between the price a plan was built at and
- * the balance read a moment later; without it, selling an entire position
- * fails on a rounding difference.
+ * The tolerance absorbs floating-point noise between valuing a position and
+ * valuing the same position a moment later, nothing more. An earlier version
+ * used one percent, which does not guard anything: it lets a leg sized one
+ * percent above the balance through, and that leg then fails on chain with
+ * 0x1788 after the user has signed. A guard that permits the failure it
+ * exists to prevent is worse than none, because it reads as a check.
  */
 export function findUncoveredSells(
   legs: readonly { readonly symbol: string; readonly side: "buy" | "sell"; readonly usd: number }[],
   balances: ReadonlyMap<string, SellableBalance>,
   priceUsdBySymbol: ReadonlyMap<string, number>,
-  tolerance = 0.01,
+  tolerance = 1e-9,
 ): SellCheck[] {
   const uncovered: SellCheck[] = [];
 

@@ -6,6 +6,7 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { PACKET_DATA_SIZE, compileAndMeasure, packGroups } from "../src/pack.ts";
+import { findUncoveredSells } from "../src/holdings.ts";
 import {
   dedupeWithinTransaction,
   instructionKey,
@@ -262,5 +263,40 @@ describe("setup instructions across a multi-transaction bundle", () => {
       data: Buffer.from([1]),
     });
     expect(dedupeWithinTransaction([sharedSetup(), other, sharedSetup()])).toHaveLength(2);
+  });
+});
+
+describe("sell coverage", () => {
+  const balance = (uiAmount: number, frozen = false) =>
+    new Map([["OPENAI", { symbol: "OPENAI", uiAmount, rawAmount: 0n, frozen }]]);
+  const prices = new Map([["OPENAI", 100]]);
+
+  test("refuses a leg that exceeds the balance", () => {
+    // Regression: a one percent tolerance let a leg one percent over the
+    // balance through, and it then failed on chain with 0x1788 after the
+    // user had signed. A guard that permits the failure it exists to prevent
+    // is worse than none.
+    const legs = [{ symbol: "OPENAI", side: "sell" as const, usd: 10_100 }];
+    expect(findUncoveredSells(legs, balance(100), prices)).toHaveLength(1);
+  });
+
+  test("allows a leg that exactly matches the balance", () => {
+    const legs = [{ symbol: "OPENAI", side: "sell" as const, usd: 10_000 }];
+    expect(findUncoveredSells(legs, balance(100), prices)).toHaveLength(0);
+  });
+
+  test("refuses a frozen account however much it reports", () => {
+    // The issuer holds freeze authority on every mint. A frozen account
+    // still reports its full balance.
+    const legs = [{ symbol: "OPENAI", side: "sell" as const, usd: 100 }];
+    const result = findUncoveredSells(legs, balance(100, true), prices);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.frozen).toBe(true);
+    expect(result[0]?.availableUsd).toBe(0);
+  });
+
+  test("ignores buy legs", () => {
+    const legs = [{ symbol: "OPENAI", side: "buy" as const, usd: 1e9 }];
+    expect(findUncoveredSells(legs, balance(0), prices)).toHaveLength(0);
   });
 });

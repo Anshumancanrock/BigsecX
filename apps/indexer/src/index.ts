@@ -14,7 +14,22 @@ const rpc = new Rpc({ url: RPC_URL });
 const jupiter = new JupiterClient();
 const store = new Store();
 
+/**
+ * True while a pass is running.
+ *
+ * A pass took 143 seconds under rate limiting against a shorter interval, so
+ * overlap is not theoretical. Two passes at once double the request pressure
+ * that caused the slowness, and both read the same cursors before either
+ * writes, so the second re-indexes the window the first is already handling.
+ */
+let running = false;
+
 async function tick(): Promise<void> {
+  if (running) {
+    console.log(`[${new Date().toISOString()}] previous pass still running; skipping this tick`);
+    return;
+  }
+  running = true;
   const started = Date.now();
   try {
     const result = await runJob(rpc, jupiter, store);
@@ -31,6 +46,8 @@ async function tick(): Promise<void> {
     // A failed tick must not kill the loop: upstreams rate limit, and the
     // next run will pick up where this one left off.
     console.error(`[${new Date().toISOString()}] job failed:`, (error as Error).message);
+  } finally {
+    running = false;
   }
 }
 
