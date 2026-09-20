@@ -12,19 +12,26 @@ import {
   INDEX_DEFINITIONS,
   UNIVERSE,
   buildIndex,
-  computePerformance,
+  buildLeaderboard,
   definitionById,
   planRebalance,
-  rankWallets,
   type IndexInput,
-  type RankedWallet,
+  type TradeRecord,
   type Weight,
 } from "@ps/core";
 import { buildExecutionPlan } from "@ps/market";
-import { buildMirrorBundle } from "@ps/tx";
+import { buildMirrorBundle, findUncoveredSells, getSellableBalances } from "@ps/tx";
 import { takeSnapshot } from "@ps/indexer/snapshot.ts";
 import { createServices } from "./context.ts";
 import { toMarketDto } from "./serialize.ts";
+import {
+  BadRequest,
+  parseHoldings,
+  parseWeights,
+  requireBase58Address,
+  requireFiniteUsd,
+  requireInt,
+} from "./validate.ts";
 
 const services = createServices();
 const app = new Hono();
@@ -32,10 +39,12 @@ const app = new Hono();
 app.use("/*", cors());
 
 app.onError((error, c) => {
-  // Upstreams fail in ways a client can do nothing about; say so plainly
-  // rather than leaking a stack trace.
+  // A malformed request is the caller's to fix and gets a 400 with the
+  // reason. Anything else is ours, and the client learns nothing useful from
+  // our stack trace.
+  if (error instanceof BadRequest) return c.json({ error: error.message }, 400);
   console.error("request failed:", error);
-  return c.json({ error: error.message }, 500);
+  return c.json({ error: "internal error" }, 500);
 });
 
 /** Cached market view. Snapshots are expensive and change slowly. */
@@ -63,12 +72,25 @@ function priceMaps(snapshot: Awaited<ReturnType<typeof takeSnapshot>>) {
   const price = new Map<string, number>();
   const liquidity = new Map<string, number>();
   const scale = new Map<string, number>();
+  // The snapshot resolves the active multiplier already, so hand the balance
+  // reader a config that simply reports it rather than re-deriving from an
+  // effective timestamp.
+  const scaleConfig = new Map<
+    string,
+    { multiplier: number; newMultiplier: number; newMultiplierEffectiveTimestamp: number }
+  >();
+
   for (const t of snapshot.tokens) {
     if (t.marketUsd !== null) price.set(t.token.symbol, t.marketUsd);
     liquidity.set(t.token.symbol, t.liquidityUsd);
     scale.set(t.token.symbol, t.multiplier);
+    scaleConfig.set(t.token.symbol, {
+      multiplier: t.multiplier,
+      newMultiplier: t.multiplier,
+      newMultiplierEffectiveTimestamp: 0,
+    });
   }
-  return { price, liquidity, scale };
+  return { price, liquidity, scale, scaleConfig };
 }
 
 app.get("/health", (c) => c.json({ ok: true }));
@@ -117,95 +139,100 @@ app.get("/api/indexes/:id", async (c) => {
 });
 
 /**
- * Leaderboard over a trailing window.
+ * Leaderboard of traders, reconstructed from indexed swaps.
  *
- * Ranks the largest observable holders by flow-adjusted return. Two limits are
- * stated in the response rather than buried: only the top accounts per mint
- * are indexed, and return is measured on holdings, not on realised profit.
+ * Ranks by profit measured against cost basis observed on chain, not by change
+ * in portfolio value: the latter rewards funding a wallet rather than trading
+ * it well. Wallets whose cost basis is incomplete -- those that sold a
+ * position acquired before indexing began -- are excluded, because their
+ * apparent profit is an artefact of when we started watching.
+ *
+ * Both limits are returned in the response rather than left implicit.
  */
-app.get("/api/leaderboard", (c) => {
-  const windowHours = Number(c.req.query("hours") ?? 24);
-  const latest = services.store.latestSnapshot();
-  if (!latest) return c.json({ error: "no snapshots yet" }, 503);
+app.get("/api/leaderboard", async (c) => {
+  const hours = requireInt(c.req.query("hours"), "hours", { min: 1, max: 24 * 30, fallback: 24 });
+  const limit = requireInt(c.req.query("limit"), "limit", { min: 1, max: 100, fallback: 25 });
+  const sortBy = ((): "pnl" | "return" | "volume" => {
+    const raw = c.req.query("sortBy");
+    return raw === "return" || raw === "volume" ? raw : "pnl";
+  })();
 
-  const earlier = services.store.snapshotAtOrBefore(
-    new Date(latest.takenAt.getTime() - windowHours * 3_600_000),
-  );
-  if (!earlier || earlier.id === latest.id) {
-    return c.json({
-      window: `${windowHours}h`,
-      entries: [],
-      note: "not enough history yet for this window",
-    });
+  const latestSlot = services.store.latestTradeSlot();
+  if (latestSlot === null) {
+    return c.json({ window: `${hours}h`, entries: [], note: "no trades indexed yet" });
   }
 
-  const before = services.store.positionsAt(earlier.id);
-  const after = services.store.positionsAt(latest.id);
-  const priceBefore = priceRowsFor(earlier.id);
-  const priceAfter = priceRowsFor(latest.id);
+  // Slots are produced at roughly 2.5 per second on mainnet. Using slots
+  // rather than block time keeps this working when block_time is null, which
+  // it can be for older entries.
+  const sinceSlot = Math.max(0, latestSlot - Math.round((hours * 3_600) / 0.4));
+  const byOwner = services.store.tradesByOwnerSince(sinceSlot);
 
-  const byOwner = new Map<string, { before: typeof before; after: typeof after }>();
-  for (const row of before) {
-    const entry = byOwner.get(row.owner) ?? { before: [], after: [] };
-    entry.before.push(row);
-    byOwner.set(row.owner, entry);
-  }
-  for (const row of after) {
-    const entry = byOwner.get(row.owner) ?? { before: [], after: [] };
-    entry.after.push(row);
-    byOwner.set(row.owner, entry);
+  const snapshot = await market();
+  const prices = new Map<string, number>();
+  for (const t of snapshot.tokens) {
+    if (t.marketUsd !== null) prices.set(t.token.symbol, t.marketUsd);
   }
 
-  const wallets: RankedWallet[] = [...byOwner.entries()].map(([owner, sides]) => ({
-    owner,
-    positions: sides.after.map((p) => ({ symbol: p.symbol, uiAmount: p.uiAmount })),
-    performance: computePerformance({
-      before: sides.before.map((p) => ({ symbol: p.symbol, uiAmount: p.uiAmount })),
-      after: sides.after.map((p) => ({ symbol: p.symbol, uiAmount: p.uiAmount })),
-      priceBefore,
-      priceAfter,
-    }),
-  }));
+  const records = new Map<string, TradeRecord[]>();
+  for (const [owner, trades] of byOwner) {
+    records.set(
+      owner,
+      trades.map((t) => ({
+        owner,
+        symbol: t.symbol,
+        uiAmount: t.uiAmount,
+        valueUsd: t.valueUsd,
+        slot: t.slot,
+      })),
+    );
+  }
+
+  const board = buildLeaderboard(records, prices, { limit, sortBy });
 
   return c.json({
-    window: `${windowHours}h`,
-    from: earlier.takenAt.toISOString(),
-    to: latest.takenAt.toISOString(),
-    entries: rankWallets(wallets, { limit: Number(c.req.query("limit") ?? 25) }).map((w) => ({
-      owner: w.owner,
-      returnFraction: w.performance.returnFraction,
-      valueUsd: w.performance.valueAfter,
-      netFlowUsd: w.performance.netFlowUsd,
-      positions: w.positions,
+    window: `${hours}h`,
+    sortBy,
+    sinceSlot,
+    walletsConsidered: records.size,
+    entries: board.map((row) => ({
+      owner: row.owner,
+      trades: row.trades,
+      volumeUsd: row.volumeUsd,
+      peakInvestedUsd: row.peakInvestedUsd,
+      markValueUsd: row.markValueUsd,
+      pnlUsd: row.pnlUsd,
+      returnFraction: row.returnFraction,
+      positions: row.positions,
     })),
     caveats: [
-      "Ranks the largest observable accounts per token, not every holder.",
-      "Return is measured on holdings and adjusted for deposits and withdrawals; it is not realised profit and loss.",
+      "Profit is measured only over trades indexed since this deployment started watching.",
+      "Wallets that sold a position acquired before indexing began are excluded, because their cost basis is unknown.",
+      "Open positions are marked at the current DEX price, not at a price anyone was filled at.",
     ],
   });
 });
 
-function priceRowsFor(snapshotId: number): Map<string, number> {
-  const rows = services.store.raw
-    .query("SELECT symbol, market_usd AS marketUsd FROM token_price WHERE snapshot_id = ?")
-    .all(snapshotId) as { symbol: string; marketUsd: number | null }[];
-  const prices = new Map<string, number>();
-  for (const row of rows) if (row.marketUsd !== null) prices.set(row.symbol, row.marketUsd);
-  return prices;
-}
-
 /** Resolve a mirror target: either a named index or explicit weights. */
 async function resolveTarget(body: {
-  indexId?: string;
-  weights?: Weight[];
-}): Promise<{ weights: readonly Weight[]; name: string } | null> {
-  if (body.weights?.length) return { weights: body.weights, name: "custom" };
-  if (!body.indexId) return null;
+  indexId?: unknown;
+  weights?: unknown;
+}): Promise<{ weights: readonly Weight[]; name: string }> {
+  if (body.weights !== undefined) {
+    return { weights: parseWeights(body.weights), name: "custom" };
+  }
+  if (typeof body.indexId !== "string") {
+    throw new BadRequest("provide indexId or weights");
+  }
 
   const definition = definitionById(body.indexId);
-  if (!definition) return null;
+  if (!definition) throw new BadRequest(`unknown index ${body.indexId}`);
+
   const portfolio = buildIndex(definition, indexInputs(await market()));
-  return portfolio ? { weights: portfolio.weights, name: definition.name } : null;
+  if (!portfolio) {
+    throw new BadRequest(`index ${body.indexId} currently has no tradable constituents`);
+  }
+  return { weights: portfolio.weights, name: definition.name };
 }
 
 /**
@@ -215,18 +242,22 @@ async function resolveTarget(body: {
  * which legs the pools cannot absorb, before a wallet ever opens.
  */
 app.post("/api/mirror/plan", async (c) => {
-  const body = await c.req.json();
+  const body = await safeJson(c);
   const target = await resolveTarget(body);
-  if (!target) return c.json({ error: "provide indexId or weights" }, 400);
+  const deployUsd = requireFiniteUsd(body.deployUsd ?? 0, "deployUsd");
+  const holdings = parseHoldings(body.holdings);
+  if (deployUsd === 0 && holdings.length === 0) {
+    throw new BadRequest("provide deployUsd, holdings, or both");
+  }
 
   const snapshot = await market();
   const { price, liquidity, scale } = priceMaps(snapshot);
 
   const rebalance = planRebalance({
     target: target.weights,
-    holdings: body.holdings ?? [],
+    holdings,
     priceUsdBySymbol: price,
-    deployUsd: Number(body.deployUsd ?? 0),
+    deployUsd,
   });
 
   const plan = await buildExecutionPlan(services.jupiter, {
@@ -270,23 +301,75 @@ app.post("/api/mirror/plan", async (c) => {
  * were grouped so a client can report a partial fill honestly.
  */
 app.post("/api/mirror/build", async (c) => {
-  const body = await c.req.json();
-  if (typeof body.owner !== "string") return c.json({ error: "owner is required" }, 400);
-
+  const body = await safeJson(c);
+  const owner = requireBase58Address(body.owner, "owner");
   const target = await resolveTarget(body);
-  if (!target) return c.json({ error: "provide indexId or weights" }, 400);
+  const deployUsd = requireFiniteUsd(body.deployUsd ?? 0, "deployUsd");
+  const holdings = parseHoldings(body.holdings);
+  const slippageBps = requireInt(body.slippageBps, "slippageBps", {
+    min: 1,
+    max: 5_000,
+    fallback: 100,
+  });
 
   const snapshot = await market();
-  const { price, scale } = priceMaps(snapshot);
+  const { price, scale, scaleConfig } = priceMaps(snapshot);
 
   const rebalance = planRebalance({
     target: target.weights,
-    holdings: body.holdings ?? [],
+    holdings,
     priceUsdBySymbol: price,
-    deployUsd: Number(body.deployUsd ?? 0),
+    deployUsd,
   });
   if (rebalance.orders.length === 0) {
     return c.json({ error: "nothing to trade", skipped: rebalance.skipped }, 400);
+  }
+
+  // Check what the wallet can actually sell before building anything. Jupiter
+  // spends from the associated token account, so a sell sized against a
+  // position held elsewhere fails on chain with custom program error 0x1788
+  // after the user has already signed.
+  if (rebalance.orders.some((o) => o.side === "sell")) {
+    const balances = await getSellableBalances(
+      services.rpc,
+      owner,
+      scaleConfig,
+      snapshot.unixSeconds,
+    );
+    const uncovered = findUncoveredSells(rebalance.orders, balances, price);
+    if (uncovered.length > 0) {
+      return c.json(
+        {
+          error: "wallet does not hold enough to cover these sell legs",
+          detail:
+            "Jupiter sells from the associated token account. Balances held in other " +
+            "accounts are not spendable by this swap.",
+          uncovered,
+        },
+        409,
+      );
+    }
+  }
+
+  // A basket is several independent transactions, so a sell meant to fund a
+  // buy can land after it. Refuse rather than hand back a bundle that fails
+  // halfway when the wallet lacks the stablecoin to cover the buys.
+  const sells = rebalance.orders.filter((o) => o.side === "sell");
+  const buys = rebalance.orders.filter((o) => o.side === "buy");
+  const buyNotional = buys.reduce((sum, o) => sum + o.usd, 0);
+  if (sells.length > 0 && buyNotional > deployUsd) {
+    return c.json(
+      {
+        error: "this rebalance funds buys from sells, which cannot be done atomically here",
+        detail:
+          `${buys.length} buy legs need $${buyNotional.toFixed(2)} but only ` +
+          `$${deployUsd.toFixed(2)} of new capital was supplied. Execute the ${sells.length} ` +
+          "sell legs first, then request the buys.",
+        sells: sells.map((o) => ({ symbol: o.symbol, usd: o.usd })),
+        buys: buys.map((o) => ({ symbol: o.symbol, usd: o.usd })),
+      },
+      409,
+    );
   }
 
   const { value } = await services.rpc.call<{
@@ -294,13 +377,13 @@ app.post("/api/mirror/build", async (c) => {
   }>("getLatestBlockhash", [{ commitment: "finalized" }]);
 
   const bundle = await buildMirrorBundle(services.jupiter, {
-    owner: body.owner,
+    owner,
     legs: rebalance.orders.map((o) => ({ symbol: o.symbol, side: o.side, usd: o.usd })),
     priceUsdBySymbol: price,
     scaleBySymbol: scale,
     blockhash: value.blockhash,
     lastValidBlockHeight: value.lastValidBlockHeight,
-    slippageBps: Number(body.slippageBps ?? 100),
+    slippageBps,
   });
 
   return c.json({
@@ -310,6 +393,20 @@ app.post("/api/mirror/build", async (c) => {
     note: "Sign all transactions together. They settle independently, so a partial fill is possible.",
   });
 });
+
+/** Parse a JSON body, turning malformed JSON into a 400 rather than a 500. */
+async function safeJson(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    throw new BadRequest("body must be valid JSON");
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new BadRequest("body must be a JSON object");
+  }
+  return body as Record<string, unknown>;
+}
 
 const port = Number(process.env["PORT"] ?? 3000);
 console.log(`API listening on http://localhost:${port}`);

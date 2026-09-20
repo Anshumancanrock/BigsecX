@@ -79,6 +79,15 @@ const MIGRATIONS: readonly string[] = [
     updated_at      INTEGER NOT NULL
   );
   `,
+  // 3: drop holder snapshots. Every free RPC endpoint refuses
+  // getTokenLargestAccounts, so this table was never populated; trades
+  // reconstructed from transaction history replaced it. Leaving the table in
+  // place invited reads against a source nothing writes, which is exactly the
+  // bug that shipped -- the leaderboard queried it and silently returned
+  // nothing.
+  `
+  DROP TABLE IF EXISTS holder_position;
+  `,
 ];
 
 export function migrate(db: Database): number {

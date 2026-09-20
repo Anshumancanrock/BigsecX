@@ -15,7 +15,7 @@ import {
   type IndexInput,
   type Weight,
 } from "@ps/core";
-import { Rpc, fetchTrades, getMintStates, getSignatures } from "@ps/chain";
+import { Rpc, fetchTrades, getMintStates, getSignaturesSince } from "@ps/chain";
 import type { JupiterClient } from "@ps/market";
 import { Store, type TradeRow } from "@ps/db";
 import { takeSnapshot, type MarketSnapshot } from "./snapshot.ts";
@@ -111,6 +111,9 @@ export async function runJob(
   let tradesWritten = 0;
   let tradersSeen = 0;
   let tradeError: string | null = null;
+  // Held until the trades are durably written, so a failure between parsing
+  // and writing does not skip the window on the next run.
+  const pendingCursors: { mint: string; signature: string }[] = [];
 
   try {
     const mints = snapshot.tokens.map((t) => t.token.mint);
@@ -120,22 +123,26 @@ export async function runJob(
 
     for (const mint of mints) {
       const cursor = store.cursorFor(mint);
-      const signatures = await getSignatures(rpc, mint, {
-        limit: SIGNATURES_PER_MINT,
-        ...(cursor ? { until: cursor } : {}),
+      const { signatures, complete } = await getSignaturesSince(rpc, mint, {
+        until: cursor ?? undefined,
+        pageSize: SIGNATURES_PER_MINT,
       });
       if (signatures.length === 0) continue;
-
-      // Advance the cursor to the newest signature regardless of how many
-      // parsed. Retrying the same window forever would starve newer blocks.
-      const newest = signatures[0];
-      if (newest) store.setCursor(mint, newest.signature);
 
       const trades = await fetchTrades(
         rpc,
         signatures.filter((s) => !s.err).map((s) => s.signature),
         watched,
       );
+
+      // Advance the cursor only after the window has been parsed, and only
+      // when the scan reached back to the previous cursor. Advancing on a
+      // partial scan, or before parsing, loses those transactions for good --
+      // nothing ever looks at that range again.
+      const newest = signatures[0];
+      if (newest && complete) {
+        pendingCursors.push({ mint, signature: newest.signature });
+      }
 
       for (const trade of trades) {
         const token = byMint(trade.mint);
@@ -169,6 +176,7 @@ export async function runJob(
 
     tradesWritten = store.writeTrades(rows);
     tradersSeen = new Set(rows.map((r) => r.owner)).size;
+    for (const cursor of pendingCursors) store.setCursor(cursor.mint, cursor.signature);
   } catch (error) {
     // Trade indexing is the most fragile part of the job. Losing it must not
     // cost the snapshot and index levels that already succeeded.

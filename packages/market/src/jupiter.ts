@@ -160,6 +160,9 @@ export interface SwapInstructionsOptions {
   readonly useSharedAccounts?: boolean;
 }
 
+/** Shared budget for instruction building, separate from quoting. */
+const SWAP_LIMITER = new RateLimiter(4, 1);
+
 export class JupiterSwapError extends Error {
   constructor(message: string, readonly status: number | null) {
     super(message);
@@ -183,7 +186,13 @@ export async function fetchSwapInstructions<T>(
   quote: Quote,
   options: SwapInstructionsOptions,
   base: string = LITE,
+  limiter: RateLimiter = SWAP_LIMITER,
 ): Promise<T> {
+  // Shares the same budget discipline as quoting. Building an eight-leg
+  // basket issues eight of these back to back, which is enough to draw a 429
+  // on its own.
+  await limiter.acquire();
+
   const response = await fetch(`${base}/swap/v1/swap-instructions`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },

@@ -87,14 +87,47 @@ export function lookupTablesFrom(
 /**
  * A stable identity for an instruction, used to drop duplicates.
  *
- * Several legs in one basket produce the same setup instruction -- creating
- * the wrapped-SOL account, for instance -- and sending it twice wastes space
- * and, for non-idempotent instructions, fails outright.
+ * Only ever applied WITHIN a single transaction. Deduplicating across a whole
+ * bundle is a trap: every sell leg emits the same "create the USDC destination
+ * account" setup, so global dedup keeps it in the first leg's group and drops
+ * it from the rest -- and those groups are packed into different
+ * transactions. A wallet that does not already hold USDC would have the first
+ * transaction create the account and every later one fail against an account
+ * that does not exist yet.
  */
 export function instructionKey(source: JupiterInstruction): string {
   return [
     source.programId,
     source.accounts.map((a) => a.pubkey).join(","),
     source.data,
+  ].join("|");
+}
+
+/**
+ * Drop repeated instructions from ONE transaction.
+ *
+ * Scope is the whole point. Legs that share a transaction often repeat the
+ * same idempotent account creation and only need it once; legs in different
+ * transactions each need their own copy, because a transaction cannot depend
+ * on one that may not have landed.
+ */
+export function dedupeWithinTransaction(
+  instructions: readonly TransactionInstruction[],
+): TransactionInstruction[] {
+  const seen = new Set<string>();
+  return instructions.filter((instruction) => {
+    const key = compiledInstructionKey(instruction);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** The same identity, for an already-converted instruction. */
+export function compiledInstructionKey(source: TransactionInstruction): string {
+  return [
+    source.programId.toBase58(),
+    source.keys.map((k) => k.pubkey.toBase58()).join(","),
+    Buffer.from(source.data).toString("base64"),
   ].join("|");
 }

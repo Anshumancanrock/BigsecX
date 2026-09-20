@@ -6,7 +6,12 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { PACKET_DATA_SIZE, compileAndMeasure, packGroups } from "../src/pack.ts";
-import { instructionKey, lookupTablesFrom, toInstruction } from "../src/instructions.ts";
+import {
+  dedupeWithinTransaction,
+  instructionKey,
+  lookupTablesFrom,
+  toInstruction,
+} from "../src/instructions.ts";
 
 const PAYER = new PublicKey("GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL");
 const BLOCKHASH = "9C62FZuEUbpZmFrqPQbNfBiPr5U1JcTBhCfKqGgSEg4m";
@@ -190,5 +195,72 @@ describe("instruction adapters", () => {
       addressLookupTableAddresses: [],
     });
     expect(tables).toHaveLength(0);
+  });
+});
+
+describe("setup instructions across a multi-transaction bundle", () => {
+  /**
+   * Regression test for a bug that shipped.
+   *
+   * Setup instructions were deduplicated across the whole bundle, so the
+   * "create the USDC destination account" instruction that every sell leg
+   * emits was kept in the first leg's group and dropped from the rest. Those
+   * groups pack into different transactions, so a wallet without a USDC
+   * account would have the first transaction create it and every later one
+   * fail against an account that did not exist yet.
+   */
+  const SETUP_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+  const DESTINATION = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+
+  /** The shared idempotent account creation every sell leg emits. */
+  function sharedSetup(): TransactionInstruction {
+    return new TransactionInstruction({
+      programId: SETUP_PROGRAM,
+      keys: [{ pubkey: DESTINATION, isSigner: false, isWritable: true }],
+      data: Buffer.from([1]), // CreateIdempotent
+    });
+  }
+
+  const isSetup = (i: TransactionInstruction) => i.programId.equals(SETUP_PROGRAM);
+
+  test("every transaction keeps the setup its legs depend on", () => {
+    // Legs large enough that they cannot share one transaction.
+    const groups = Array.from({ length: 4 }, () => ({
+      instructions: [sharedSetup(), instruction(16)],
+      lookupTables: [],
+    }));
+
+    const { packed, oversized } = packGroups({ payer: PAYER, blockhash: BLOCKHASH, groups });
+    expect(oversized).toHaveLength(0);
+    expect(packed.length).toBeGreaterThan(1);
+
+    for (const entry of packed) {
+      const kept = dedupeWithinTransaction(entry.instructions);
+      expect(kept.filter(isSetup)).toHaveLength(1);
+    }
+  });
+
+  test("legs sharing a transaction carry the setup only once", () => {
+    const groups = Array.from({ length: 3 }, () => ({
+      instructions: [sharedSetup(), instruction(2)],
+      lookupTables: [],
+    }));
+
+    const { packed } = packGroups({ payer: PAYER, blockhash: BLOCKHASH, groups });
+    expect(packed).toHaveLength(1);
+
+    const kept = dedupeWithinTransaction(packed[0]!.instructions);
+    expect(kept.filter(isSetup)).toHaveLength(1);
+    // The three swaps survive; only the repeated setup is collapsed.
+    expect(kept.filter((i) => !isSetup(i))).toHaveLength(3);
+  });
+
+  test("dedupe is keyed on accounts and data, not just program", () => {
+    const other = new TransactionInstruction({
+      programId: SETUP_PROGRAM,
+      keys: [{ pubkey: PROGRAM, isSigner: false, isWritable: true }],
+      data: Buffer.from([1]),
+    });
+    expect(dedupeWithinTransaction([sharedSetup(), other, sharedSetup()])).toHaveLength(2);
   });
 });

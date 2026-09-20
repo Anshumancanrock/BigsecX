@@ -66,19 +66,63 @@ function isCounterparty(owner: string, signers: ReadonlySet<string>): boolean {
 }
 
 /**
- * Recent signatures touching a mint.
+ * One page of signatures touching an address, newest first.
  *
- * `until` makes this incremental: pass the newest signature already indexed
- * and only newer ones come back.
+ * `until` bounds the scan: the node returns signatures newer than it.
+ * `before` pages backward from a signature already seen.
  */
 export async function getSignatures(
   rpc: Rpc,
   address: string,
-  options: { readonly limit?: number; readonly until?: string } = {},
+  options: { readonly limit?: number; readonly until?: string; readonly before?: string } = {},
 ): Promise<SignatureRef[]> {
   const params: Record<string, unknown> = { limit: options.limit ?? 50 };
   if (options.until) params["until"] = options.until;
+  if (options.before) params["before"] = options.before;
   return rpc.call<SignatureRef[]>("getSignaturesForAddress", [address, params]);
+}
+
+/**
+ * Every signature newer than `until`, across as many pages as allowed.
+ *
+ * A single page silently drops history whenever more than `limit` new
+ * signatures have accumulated: the node returns the newest page, and
+ * advancing the cursor to the top of it skips everything between that page
+ * and the previous cursor. Paging backward with `before` closes that gap.
+ *
+ * `maxPages` bounds the work per run. When the budget runs out the result is
+ * flagged `complete: false`, and the caller must not advance its cursor past
+ * what it actually indexed or the same gap reopens.
+ */
+export async function getSignaturesSince(
+  rpc: Rpc,
+  address: string,
+  options: {
+    readonly until?: string | undefined;
+    readonly pageSize?: number;
+    readonly maxPages?: number;
+  } = {},
+): Promise<{ readonly signatures: SignatureRef[]; readonly complete: boolean }> {
+  const pageSize = options.pageSize ?? 50;
+  const maxPages = options.maxPages ?? 3;
+
+  const signatures: SignatureRef[] = [];
+  let before: string | undefined;
+
+  for (let page = 0; page < maxPages; page++) {
+    const batch = await getSignatures(rpc, address, {
+      limit: pageSize,
+      ...(options.until ? { until: options.until } : {}),
+      ...(before ? { before } : {}),
+    });
+    signatures.push(...batch);
+
+    // A short page means the node had nothing older left above `until`.
+    if (batch.length < pageSize) return { signatures, complete: true };
+    before = batch[batch.length - 1]?.signature;
+    if (!before) return { signatures, complete: true };
+  }
+  return { signatures, complete: false };
 }
 
 /** Net token-balance change per owner in one transaction. */

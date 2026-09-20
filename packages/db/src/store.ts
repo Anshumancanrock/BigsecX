@@ -6,7 +6,16 @@
  */
 
 import { Database } from "bun:sqlite";
+import { mkdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { migrate } from "./schema.ts";
+
+function defaultDatabasePath(): string {
+  // packages/db/src -> repository root
+  const here = dirname(fileURLToPath(import.meta.url));
+  return join(resolve(here, "..", "..", ".."), "data", "prestocks.db");
+}
 
 export interface SnapshotRow {
   readonly id: number;
@@ -35,25 +44,18 @@ export interface TradeRow {
   readonly valueUsd: number | null;
 }
 
-export interface TraderActivityRow {
-  readonly owner: string;
-  readonly trades: number;
-  readonly volumeUsd: number;
-  readonly netUsd: number;
-  readonly lastSlot: number;
-}
-
-export interface PositionRow {
-  readonly owner: string;
-  readonly symbol: string;
-  readonly uiAmount: number;
-  readonly valueUsd: number;
-}
-
 export class Store {
   readonly #db: Database;
 
-  constructor(path = process.env["DATABASE_PATH"] ?? "data/prestocks.db") {
+  /**
+   * @param path Defaults to `data/prestocks.db` resolved against the
+   * repository root rather than the current directory. A relative default
+   * silently gives the API and the indexer different databases when they are
+   * started from different places, and the only symptom is an empty
+   * leaderboard.
+   */
+  constructor(path = process.env["DATABASE_PATH"] ?? defaultDatabasePath()) {
+    mkdirSync(dirname(path), { recursive: true });
     this.#db = new Database(path, { create: true });
     migrate(this.#db);
   }
@@ -108,19 +110,6 @@ export class Store {
     })();
   }
 
-  writePositions(snapshotId: number, positions: readonly PositionRow[]): void {
-    const insert = this.#db.query(
-      `INSERT OR REPLACE INTO holder_position
-         (snapshot_id, owner, symbol, ui_amount, value_usd)
-       VALUES (?, ?, ?, ?, ?)`,
-    );
-    this.#db.transaction(() => {
-      for (const p of positions) {
-        insert.run(snapshotId, p.owner, p.symbol, p.uiAmount, p.valueUsd);
-      }
-    })();
-  }
-
   writeIndexLevel(args: {
     readonly indexId: string;
     readonly snapshotId: number;
@@ -153,26 +142,6 @@ export class Store {
       | { id: number; taken_at: number; epoch: number }
       | null;
     return row ? { id: row.id, takenAt: new Date(row.taken_at * 1000), epoch: row.epoch } : null;
-  }
-
-  positionsAt(snapshotId: number): PositionRow[] {
-    return this.#db
-      .query(
-        `SELECT owner, symbol, ui_amount AS uiAmount, value_usd AS valueUsd
-         FROM holder_position WHERE snapshot_id = ?`,
-      )
-      .all(snapshotId) as PositionRow[];
-  }
-
-  /** Total portfolio value per owner at one snapshot. */
-  portfolioValuesAt(snapshotId: number): Map<string, number> {
-    const rows = this.#db
-      .query(
-        `SELECT owner, SUM(value_usd) AS total FROM holder_position
-         WHERE snapshot_id = ? GROUP BY owner`,
-      )
-      .all(snapshotId) as { owner: string; total: number }[];
-    return new Map(rows.map((r) => [r.owner, r.total]));
   }
 
   writeTrades(trades: readonly TradeRow[]): number {
@@ -216,26 +185,31 @@ export class Store {
       .run(mint, signature, Math.floor(Date.now() / 1000));
   }
 
-  /**
-   * Net traded volume and flow per wallet since a slot.
-   *
-   * `netUsd` is signed: negative means the wallet spent more than it realised
-   * over the window, which is what accumulating looks like.
-   */
-  traderActivity(sinceSlot: number): TraderActivityRow[] {
-    return this.#db
+  tradesByOwnerSince(sinceSlot: number): Map<string, TradeRow[]> {
+    const rows = this.#db
       .query(
-        `SELECT owner,
-                COUNT(*)                AS trades,
-                SUM(ABS(value_usd))     AS volumeUsd,
-                SUM(value_usd)          AS netUsd,
-                MAX(slot)               AS lastSlot
-         FROM trade
-         WHERE slot >= ? AND value_usd IS NOT NULL
-         GROUP BY owner
-         ORDER BY volumeUsd DESC`,
+        `SELECT signature, owner, symbol, slot, block_time AS blockTime,
+                delta_raw AS deltaRaw, ui_amount AS uiAmount, value_usd AS valueUsd
+         FROM trade WHERE slot >= ? ORDER BY slot ASC`,
       )
-      .all(sinceSlot) as TraderActivityRow[];
+      .all(sinceSlot) as (Omit<TradeRow, "deltaRaw"> & { deltaRaw: string })[];
+
+    const byOwner = new Map<string, TradeRow[]>();
+    for (const row of rows) {
+      const trade = { ...row, deltaRaw: BigInt(row.deltaRaw) };
+      const existing = byOwner.get(row.owner);
+      if (existing) existing.push(trade);
+      else byOwner.set(row.owner, [trade]);
+    }
+    return byOwner;
+  }
+
+  /** Highest slot indexed, or null when nothing has been indexed. */
+  latestTradeSlot(): number | null {
+    const row = this.#db.query("SELECT MAX(slot) AS slot FROM trade").get() as {
+      slot: number | null;
+    };
+    return row.slot;
   }
 
   tradesFor(owner: string, limit = 100): TradeRow[] {

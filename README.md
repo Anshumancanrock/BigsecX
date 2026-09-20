@@ -76,6 +76,20 @@ outbound calls go through a token bucket, and cache misses are single-flighted.
 cumulative volume and 60 weeks of holder counts per symbol. Volume is
 cumulative; `dailyVolume()` differences it.
 
+**Quotes and balances are not the same question.** Jupiter spends from the
+associated token account, not from everything an owner holds. A mainnet wallet
+inspected here held 133 ANTHROPIC across 49 accounts while its ATA held 0.0001;
+a sell sized against the total fails on chain with custom program error 0x1788,
+*after* the user has signed. `POST /api/mirror/build` reads ATA balances and
+refuses uncovered sell legs with a 409 instead.
+
+**Setup instructions cannot be deduplicated across a bundle.** Every sell leg
+emits the same "create the USDC destination account" instruction. Dropping it
+from all but the first leg looks like an optimisation, but those legs are
+packed into different transactions, so a wallet without that account would have
+the first transaction create it and every later one fail. Deduplication is
+scoped to a single transaction; `packages/tx/test/pack.test.ts` locks this down.
+
 **Free RPC endpoints refuse the obvious holder query.** `getTokenLargestAccounts`
 returns 429 from every public endpoint tested, even for a single call, and
 `getProgramAccounts` over 68,000 accounts is worse. Traders are reconstructed

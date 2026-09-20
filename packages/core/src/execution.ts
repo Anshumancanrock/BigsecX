@@ -130,7 +130,10 @@ export function judgeLeg(probe: LegProbe, limits: ExecutionLimits = DEFAULT_LIMI
  * pays it twice: 1% at the live 50 bps, and 2% once epoch 1039 lands.
  */
 export function transferFeeCostUsd(netUsd: number, feeBps: number): number {
-  if (feeBps <= 0) return 0;
+  if (feeBps <= 0 || !Number.isFinite(netUsd)) return 0;
+  // A 100% fee leaves nothing to gross up from; the division would be by zero
+  // and anything above it would flip the sign.
+  if (feeBps >= 10_000) return Number.POSITIVE_INFINITY;
   const gross = (netUsd * 10_000) / (10_000 - feeBps);
   return gross - netUsd;
 }

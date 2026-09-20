@@ -25,7 +25,7 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import {
-  instructionKey,
+  dedupeWithinTransaction,
   lookupTablesFrom,
   toInstruction,
   type JupiterInstruction,
@@ -161,7 +161,6 @@ async function buildGroup(
   leg: MirrorLeg,
   request: MirrorRequest,
   route: { readonly maxAccounts: number; readonly onlyDirectRoutes: boolean },
-  seenSetup: Set<string>,
   excludeDexes: readonly string[],
 ): Promise<{
   group: InstructionGroup;
@@ -181,15 +180,10 @@ async function buildGroup(
     );
   }
 
-  const instructions: JupiterInstruction[] = [];
-  for (const setup of response.setupInstructions) {
-    // Setup repeats across legs -- creating the wrapped-SOL account, for one --
-    // so it is emitted once per bundle.
-    const key = instructionKey(setup);
-    if (seenSetup.has(key)) continue;
-    seenSetup.add(key);
-    instructions.push(setup);
-  }
+  // Every leg keeps its own setup. These are idempotent account creations, so
+  // a duplicate costs a few bytes; a missing one costs the transaction.
+  // Duplicates are removed later, within each transaction, where it is safe.
+  const instructions: JupiterInstruction[] = [...response.setupInstructions];
   instructions.push(response.swapInstruction);
   if (response.cleanupInstruction) instructions.push(response.cleanupInstruction);
 
@@ -213,7 +207,6 @@ export async function buildMirrorBundle(
   const groups: InstructionGroup[] = [];
   const groupSymbols: string[] = [];
   const groupComputeUnits: number[] = [];
-  const seenSetup = new Set<string>();
   // Jupiter's own compute-budget instructions are kept only for the priority
   // fee; the unit limit is recomputed per transaction once packing is known.
   let priorityFeeInstructions: readonly JupiterInstruction[] = [];
@@ -231,12 +224,9 @@ export async function buildMirrorBundle(
     const excluded = new Set<string>();
 
     for (const route of ladder) {
-      // A setup instruction emitted by a discarded attempt must not be
-      // remembered, or the retry will omit an account it still needs.
-      const attemptSetup = new Set(seenSetup);
       let built;
       try {
-        built = await buildGroup(jupiter, leg, request, route, attemptSetup, [...excluded]);
+        built = await buildGroup(jupiter, leg, request, route, [...excluded]);
       } catch (error) {
         lastError = (error as Error).message;
         if (error instanceof RouteRejected) {
@@ -258,7 +248,6 @@ export async function buildMirrorBundle(
         continue;
       }
 
-      for (const key of attemptSetup) seenSetup.add(key);
       if (built.budget.length > priorityFeeInstructions.length) {
         priorityFeeInstructions = built.budget;
       }
@@ -319,11 +308,13 @@ export async function buildMirrorBundle(
       ),
     );
 
+    const deduped = dedupeWithinTransaction(entry.instructions);
+
     const withBudget = [
       ComputeBudgetProgram.setComputeUnitLimit({ units }),
       ...priorityFee(priorityFeeInstructions).map(toInstruction),
-      // Drop the placeholder preamble that packing compiled in.
-      ...entry.instructions,
+      // Replaces the placeholder preamble that packing compiled in.
+      ...deduped,
     ];
 
     const message = new TransactionMessage({

@@ -5,4 +5,4 @@ export * from "./pricing.ts";
 export * from "./portfolio.ts";
 export * from "./execution.ts";
 export * from "./indexes.ts";
-export * from "./performance.ts";
+export * from "./trader-pnl.ts";
