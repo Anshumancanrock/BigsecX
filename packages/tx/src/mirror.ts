@@ -181,6 +181,15 @@ async function buildGroup(
   computeUnits: number;
   budget: readonly JupiterInstruction[];
 }> {
+  // Always a fresh quote, taken immediately before the instructions are
+  // fetched from it.
+  //
+  // Reusing the quote the planner already took halves the upstream calls and
+  // cuts several seconds, and it was tried: it spends the user's slippage
+  // budget on our latency. That tolerance exists to absorb the market moving
+  // between quoting and landing, and handing a leg a quote that is already
+  // seconds old consumes it before the user has even signed. Measured, the
+  // reuse turned a basket that landed six of six into one of five.
   const quote = await quoteLeg(jupiter, leg, request, route, excludeDexes);
   const response = await fetchSwapInstructions<SwapInstructionsResponse>(quote, {
     userPublicKey: request.owner,

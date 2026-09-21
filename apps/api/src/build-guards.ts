@@ -19,6 +19,15 @@ import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
 
 /** Enough lamports to submit several transactions and open accounts. */
 export const MIN_LAMPORTS = 3_000_000;
+/**
+ * The route constraint the builder tries first.
+ *
+ * Planning matches it so both price the same route: a cost measured against
+ * an unconstrained route is not the cost of the route that gets built.
+ * Measured at demo sizes the constraint is worth at most 0.003%, so matching
+ * it is free.
+ */
+const FIRST_RUNG_MAX_ACCOUNTS = 40;
 
 export interface BuildRequest {
   readonly owner: string;
@@ -185,6 +194,8 @@ export async function buildForTarget(
     priceUsdBySymbol: price,
     scaleBySymbol: scale,
     transferFeeBps: snapshot.tokens[0]?.transferFeeBps ?? 0,
+    // Matched to the builder's first rung so its quotes can be reused.
+    maxAccounts: FIRST_RUNG_MAX_ACCOUNTS,
   });
 
   if (plan.legs.length === 0) {

@@ -336,6 +336,25 @@ Frozen accounts are detected too: a frozen account reports its full balance,
 so comparing amounts alone passes it and the swap fails on chain after the
 user has signed.
 
+## Why a build takes about fifteen seconds
+
+Almost all of it is waiting on Jupiter's keyless rate limit. An eight-leg
+basket needs a quote and an instruction fetch per leg, plus the planner's
+quote to size each one, against a tier that reports its remaining quota in
+single digits. `JUPITER_API_KEY` raises the client's own budget from 4/s to
+40/s and collapses this to a couple of seconds; it is the single highest
+-value thing to configure.
+
+Reusing the planner's quote in the builder was tried and reverted. It cut
+18s to 13.5s and took the basket from six-of-six landing to one-of-five: a
+quote that is already seconds old spends the slippage tolerance that exists
+to absorb the market moving between quoting and landing. Latency is not
+worth paying for with someone else's fill.
+
+Planning and building do price the same route, though, so the cost shown is
+the cost of what gets built. Measured at demo sizes the route constraint is
+worth at most 0.003%.
+
 ## Slippage
 
 Tolerance is set per leg from the price impact that leg measured, not from

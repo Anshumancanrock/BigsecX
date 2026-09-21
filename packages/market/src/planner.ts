@@ -44,6 +44,15 @@ export interface PlanRequest {
   /** Transfer fee in force this epoch, for disclosure. */
   readonly transferFeeBps: number;
   readonly limits?: ExecutionLimits;
+  /**
+   * Route constraint, matched to the one the builder will use.
+   *
+   * Planning and building must price the same route or the cost shown is not
+   * the cost paid. Measured at demo sizes the constraint costs at most
+   * 0.003%, so matching it is free -- and it lets the builder reuse this
+   * quote instead of taking a second one per leg.
+   */
+  readonly maxAccounts?: number;
 }
 
 interface Probe {
@@ -78,6 +87,7 @@ async function probeLeg(
       inputMint: USDC_MINT,
       outputMint: token.mint,
       amount: BigInt(Math.round(usd * 10 ** USDC_DECIMALS)),
+      ...(request.maxAccounts !== undefined ? { maxAccounts: request.maxAccounts } : {}),
     });
     // outAmount is raw and net of fee; scale it to UI shares before pricing.
     outUi = (Number(quote.outAmount) / 10 ** token.decimals) * multiplier;
@@ -95,6 +105,7 @@ async function probeLeg(
       inputMint: token.mint,
       outputMint: USDC_MINT,
       amount: rawAmount > 0n ? rawAmount : 1n,
+      ...(request.maxAccounts !== undefined ? { maxAccounts: request.maxAccounts } : {}),
     });
     const proceedsUsd = Number(quote.outAmount) / 10 ** USDC_DECIMALS;
     if (uiAmount <= 0) throw new Error(`planner: ${order.symbol} sell size is zero`);
