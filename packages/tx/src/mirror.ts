@@ -65,6 +65,13 @@ export interface MirrorLeg {
   readonly side: RebalanceOrder["side"];
   /** Notional to trade, in USD. */
   readonly usd: number;
+  /**
+   * Tolerance for this leg, overriding the request default.
+   *
+   * Set from the impact the leg measured during planning, because one global
+   * tolerance cannot suit pools whose spreads differ by a factor of four.
+   */
+  readonly slippageBps?: number;
 }
 
 export interface MirrorRequest {
@@ -106,7 +113,7 @@ async function quoteLeg(
 ): Promise<Quote> {
   const token = bySymbol(leg.symbol);
   if (!token) throw new Error(`unknown symbol ${leg.symbol}`);
-  const slippageBps = request.slippageBps ?? 100;
+  const slippageBps = leg.slippageBps ?? request.slippageBps ?? 150;
   const { maxAccounts, onlyDirectRoutes } = route;
 
   if (leg.side === "buy") {

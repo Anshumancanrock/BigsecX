@@ -336,6 +336,20 @@ Frozen accounts are detected too: a frozen account reports its full balance,
 so comparing amounts alone passes it and the swap fails on chain after the
 user has signed.
 
+## Slippage
+
+Tolerance is set per leg from the price impact that leg measured, not from
+one global number. A flat tolerance cannot work here: these pools carry
+bid-ask spread floors of two to four percent and move within seconds of a
+quote. Measured on mainnet, a bundle built and simulated **seven seconds
+apart** landed two of six legs at a flat 100 bps and six of six at 300.
+
+A tolerance set high enough for the worst pool would also hand the deepest
+pool far more room than it needs, so each leg gets its measured impact plus
+headroom, floored and capped. The value a caller supplies is the **floor**:
+asking for more room grants it, and asking for less still leaves enough for
+the pool rather than reverting after the user has signed.
+
 ## Mirroring
 
 A portfolio is a set of target weights. `planRebalance` turns the gap between a

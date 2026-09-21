@@ -58,7 +58,7 @@ function parseLimits(body: Record<string, unknown>): CopyLimits {
     maxSlippageBps: requireInt(body["maxSlippageBps"], "maxSlippageBps", {
       min: 1,
       max: 5_000,
-      fallback: 100,
+      fallback: 150,
     }),
     ...(excludeSymbols !== undefined
       ? { excludeSymbols: (excludeSymbols as unknown[]).map((s) => String(s)) }

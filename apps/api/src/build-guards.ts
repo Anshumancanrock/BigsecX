@@ -11,7 +11,7 @@
  * one leaves the caller stuck on the next.
  */
 
-import { planRebalance, type ExecutionPlan, type Weight } from "@ps/core";
+import { planRebalance, slippageBpsFor, type ExecutionPlan, type Weight } from "@ps/core";
 import { buildExecutionPlan } from "@ps/market";
 import { buildMirrorBundle, findUncoveredSells, getSellableBalances, getSpendable } from "@ps/tx";
 import type { Services } from "./context.ts";
@@ -208,10 +208,15 @@ export async function buildForTarget(
     value: { blockhash: string; lastValidBlockHeight: number };
   }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
 
+  // Each leg carries a tolerance derived from the impact it just measured.
+  // The caller's value is a floor, not a ceiling: it says how much room the
+  // user is comfortable with at minimum, and a pool that demonstrably needs
+  // more gets more rather than reverting after they have signed.
   const legs = plan.legs.map((l) => ({
     symbol: l.order.symbol,
     side: l.order.side,
     usd: l.usd,
+    slippageBps: slippageBpsFor(l.priceImpact, { floorBps: request.slippageBps }),
   }));
 
   const bundle = await buildMirrorBundle(services.jupiter, {

@@ -53,7 +53,7 @@ export interface CopyLimits {
 export const DEFAULT_COPY_LIMITS: Omit<CopyLimits, "capitalUsd"> = {
   copyRatio: 1,
   maxPositionWeight: 1,
-  maxSlippageBps: 100,
+  maxSlippageBps: 150,
 };
 
 export class CopyLimitsInvalid extends Error {

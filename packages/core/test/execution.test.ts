@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_LIMITS, judgeLeg, summarize, transferFeeCostUsd, type PlannedLeg } from "../src/execution.ts";
+import {
+  DEFAULT_LIMITS,
+  judgeLeg,
+  slippageBpsFor,
+  summarize,
+  transferFeeCostUsd,
+  type PlannedLeg,
+} from "../src/execution.ts";
 import { capWeights } from "../src/portfolio.ts";
 
 describe("judgeLeg", () => {
@@ -149,5 +156,45 @@ describe("capWeights invariants", () => {
       }
       expect(out).toHaveLength(n);
     }
+  });
+});
+
+describe("slippageBpsFor", () => {
+  /**
+   * A single global tolerance cannot work in this market. These pools carry
+   * bid-ask spread floors of two to four percent and move within seconds of
+   * a quote: a bundle built and simulated seven seconds apart landed two of
+   * six legs at a flat 100 bps and six of six at 300. Setting one number
+   * high enough for the worst pool also hands the deepest pool far more room
+   * than it needs, so the tolerance follows the impact each leg measured.
+   */
+  test("a deep pool gets the floor and no more", () => {
+    expect(slippageBpsFor(0.0005)).toBe(158);
+    expect(slippageBpsFor(0)).toBe(150);
+  });
+
+  test("a thin pool gets room proportional to what it cost", () => {
+    // NEURALINK measured 4.41% impact on a real quote.
+    expect(slippageBpsFor(0.0441)).toBe(812);
+    // FIGUREAI measured 3.06%.
+    expect(slippageBpsFor(0.0306)).toBe(609);
+  });
+
+  test("a favourable route needs no extra room", () => {
+    // Negative impact means the route beat the reference price.
+    expect(slippageBpsFor(-0.02)).toBe(150);
+  });
+
+  test("nothing is written a blank cheque", () => {
+    expect(slippageBpsFor(5)).toBe(1_000);
+    expect(slippageBpsFor(Number.POSITIVE_INFINITY)).toBe(150);
+    expect(slippageBpsFor(Number.NaN)).toBe(150);
+  });
+
+  test("the caller's tolerance is a floor, never a ceiling", () => {
+    // A user asking for more room gets it; one asking for less still gets
+    // enough for the pool, rather than a revert after they have signed.
+    expect(slippageBpsFor(0.0441, { floorBps: 500 })).toBeGreaterThanOrEqual(500);
+    expect(slippageBpsFor(0.0441, { floorBps: 10 })).toBeGreaterThan(600);
   });
 });

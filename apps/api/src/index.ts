@@ -431,10 +431,11 @@ app.post("/api/mirror/build", async (c) => {
   const owner = requireBase58Address(body["owner"], "owner");
   const target = await resolveTarget(services, body);
   const deployUsd = requireFiniteUsd(body["deployUsd"] ?? 0, "deployUsd");
+  // A floor, not a ceiling: each leg widens it to suit the pool it trades in.
   const slippageBps = requireInt(body["slippageBps"], "slippageBps", {
     min: 1,
     max: 5_000,
-    fallback: 100,
+    fallback: 150,
   });
 
   const snapshot = await market();

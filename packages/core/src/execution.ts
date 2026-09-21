@@ -138,6 +138,36 @@ export function transferFeeCostUsd(netUsd: number, feeBps: number): number {
   return gross - netUsd;
 }
 
+/**
+ * Slippage tolerance for a leg, in basis points, from its measured impact.
+ *
+ * A single global tolerance cannot work here. These pools carry bid-ask
+ * spread floors of two to four percent, and prices move within seconds of a
+ * quote, so a flat 100 bps rejects most legs: a bundle built and simulated
+ * seven seconds apart landed two of six at 100 bps and six of six at 300.
+ * Setting one number high enough for the worst pool would also hand the
+ * deepest pool far more room than it needs.
+ *
+ * So the tolerance follows the impact the leg actually measured, with
+ * headroom for movement between quoting and landing, floored so a deep pool
+ * still gets room to breathe and capped so nothing is written a blank
+ * cheque.
+ */
+export function slippageBpsFor(
+  priceImpact: number,
+  options: { readonly floorBps?: number; readonly capBps?: number; readonly headroom?: number } = {},
+): number {
+  const floorBps = options.floorBps ?? 150;
+  const capBps = options.capBps ?? 1_000;
+  const headroom = options.headroom ?? 1.5;
+
+  // A negative impact means the route beat the reference price; it needs no
+  // extra room, only the floor.
+  const measured = Number.isFinite(priceImpact) && priceImpact > 0 ? priceImpact : 0;
+  const derived = Math.ceil(measured * 10_000 * headroom) + floorBps;
+  return Math.min(capBps, Math.max(floorBps, derived));
+}
+
 /** Exact fee in raw base units, for display alongside a quote. */
 export function transferFeeRaw(rawAmount: bigint, fee: TransferFee): bigint {
   return calculateFee(fee, rawAmount);
