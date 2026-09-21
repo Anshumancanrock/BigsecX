@@ -27,7 +27,7 @@ import { BadRequest, requireBase58Address, requireFiniteUsd, requireInt } from "
 
 /** Matches the ceiling the copy domain enforces, against ~$2.6M of depth. */
 const MAX_COPY_CAPITAL_USD = 1_000_000;
-import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
+import type { MarketSnapshot } from "@ps/market";
 
 function parseLimits(body: Record<string, unknown>): CopyLimits {
   const fraction = (key: string, fallback: number): number => {

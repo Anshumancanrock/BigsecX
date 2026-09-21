@@ -26,7 +26,7 @@ import {
   type Weight,
 } from "@ps/core";
 import { Cache, buildExecutionPlan, priceTruth } from "@ps/market";
-import { takeSnapshot } from "@ps/indexer/snapshot.ts";
+import { takeSnapshot } from "@ps/market";
 import type { Services } from "./context.ts";
 import { toMarketDto } from "./serialize.ts";
 import { Unauthorized } from "./auth.ts";

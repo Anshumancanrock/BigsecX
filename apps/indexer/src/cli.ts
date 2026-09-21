@@ -6,7 +6,7 @@
 
 import { Rpc } from "@ps/chain";
 import { JupiterClient } from "@ps/market";
-import { takeSnapshot } from "./snapshot.ts";
+import { takeSnapshot } from "@ps/market";
 
 const RPC_URL = process.env["SOLANA_RPC_URL"] ?? "https://api.mainnet-beta.solana.com";
 

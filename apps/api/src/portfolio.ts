@@ -12,7 +12,7 @@ import { UNIVERSE, bySymbol, driftExceeded, sectorExposure, type Weight } from "
 import { getSellableBalances, getSpendable } from "@ps/tx";
 import type { Services } from "./context.ts";
 import { requireBase58Address } from "./validate.ts";
-import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
+import type { MarketSnapshot } from "@ps/market";
 
 export interface PortfolioPosition {
   readonly symbol: string;

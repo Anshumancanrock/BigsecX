@@ -16,7 +16,7 @@ import {
 } from "@ps/core";
 import { Rpc } from "@ps/chain";
 import { JupiterClient, buildExecutionPlan } from "@ps/market";
-import { takeSnapshot } from "./snapshot.ts";
+import { takeSnapshot } from "@ps/market";
 
 const RPC_URL = process.env["SOLANA_RPC_URL"] ?? "https://api.mainnet-beta.solana.com";
 const priceIndexId = process.argv[2] ?? "pre8";

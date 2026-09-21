@@ -18,7 +18,7 @@ import {
 import { Rpc, fetchTrades, getMintStates, getSignaturesSince } from "@ps/chain";
 import { discoverVenues, type JupiterClient } from "@ps/market";
 import { Store, type TradeRow } from "@ps/db";
-import { takeSnapshot, type MarketSnapshot } from "./snapshot.ts";
+import { takeSnapshot, type MarketSnapshot } from "@ps/market";
 
 /** Index levels start here, so a chart reads as a percentage from launch. */
 const INDEX_BASE = 1_000;

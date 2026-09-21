@@ -23,7 +23,7 @@ import {
 } from "@ps/market";
 import type { Services } from "./context.ts";
 import { requireInt } from "./validate.ts";
-import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
+import type { MarketSnapshot } from "@ps/market";
 
 /**
  * Issuer statistics, or nothing.

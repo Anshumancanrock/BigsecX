@@ -15,7 +15,7 @@ import { planRebalance, slippageBpsFor, type ExecutionPlan, type Weight } from "
 import { buildExecutionPlan } from "@ps/market";
 import { buildMirrorBundle, findUncoveredSells, getSellableBalances, getSpendable } from "@ps/tx";
 import type { Services } from "./context.ts";
-import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
+import type { MarketSnapshot } from "@ps/market";
 
 /** Enough lamports to submit several transactions and open accounts. */
 export const MIN_LAMPORTS = 3_000_000;

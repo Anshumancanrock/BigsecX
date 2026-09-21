@@ -8,7 +8,7 @@ Backend foundation for a Solana app built on PreStocks tokenized pre-IPO equity.
 | --- | --- |
 | `packages/core` | Pure domain. Token-2022 unit math, transfer-fee arithmetic, the token universe, price models. No I/O, fully unit-tested. |
 | `packages/chain` | Solana JSON-RPC reads and Token-2022 mint/account parsing. |
-| `packages/market` | Issuer API and Jupiter clients, with caching and rate limiting. |
+| `packages/market` | Issuer, Jupiter and Pyth clients, plus the market snapshot that composes them. |
 | `packages/tx` | Builds the unsigned transactions that move a wallet onto a target allocation. |
 | `packages/db` | SQLite schema, migrations and repositories. |
 | `apps/indexer` | Snapshot, trade and index-level indexing job, plus CLIs. |
@@ -52,10 +52,12 @@ sent. So the fee is already inside the price, and adding it to a cost total
 charges the user twice. `packages/core/src/execution.ts` measures cost as
 realized fill versus reference price, which cannot double-count by construction.
 
-**The transfer fee is 50 bps, not 100.** Each mint carries two fee schedules.
-`newerTransferFee` is 100 bps but only applies from epoch 1039; until then the
-50 bps `olderTransferFee` is live. Reading the newer schedule unconditionally
-doubles every quoted cost. `epochFee()` implements the on-chain selection rule.
+**The transfer fee changes at an epoch boundary, and it just did.** Each mint
+carries two schedules. Until epoch 1039 the live fee was the 50 bps
+`olderTransferFee`; from 1039 it is 100 bps. `epochFee()` implements the
+on-chain selection rule and handled the real transition on 2026-09-21 with no
+code change — anything that hardcoded either number is now wrong in one
+direction or the other.
 
 **The fee is a ceiling division**, so any non-zero transfer pays at least one
 base unit. Tests port the upstream Rust vectors directly.

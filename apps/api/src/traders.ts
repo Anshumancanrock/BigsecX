@@ -11,7 +11,7 @@ import { Hono } from "hono";
 import { computeTraderPnl, sectorExposure, type TradeRecord } from "@ps/core";
 import type { Services } from "./context.ts";
 import { requireBase58Address, requireInt } from "./validate.ts";
-import type { MarketSnapshot } from "@ps/indexer/snapshot.ts";
+import type { MarketSnapshot } from "@ps/market";
 
 /** Solana produces roughly one slot every 400ms. */
 const SLOTS_PER_HOUR = 3_600 / 0.4;

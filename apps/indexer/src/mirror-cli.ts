@@ -11,7 +11,7 @@ import { INDEX_DEFINITIONS, buildIndex, definitionById, planRebalance, type Inde
 import { Rpc } from "@ps/chain";
 import { JupiterClient } from "@ps/market";
 import { buildMirrorBundle } from "@ps/tx";
-import { takeSnapshot } from "./snapshot.ts";
+import { takeSnapshot } from "@ps/market";
 
 const RPC_URL = process.env["SOLANA_RPC_URL"] ?? "https://solana-rpc.publicnode.com";
 const owner = process.argv[2];

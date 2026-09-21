@@ -20,8 +20,8 @@ import {
   type BasisLabel,
   type PreStock,
 } from "@ps/core";
-import { Rpc, getMintStates, type MintState } from "@ps/chain";
-import type { JupiterClient, PriceEntry } from "@ps/market";
+import { getMintStates, type MintState, type Rpc } from "@ps/chain";
+import type { JupiterClient, PriceEntry } from "./jupiter.ts";
 
 export interface TokenView {
   readonly token: PreStock;

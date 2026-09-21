@@ -58,6 +58,7 @@
       "name": "@ps/market",
       "version": "0.1.0",
       "dependencies": {
+        "@ps/chain": "workspace:*",
         "@ps/core": "workspace:*",
       },
     },

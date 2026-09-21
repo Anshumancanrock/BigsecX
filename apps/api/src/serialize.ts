@@ -10,7 +10,7 @@
  * as zero or as fair value.
  */
 
-import type { MarketSnapshot, TokenView } from "@ps/indexer/snapshot.ts";
+import type { MarketSnapshot, TokenView } from "@ps/market";
 
 export interface TokenDto {
   readonly symbol: string;
