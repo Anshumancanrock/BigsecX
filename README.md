@@ -118,6 +118,7 @@ of the PRE8 basket where a single unconstrained attempt fills five.
 | `GET /api/indexes/:id` | One index with its level history |
 | `GET /api/leaderboard?hours=24` | Wallets ranked by flow-adjusted return |
 | `POST /api/mirror/plan` | Price a basket against live depth, before any wallet opens |
+| — | Targets resolve from `indexId`, `strategyId` (published only) or inline `weights` |
 | `POST /api/mirror/build` | Unsigned versioned transactions for `signAllTransactions` |
 
 Verified end to end on mainnet: `POST /api/mirror/build` for the eight-token
@@ -161,11 +162,24 @@ allocation: a position over the cap is scaled down, but a position under the
 floor is *rejected* rather than raised, because raising it would ship weights
 the author did not choose.
 
-**Mutations require a wallet signature.** `GET /api/auth/message` returns the
-exact bytes to sign; send the base64 `signature` and the `issuedAt` alongside
-the request. The signature is bound to the action *and* the resource, so one
-authorising a create cannot be lifted onto a delete, and it expires after
-five minutes so a captured one cannot be replayed.
+**Mutations require a wallet signature.** `POST /api/auth/message` returns
+the exact bytes to sign, given the body you intend to send; return the base64
+`signature` and that `issuedAt` alongside the request.
+
+The signature binds the action, the resource **and a digest of the body**, so
+one authorising a create cannot be lifted onto a delete, nor replayed with
+different content. Each signature is accepted once and refused thereafter,
+and expires five minutes after it was issued. A future-dated `issuedAt` is
+rejected beyond a small clock-skew allowance, because accepting the full
+window in both directions would double every signature's life.
+
+Without the body in the signed bytes a captured signature was an arbitrary
+write primitive: one legitimate signature could publish baskets under the
+victim's wallet and rewrite their own for five minutes.
+
+Drafts are never returned by `GET /api/strategies`, including when filtered
+by creator — a wallet address is public. Reading your own unpublished work
+goes through `POST /api/strategies/mine`, which requires a signature.
 
 Asserting an address was not merely unauthenticated, it was forgeable:
 anyone could publish a basket attributed to any wallet, and on a product that
@@ -283,9 +297,15 @@ Copying adds a sleeve. It does not rebalance the whole wallet.
 
 ## Limits
 
-Requests are throttled per client and **weighted by what they cost upstream**:
-a build spends forty times what a cached market read does, because it quotes
-every leg and then fetches instructions for each. The keyless Jupiter tier
+Requests are throttled per **socket address** and weighted by what they cost
+upstream. Forwarded headers are honoured only behind `TRUST_PROXY=1`, because
+a header is something a request asserts about itself; with no proxy declared,
+every caller would otherwise share one bucket and the fourth visitor would be
+refused because of the first three. The limiter never lets a request through
+unmetered when its client map is full — failing open there would hand an
+attacker the bypass. Costs are weighted because
+a build spends forty times what a cached market read does: it quotes every
+leg and then fetches instructions for each. The keyless Jupiter tier
 reports a remaining quota in single digits, so an unthrottled build endpoint
 is not only a denial of service against this deployment — it is a way for
 anyone to exhaust the quota a demo is running on. `/health` is never

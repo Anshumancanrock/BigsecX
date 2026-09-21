@@ -300,16 +300,43 @@ app.get("/api/leaderboard", async (c) => {
   });
 });
 
-/** Resolve a mirror target: either a named index or explicit weights. */
-async function resolveTarget(body: {
-  indexId?: unknown;
-  weights?: unknown;
-}): Promise<{ weights: readonly Weight[]; name: string }> {
+/**
+ * Resolve what a mirror is aiming at.
+ *
+ * Three sources: a system index, a published strategy somebody authored, or
+ * weights supplied inline.
+ *
+ * The strategy branch is what closes the product's loop. Authoring and
+ * execution were built separately and never joined, so a user could create a
+ * basket, publish it, and then find no way to buy it -- `/mirror/plan` and
+ * `/mirror/build` answered "unknown index" for its id. Creating a thing
+ * nobody can buy is not a feature.
+ *
+ * Only published strategies resolve. A draft is its author's private work,
+ * and an id is not a secret; publishing is how an author says it is ready to
+ * be bought, including by themselves.
+ */
+async function resolveTarget(
+  services: Services,
+  body: { indexId?: unknown; strategyId?: unknown; weights?: unknown },
+): Promise<{ weights: readonly Weight[]; name: string; source: string }> {
   if (body.weights !== undefined) {
-    return { weights: parseWeights(body.weights), name: "custom" };
+    return { weights: parseWeights(body.weights), name: "custom", source: "weights" };
   }
+
+  if (typeof body.strategyId === "string") {
+    const strategy = services.store.getStrategy(body.strategyId);
+    if (!strategy) throw new BadRequest(`unknown strategy ${body.strategyId}`);
+    if (!strategy.published) {
+      throw new BadRequest(
+        `strategy ${body.strategyId} is a draft; publish it before it can be bought`,
+      );
+    }
+    return { weights: strategy.weights, name: strategy.name, source: "strategy" };
+  }
+
   if (typeof body.indexId !== "string") {
-    throw new BadRequest("provide indexId or weights");
+    throw new BadRequest("provide indexId, strategyId or weights");
   }
 
   const definition = definitionById(body.indexId);
@@ -319,7 +346,7 @@ async function resolveTarget(body: {
   if (!portfolio) {
     throw new BadRequest(`index ${body.indexId} currently has no tradable constituents`);
   }
-  return { weights: portfolio.weights, name: definition.name };
+  return { weights: portfolio.weights, name: definition.name, source: "index" };
 }
 
 /**
@@ -330,7 +357,7 @@ async function resolveTarget(body: {
  */
 app.post("/api/mirror/plan", async (c) => {
   const body = await safeJson(c);
-  const target = await resolveTarget(body);
+  const target = await resolveTarget(services, body);
   const deployUsd = requireFiniteUsd(body["deployUsd"] ?? 0, "deployUsd");
 
   const snapshot = await market();
@@ -367,6 +394,7 @@ app.post("/api/mirror/plan", async (c) => {
 
   return c.json({
     target: target.name,
+    targetSource: target.source,
     weights: target.weights,
     skipped: rebalance.skipped,
     unpricedHoldings: rebalance.unpricedHoldings,
@@ -401,7 +429,7 @@ app.post("/api/mirror/plan", async (c) => {
 app.post("/api/mirror/build", async (c) => {
   const body = await safeJson(c);
   const owner = requireBase58Address(body["owner"], "owner");
-  const target = await resolveTarget(body);
+  const target = await resolveTarget(services, body);
   const deployUsd = requireFiniteUsd(body["deployUsd"] ?? 0, "deployUsd");
   const slippageBps = requireInt(body["slippageBps"], "slippageBps", {
     min: 1,
@@ -447,6 +475,7 @@ app.post("/api/mirror/build", async (c) => {
 
   return c.json({
     target: target.name,
+    targetSource: target.source,
     ...outcome.bundle,
     // The sizes actually built, after depth and impact limits. These are
     // what the transactions do, and they are what the plan endpoint shows.

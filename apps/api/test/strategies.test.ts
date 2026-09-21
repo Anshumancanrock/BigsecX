@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createApp } from "../src/index.ts";
+import { bodyDigest, canonicalMessage } from "../src/auth.ts";
 import { TestWallet, makeServices } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
@@ -32,7 +33,9 @@ async function signed(
   resource: string,
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  return { ...body, creator: wallet.address, ...(await wallet.sign(action, resource)) };
+  // The signature covers the body it will be sent with, including creator.
+  const full = { ...body, creator: wallet.address };
+  return { ...full, ...(await wallet.sign(action, resource, full)) };
 }
 
 const draftBody = (over: Record<string, unknown> = {}) => ({
@@ -146,12 +149,9 @@ describe("authentication", () => {
    */
   test("refuses to attribute a strategy to a wallet the caller cannot sign for", async () => {
     // Alice signs, but claims to be Bob.
-    const proof = await alice.sign("create-strategy", "new");
-    const res = await send(app(), "POST", "/api/strategies", {
-      ...draftBody(),
-      creator: bob.address,
-      ...proof,
-    });
+    const body = { ...draftBody(), creator: bob.address };
+    const proof = await alice.sign("create-strategy", "new", body);
+    const res = await send(app(), "POST", "/api/strategies", { ...body, ...proof });
     expect(res.status).toBe(401);
     expect(((await res.json()) as { error: string }).error).toContain("does not match");
   });
@@ -167,24 +167,18 @@ describe("authentication", () => {
 
   test("refuses a stale signature", async () => {
     // Replaying a captured signature indefinitely must not work.
-    const stale = await alice.sign("create-strategy", "new", Date.now() - 60 * 60_000);
-    const res = await send(app(), "POST", "/api/strategies", {
-      ...draftBody(),
-      creator: alice.address,
-      ...stale,
-    });
+    const body = { ...draftBody(), creator: alice.address };
+    const stale = await alice.sign("create-strategy", "new", body, Date.now() - 60 * 60_000);
+    const res = await send(app(), "POST", "/api/strategies", { ...body, ...stale });
     expect(res.status).toBe(401);
     expect(((await res.json()) as { error: string }).error).toContain("window");
   });
 
   test("refuses a signature bound to a different action", async () => {
     // A signature authorising a delete must not authorise a create.
-    const wrong = await alice.sign("delete-strategy", "new");
-    const res = await send(app(), "POST", "/api/strategies", {
-      ...draftBody(),
-      creator: alice.address,
-      ...wrong,
-    });
+    const body = { ...draftBody(), creator: alice.address };
+    const wrong = await alice.sign("delete-strategy", "new", body);
+    const res = await send(app(), "POST", "/api/strategies", { ...body, ...wrong });
     expect(res.status).toBe(401);
   });
 
@@ -203,15 +197,88 @@ describe("authentication", () => {
     expect(res.status).toBe(401);
   });
 
-  test("serves the exact message a client must sign", async () => {
-    const res = await app().request(
-      `/api/auth/message?action=create-strategy&resource=new&wallet=${alice.address}`,
-    );
+  test("refuses a signature replayed with a different body", async () => {
+    // Without the body in the signed bytes, one captured signature is an
+    // arbitrary write primitive for the whole freshness window: it can
+    // publish baskets under the victim's wallet and rewrite their own.
+    const honest = { ...draftBody(), creator: alice.address };
+    const proof = await alice.sign("create-strategy", "new", honest);
+    expect((await send(app(), "POST", "/api/strategies", { ...honest, ...proof })).status).toBe(201);
+
+    const tampered = {
+      ...draftBody({
+        name: "Rugpull",
+        published: true,
+        weights: [
+          { symbol: "KALSHI", weight: 50 },
+          { symbol: "SPACEX", weight: 50 },
+        ],
+      }),
+      creator: alice.address,
+    };
+    const res = await send(app(), "POST", "/api/strategies", { ...tampered, ...proof });
+    expect(res.status).toBe(401);
+  });
+
+  test("refuses the same signature twice", async () => {
+    // Even with identical content: a create would otherwise mint a second
+    // basket, because the id carries a fresh random suffix each time.
+    const a = app();
+    const body = { ...draftBody(), creator: alice.address };
+    const proof = await alice.sign("create-strategy", "new", body);
+    expect((await send(a, "POST", "/api/strategies", { ...body, ...proof })).status).toBe(201);
+    const replay = await send(a, "POST", "/api/strategies", { ...body, ...proof });
+    expect(replay.status).toBe(401);
+    expect(((await replay.json()) as { error: string }).error).toContain("already been used");
+  });
+
+  test("refuses a future-dated signature", async () => {
+    // Allowing the full window forward would double every signature's life.
+    const body = { ...draftBody(), creator: alice.address };
+    const future = await alice.sign("create-strategy", "new", body, Date.now() + 4 * 60_000);
+    const res = await send(app(), "POST", "/api/strategies", { ...body, ...future });
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { error: string }).error).toContain("future");
+  });
+
+  test("serves the exact message a client must sign, including the body", async () => {
+    const payload = { ...draftBody(), creator: alice.address };
+    const res = await send(app(), "POST", "/api/auth/message", {
+      action: "create-strategy",
+      resource: "new",
+      wallet: alice.address,
+      body: payload,
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { message: string; issuedAt: number; required: boolean };
     expect(body.message).toContain("action:create-strategy");
     expect(body.message).toContain(`wallet:${alice.address}`);
+    // The body digest is part of the signed bytes, so a client deriving the
+    // message without it would fail verification with nothing to debug.
+    expect(body.message).toMatch(/\nbody:[0-9a-f]{64}$/);
     expect(body.required).toBe(true);
+  });
+
+  test("the served message matches what the client would derive", async () => {
+    const a = app();
+    const payload = { ...draftBody(), creator: alice.address };
+    const served = (await (
+      await send(a, "POST", "/api/auth/message", {
+        action: "create-strategy",
+        resource: "new",
+        wallet: alice.address,
+        body: payload,
+      })
+    ).json()) as { message: string; issuedAt: number };
+
+    const mine = canonicalMessage({
+      action: "create-strategy",
+      resource: "new",
+      wallet: alice.address,
+      issuedAt: served.issuedAt,
+      bodyDigest: await bodyDigest(payload),
+    });
+    expect(mine).toBe(served.message);
   });
 
   test("reads are not gated", async () => {
@@ -227,9 +294,17 @@ describe("visibility and ownership", () => {
     const publicList = (await (await a.request("/api/strategies")).json()) as { strategies: unknown[] };
     expect(publicList.strategies).toHaveLength(0);
 
-    const mine = (await (await a.request(`/api/strategies?creator=${ALICE}`)).json()) as {
-      strategies: { id: string }[];
+    // A wallet address is public, so filtering by creator must NOT expose
+    // that wallet's unpublished work.
+    const byCreator = (await (await a.request(`/api/strategies?creator=${ALICE}`)).json()) as {
+      strategies: unknown[];
     };
+    expect(byCreator.strategies).toHaveLength(0);
+
+    // Reading your own drafts requires proving the wallet is yours.
+    const mine = (await (
+      await send(a, "POST", "/api/strategies/mine", await signed(alice, "list-drafts", "mine", {}))
+    ).json()) as { strategies: { id: string }[] };
     expect(mine.strategies.map((s) => s.id)).toEqual([created.id]);
   });
 
@@ -308,6 +383,76 @@ describe("response consistency", () => {
     };
     const fetched = await (await a.request(`/api/strategies/${created.id}`)).json();
     expect(fetched).toEqual(created);
+  });
+});
+
+describe("a published strategy can be bought", () => {
+  /**
+   * The product's loop. Authoring and execution were built separately and
+   * never joined: a user could create a basket, publish it, and then find no
+   * way to buy it, because the mirror routes accepted only a system index id
+   * or inline weights and answered "unknown index" for a strategy id.
+   */
+  test("its id resolves as a mirror target", async () => {
+    const a = app();
+    const created = (await (await send(a, "POST", "/api/strategies", await draft({ published: true }))).json()) as {
+      id: string;
+      weights: { symbol: string; weight: number }[];
+    };
+
+    const plan = await send(a, "POST", "/api/mirror/plan", {
+      strategyId: created.id,
+      deployUsd: 1_000,
+    });
+    expect(plan.status).toBe(200);
+    const body = (await plan.json()) as {
+      target: string;
+      targetSource: string;
+      weights: { symbol: string; weight: number }[];
+    };
+    expect(body.targetSource).toBe("strategy");
+    expect(body.target).toBe("Humanoid Revolution");
+    expect(body.weights).toEqual(created.weights);
+  });
+
+  test("a draft cannot be bought, and says why", async () => {
+    const a = app();
+    const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as {
+      id: string;
+    };
+    const res = await send(a, "POST", "/api/mirror/plan", {
+      strategyId: created.id,
+      deployUsd: 1_000,
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("publish it");
+  });
+
+  test("an unknown strategy id is refused", async () => {
+    const res = await send(app(), "POST", "/api/mirror/plan", {
+      strategyId: "ghost",
+      deployUsd: 1_000,
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain("unknown strategy");
+  });
+});
+
+describe("drafts are private", () => {
+  test("another wallet cannot list them even with a signature", async () => {
+    const a = app();
+    await send(a, "POST", "/api/strategies", await draft());
+    const bobs = (await (
+      await send(a, "POST", "/api/strategies/mine", await signed(bob, "list-drafts", "mine", {}))
+    ).json()) as { strategies: unknown[] };
+    expect(bobs.strategies).toHaveLength(0);
+  });
+
+  test("listing drafts requires a signature", async () => {
+    const a = app();
+    await send(a, "POST", "/api/strategies", await draft());
+    const res = await send(a, "POST", "/api/strategies/mine", { creator: ALICE });
+    expect(res.status).toBe(401);
   });
 });
 

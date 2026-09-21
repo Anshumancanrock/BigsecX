@@ -146,17 +146,30 @@ export function migrate(db: Database): number {
   // lock fails immediately with SQLITE_BUSY and that process dies at boot.
   db.exec("PRAGMA busy_timeout = 5000");
 
-  const current = (db.query("PRAGMA user_version").get() as { user_version: number }).user_version;
-
-  for (let version = current; version < MIGRATIONS.length; version++) {
+  for (let version = 0; version < MIGRATIONS.length; version++) {
     const sql = MIGRATIONS[version];
     if (!sql) continue;
-    // Each migration is one transaction: a half-applied schema is worse than
-    // a failed startup.
+
+    // The version is re-read INSIDE the transaction, and the transaction is
+    // IMMEDIATE so it takes the write lock before reading rather than
+    // upgrading afterwards.
+    //
+    // Reading the version once up front was a data-corrupting race. The API
+    // and the indexer both construct a Store against the same file and are
+    // started together, so both could read version 5, and both would then
+    // run migration 6 -- a non-idempotent UPDATE multiplying every timestamp
+    // by 1000. Applied twice it multiplies by a million, which puts every
+    // snapshot in the year 58661. Reproduced before this change.
+    //
+    // A migration that is already applied is skipped rather than failing:
+    // losing the race is normal, not an error.
     db.transaction(() => {
+      const current = (db.query("PRAGMA user_version").get() as { user_version: number })
+        .user_version;
+      if (current !== version) return;
       db.exec(sql);
       db.exec(`PRAGMA user_version = ${version + 1}`);
-    })();
+    }).immediate();
   }
   return MIGRATIONS.length;
 }

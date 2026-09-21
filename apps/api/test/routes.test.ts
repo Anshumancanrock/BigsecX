@@ -220,7 +220,7 @@ describe("mirror/plan validation", () => {
     ["duplicate symbol", { weights: [{ symbol: "OPENAI", weight: 1 }, { symbol: "openai", weight: 1 }], deployUsd: 100 }, "duplicate"],
     ["empty weights", { weights: [], deployUsd: 100 }, "must not be empty"],
     ["unknown index", { indexId: "nope", deployUsd: 100 }, "unknown index"],
-    ["neither target", {}, "provide indexId or weights"],
+    ["neither target", {}, "provide indexId, strategyId or weights"],
     ["holdings with a bad amount", { indexId: "pre8", holdings: [{ symbol: "OPENAI", uiAmount: -1 }] }, "non-negative"],
   ];
 

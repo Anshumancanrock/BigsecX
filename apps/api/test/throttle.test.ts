@@ -1,6 +1,18 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { throttle } from "../src/throttle.ts";
+
+// Forwarded headers are honoured only behind a declared proxy, so these
+// tests declare one. Without it every caller keys to the socket address,
+// which is what the no-proxy case is for.
+const previousTrustProxy = process.env["TRUST_PROXY"];
+beforeAll(() => {
+  process.env["TRUST_PROXY"] = "1";
+});
+afterAll(() => {
+  if (previousTrustProxy === undefined) delete process.env["TRUST_PROXY"];
+  else process.env["TRUST_PROXY"] = previousTrustProxy;
+});
 
 function app(options = {}) {
   const a = new Hono();
@@ -58,6 +70,32 @@ describe("throttle", () => {
     expect((await a.request("/api/market", from("7.7.7.7"))).status).toBe(429);
     await new Promise((r) => setTimeout(r, 60));
     expect((await a.request("/api/market", from("7.7.7.7"))).status).toBe(200);
+  });
+
+  test("ignores a forwarded header when no proxy is declared", async () => {
+    // Otherwise any caller picks its own bucket by inventing a header.
+    const saved = process.env["TRUST_PROXY"];
+    delete process.env["TRUST_PROXY"];
+    try {
+      const a = app({ capacity: 40, refillPerSecond: 0.0001 });
+      expect((await a.request("/api/mirror/build", { method: "POST", ...from("8.8.8.8") })).status).toBe(200);
+      // A different claimed address must not reset the budget.
+      expect((await a.request("/api/mirror/build", { method: "POST", ...from("9.9.9.9") })).status).toBe(429);
+    } finally {
+      if (saved !== undefined) process.env["TRUST_PROXY"] = saved;
+    }
+  });
+
+  test("never lets a request through unmetered when the map is full", async () => {
+    // Failing open under pressure hands an attacker the bypass: fill the map
+    // with distinct addresses and everything after is free.
+    const a = app({ capacity: 40, refillPerSecond: 0.0001, maxClients: 4 });
+    for (let i = 0; i < 20; i++) {
+      await a.request("/api/market", from(`172.16.0.${i}`));
+    }
+    // A fresh client still gets its own budget, and still runs out.
+    expect((await a.request("/api/mirror/build", { method: "POST", ...from("172.31.0.1") })).status).toBe(200);
+    expect((await a.request("/api/mirror/build", { method: "POST", ...from("172.31.0.1") })).status).toBe(429);
   });
 
   test("does not retain a client entry per address forever", async () => {

@@ -96,22 +96,22 @@ describe("portfolio compared to a strategy", () => {
   async function withStrategy(options: FakeOptions) {
     const { app: a } = app(options);
     const author = new TestWallet();
-    const created = (await (
-      await a.request("/api/strategies", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          creator: author.address,
-          ...(await author.sign("create-strategy", "new")),
-          name: "Even",
-          weights: [
-            { symbol: "OPENAI", weight: 50 },
-            { symbol: "ANTHROPIC", weight: 50 },
-          ],
-          guardrails: { driftBps: 300 },
-        }),
-      })
-    ).json()) as { id: string };
+    // The signature covers the body, so build it first and sign that.
+    const body = {
+      creator: author.address,
+      name: "Even",
+      weights: [
+        { symbol: "OPENAI", weight: 50 },
+        { symbol: "ANTHROPIC", weight: 50 },
+      ],
+      guardrails: { driftBps: 300 },
+    };
+    const res = await a.request("/api/strategies", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...body, ...(await author.sign("create-strategy", "new", body)) }),
+    });
+    const created = (await res.json()) as { id: string };
     return { a, id: created.id };
   }
 

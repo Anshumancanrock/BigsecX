@@ -11,7 +11,7 @@
 import { ALL_MINTS, UNIVERSE, type PreStock } from "@ps/core";
 import { Keypair } from "@solana/web3.js";
 import { PythClient } from "@ps/market";
-import { canonicalMessage } from "../src/auth.ts";
+import { bodyDigest, canonicalMessage } from "../src/auth.ts";
 import type { Services } from "../src/context.ts";
 import { Store } from "@ps/db";
 
@@ -258,14 +258,26 @@ export class TestWallet {
     return this.#keypair.publicKey.toBase58();
   }
 
-  /** Sign the canonical message for an action and return body fields. */
+  /**
+   * Sign the canonical message for an action over a specific body.
+   *
+   * The body is part of the signature, so a proof cannot be moved onto
+   * different content.
+   */
   async sign(
     action: string,
     resource: string,
+    body: Record<string, unknown> = {},
     issuedAt = Date.now(),
   ): Promise<{ signature: string; issuedAt: number }> {
     const message = new TextEncoder().encode(
-      canonicalMessage({ action, resource, wallet: this.address, issuedAt }),
+      canonicalMessage({
+        action,
+        resource,
+        wallet: this.address,
+        issuedAt,
+        bodyDigest: await bodyDigest(body),
+      }),
     );
     // Ed25519 seeds are the first 32 bytes; wrap in the PKCS8 prefix that
     // WebCrypto expects.

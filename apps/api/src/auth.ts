@@ -17,14 +17,23 @@
  *   short window, so a signature captured from one request cannot be replayed
  *   indefinitely.
  *
- *   Binding. The message names the action and the resource, so a signature
- *   authorising one edit cannot be lifted onto a different one.
+ *   Binding. The message names the action, the resource AND a digest of the
+ *   request body, so a signature authorising one edit cannot be lifted onto
+ *   a different one, nor replayed with different content. Without the
+ *   digest a captured signature was an arbitrary write primitive: one
+ *   legitimate signature could be resent with any body for five minutes,
+ *   publishing baskets under the victim's wallet and rewriting their own.
+ *
+ *   Single use. A signature is recorded when accepted and refused on repeat,
+ *   so identical content cannot be submitted twice either.
  */
 
 import { BadRequest } from "./validate.ts";
 
 /** How far a signed message's timestamp may be from ours. */
 export const SIGNATURE_WINDOW_MS = 5 * 60_000;
+/** Forward allowance for a client clock running fast. */
+export const CLOCK_SKEW_MS = 30_000;
 
 export class Unauthorized extends Error {
   constructor(message: string) {
@@ -54,6 +63,8 @@ export function canonicalMessage(args: {
   readonly resource: string;
   readonly wallet: string;
   readonly issuedAt: number;
+  /** Hex sha256 of the request body. Empty for actions that carry none. */
+  readonly bodyDigest?: string;
 }): string {
   return [
     "prestocks.basket",
@@ -61,7 +72,51 @@ export function canonicalMessage(args: {
     `resource:${args.resource}`,
     `wallet:${args.wallet}`,
     `issuedAt:${args.issuedAt}`,
+    `body:${args.bodyDigest ?? ""}`,
   ].join("\n");
+}
+
+/**
+ * Stable digest of a request body.
+ *
+ * Keys are sorted so two encoders of the same object agree, and the proof
+ * fields are removed because they cannot be part of what they attest to.
+ */
+export async function bodyDigest(body: Record<string, unknown>): Promise<string> {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .filter(([key]) => key !== "signature" && key !== "issuedAt")
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          .map(([key, inner]) => [key, canonical(inner)]),
+      );
+    }
+    return value;
+  };
+
+  const bytes = new TextEncoder().encode(JSON.stringify(canonical(body)));
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Signatures already accepted, by their own value.
+ *
+ * Bounded by the freshness window: anything older than the window can never
+ * be accepted again anyway, so it is swept rather than retained.
+ */
+const consumed = new Map<string, number>();
+
+function consume(signature: string, issuedAt: number, now: number): void {
+  for (const [seen, when] of consumed) {
+    if (now - when > SIGNATURE_WINDOW_MS) consumed.delete(seen);
+  }
+  if (consumed.has(signature)) {
+    throw new Unauthorized("this signature has already been used; sign again");
+  }
+  consumed.set(signature, issuedAt);
 }
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -110,15 +165,25 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
  */
 export async function verifySignedAction(
   signed: SignedAction,
-  args: { readonly action: string; readonly resource: string; readonly now?: number },
+  args: {
+    readonly action: string;
+    readonly resource: string;
+    readonly bodyDigest?: string;
+    readonly now?: number;
+  },
 ): Promise<void> {
   const now = args.now ?? Date.now();
 
   if (!Number.isFinite(signed.issuedAt)) {
     throw new Unauthorized("issuedAt must be a timestamp in milliseconds");
   }
-  // Symmetric window: a clock ahead of ours is as suspect as one behind.
-  if (Math.abs(now - signed.issuedAt) > SIGNATURE_WINDOW_MS) {
+  // Asymmetric on purpose. A small forward allowance covers a client clock
+  // running fast; allowing the full window in both directions would let a
+  // future-dated signature live for ten minutes rather than five.
+  if (signed.issuedAt - now > CLOCK_SKEW_MS) {
+    throw new Unauthorized("issuedAt is in the future; check the client clock");
+  }
+  if (now - signed.issuedAt > SIGNATURE_WINDOW_MS) {
     throw new Unauthorized(
       `signature is outside the ${SIGNATURE_WINDOW_MS / 60_000} minute window; sign again`,
     );
@@ -136,6 +201,7 @@ export async function verifySignedAction(
       resource: args.resource,
       wallet: signed.wallet,
       issuedAt: signed.issuedAt,
+      ...(args.bodyDigest !== undefined ? { bodyDigest: args.bodyDigest } : {}),
     }),
   );
 
@@ -147,7 +213,10 @@ export async function verifySignedAction(
   }
 
   const valid = await crypto.subtle.verify("Ed25519", key, signature, message);
-  if (!valid) throw new Unauthorized("signature does not match this wallet and action");
+  if (!valid) {
+    throw new Unauthorized("signature does not match this wallet, action and body");
+  }
+  consume(signed.signature, signed.issuedAt, now);
 }
 
 /**
@@ -177,6 +246,10 @@ export async function authorize(
 
   await verifySignedAction(
     { wallet: args.wallet, signature, issuedAt },
-    { action: args.action, resource: args.resource },
+    {
+      action: args.action,
+      resource: args.resource,
+      bodyDigest: await bodyDigest(body),
+    },
   );
 }

@@ -342,12 +342,19 @@ export class Store {
   /**
    * List strategies, newest first.
    *
-   * `creator` returns that wallet's own drafts as well as its published work;
-   * without it only published strategies are visible, because an unpublished
-   * draft belongs to its author alone.
+   * Drafts are opt-in. Passing a creator used to switch the filter from
+   * "published" to "this wallet", which returned that wallet's unpublished
+   * work to anyone who typed its address -- and a wallet address is public.
+   * Now a creator narrows the list, and only `includeDrafts` widens it, so
+   * the default is safe and a caller must ask for the unsafe thing.
    */
   listStrategies(
-    options: { readonly creator?: string; readonly limit?: number; readonly holding?: string } = {},
+    options: {
+      readonly creator?: string;
+      readonly limit?: number;
+      readonly holding?: string;
+      readonly includeDrafts?: boolean;
+    } = {},
   ): StrategyRow[] {
     const limit = options.limit ?? 50;
     const clauses: string[] = [];
@@ -356,9 +363,9 @@ export class Store {
     if (options.creator) {
       clauses.push("creator = ?");
       params.push(options.creator);
-    } else {
-      clauses.push("published = 1");
     }
+    if (!options.includeDrafts) clauses.push("published = 1");
+    if (clauses.length === 0) clauses.push("1 = 1");
     if (options.holding) {
       clauses.push("id IN (SELECT strategy_id FROM strategy_constituent WHERE symbol = ?)");
       params.push(options.holding.toUpperCase());

@@ -26,7 +26,7 @@ import {
 } from "@ps/core";
 import type { StrategyRow } from "@ps/db";
 import type { Services } from "./context.ts";
-import { authorize, canonicalMessage, signatureRequired } from "./auth.ts";
+import { authorize, bodyDigest, canonicalMessage, signatureRequired } from "./auth.ts";
 import { BadRequest, parseWeights, requireBase58Address, requireInt } from "./validate.ts";
 
 const REBALANCE: readonly RebalanceFrequency[] = ["manual", "daily", "weekly", "monthly"];
@@ -150,27 +150,49 @@ function strategyId(name: string): string {
 
 export function registerStrategyRoutes(app: Hono, services: Services): void {
   /**
-   * The exact message a wallet must sign for a given action.
+   * The exact message a wallet must sign.
    *
-   * Served rather than documented so a client cannot derive it slightly
-   * differently and get an opaque verification failure.
+   * A POST because the signature covers the request body, so deriving the
+   * message needs that body. Served rather than documented: a client that
+   * derived it even slightly differently would get an opaque verification
+   * failure with nothing to debug.
    */
-  app.get("/api/auth/message", (c) => {
-    const action = c.req.query("action") ?? "";
-    const resource = c.req.query("resource") ?? "";
-    const wallet = requireBase58Address(c.req.query("wallet"), "wallet");
+  app.post("/api/auth/message", async (c) => {
+    const body = await readJson(c);
+    const action = typeof body["action"] === "string" ? body["action"] : "";
+    const resource = typeof body["resource"] === "string" ? body["resource"] : "";
+    const wallet = requireBase58Address(body["wallet"], "wallet");
     if (!action) throw new BadRequest("action is required");
+
+    const payload =
+      body["body"] && typeof body["body"] === "object" && !Array.isArray(body["body"])
+        ? (body["body"] as Record<string, unknown>)
+        : {};
 
     const issuedAt = Date.now();
     return c.json({
-      message: canonicalMessage({ action, resource, wallet, issuedAt }),
+      message: canonicalMessage({
+        action,
+        resource,
+        wallet,
+        issuedAt,
+        bodyDigest: await bodyDigest(payload),
+      }),
       issuedAt,
       required: signatureRequired(),
-      note: "Sign these exact bytes with the wallet, then send signature (base64) and issuedAt with the request.",
+      note:
+        "Sign these exact bytes, then send the request with signature (base64) and this issuedAt. " +
+        "The body you sign must be the body you send, minus signature and issuedAt.",
     });
   });
 
-  /** Published strategies, or a creator's own including drafts. */
+  /**
+   * Published strategies, optionally narrowed to one creator.
+   *
+   * Drafts are never returned here. A wallet address is public, so filtering
+   * by creator cannot be what unlocks that wallet's unpublished work -- see
+   * /api/strategies/mine, which requires a signature.
+   */
   app.get("/api/strategies", (c) => {
     const creator = c.req.query("creator");
     const holding = c.req.query("holding");
@@ -181,7 +203,22 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
       ...(holding ? { holding } : {}),
       limit,
     });
-    return c.json({ strategies: rows.map(toDto), scope: creator ? "creator" : "published" });
+    return c.json({ strategies: rows.map(toDto), scope: "published" });
+  });
+
+  /**
+   * A creator's own strategies, drafts included.
+   *
+   * A POST because it carries a signature: reading your own unpublished work
+   * requires proving the wallet is yours.
+   */
+  app.post("/api/strategies/mine", async (c) => {
+    const body = await readJson(c);
+    const creator = await requireCreator(body, "list-drafts", "mine");
+    const limit = requireInt(body["limit"], "limit", { min: 1, max: 100, fallback: 50 });
+
+    const rows = services.store.listStrategies({ creator, includeDrafts: true, limit });
+    return c.json({ strategies: rows.map(toDto), scope: "creator" });
   });
 
   app.get("/api/strategies/:id", (c) => {

@@ -58,15 +58,40 @@ function costOf(path: string, fallback: number): number {
 /**
  * Identify the caller.
  *
- * Behind a proxy the socket address is the proxy, so the forwarded header is
- * preferred when present. It is spoofable, which matters for a public
- * deployment but not for the thing this defends against: an unthrottled
- * client exhausting the upstream quota by accident or impatience.
+ * The socket address is the fallback and the default. Trusting a forwarded
+ * header unconditionally lets any caller pick its own bucket, and falling
+ * back to a constant is worse still: with no proxy in front -- which is how
+ * this runs locally and during a demo -- every client shared one bucket, so
+ * the fourth independent visitor was refused because of the first three.
+ *
+ * Forwarded headers are honoured only behind TRUST_PROXY=1, which is a
+ * deployment fact the deployment states rather than something a request
+ * asserts about itself.
  */
 function clientKey(c: Context): string {
-  const forwarded = c.req.header("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]?.trim() ?? "unknown";
-  return c.req.header("x-real-ip") ?? "unknown";
+  if (process.env["TRUST_PROXY"] === "1") {
+    const forwarded = c.req.header("x-forwarded-for");
+    if (forwarded) return forwarded.split(",")[0]?.trim() ?? peerAddress(c);
+    const real = c.req.header("x-real-ip");
+    if (real) return real;
+  }
+  return peerAddress(c);
+}
+
+/**
+ * The peer's socket address.
+ *
+ * Under Bun's `export default { fetch }` binding, Hono's `c.env` IS the
+ * Server object, so `requestIP` is reached directly on it rather than
+ * through a wrapper.
+ */
+function peerAddress(c: Context): string {
+  const server = c.env as { requestIP?: (request: Request) => { address?: string } | null };
+  try {
+    return server?.requestIP?.(c.req.raw)?.address ?? "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 export function throttle(options: ThrottleOptions = {}) {
@@ -84,18 +109,26 @@ export function throttle(options: ThrottleOptions = {}) {
     const key = clientKey(c);
     const now = Date.now();
 
-    // Bound the map. Without this the limiter is itself a memory leak, since
-    // every distinct client address would be retained forever.
+    // Bound the map, without ever letting a request through unmetered.
+    // Failing open under pressure hands an attacker the bypass: fill the map
+    // with distinct addresses and every subsequent request is free.
     if (!buckets.has(key) && buckets.size >= maxClients) {
       for (const [existing, bucket] of buckets) {
         if (now - bucket.lastRefill > 60_000) buckets.delete(existing);
       }
-      // Still full of active clients: let the request through rather than
-      // refusing traffic because of our own bookkeeping.
-      if (buckets.size >= maxClients) return next();
+      // Still full of active clients: evict the least recently seen.
+      while (buckets.size >= maxClients) {
+        const oldest = buckets.keys().next();
+        if (oldest.done) break;
+        buckets.delete(oldest.value);
+      }
     }
 
     const bucket = buckets.get(key) ?? { tokens: capacity, lastRefill: now };
+    // Map preserves insertion order and set() on an existing key keeps its
+    // original position, so the hot path deletes first to make order mean
+    // recency for the eviction above.
+    buckets.delete(key);
     bucket.tokens = Math.min(
       capacity,
       bucket.tokens + ((now - bucket.lastRefill) / 1000) * refillPerSecond,
