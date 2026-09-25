@@ -1,8 +1,7 @@
 /**
- * Persistence for market snapshots, holder positions and index levels.
- *
- * Reads and writes go through this class rather than raw SQL at call sites, so
- * the shapes the rest of the app sees stay stable if the storage engine moves.
+ * Persistence for snapshots, trades, strategies and social data. Call sites go
+ * through this class rather than raw SQL, so the shapes they see stay stable if
+ * the storage engine changes.
  */
 
 import { Database } from "bun:sqlite";
@@ -78,15 +77,44 @@ export interface TradeRow {
   readonly valueUsd: number | null;
 }
 
+/** What a wallet has said about itself. */
+export interface ProfileRow {
+  readonly wallet: string;
+  readonly name: string;
+  readonly handle: string | null;
+  readonly bio: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+/** A picture a wallet uploaded, as stored. */
+export interface AvatarImage {
+  readonly mime: string;
+  readonly bytes: Uint8Array;
+  readonly updatedAt: number;
+}
+
+/** One side of a follow, with when it began. */
+export interface FollowRow {
+  readonly wallet: string;
+  readonly at: number;
+}
+
+/** A wallet's trading activity as far as the index has seen it. */
+export interface TradeSummary {
+  readonly count: number;
+  /** Unix seconds of the first and last trade with a known time. */
+  readonly firstAt: number | null;
+  readonly lastAt: number | null;
+}
+
 export class Store {
   readonly #db: Database;
 
   /**
-   * @param path Defaults to `data/prestocks.db` resolved against the
-   * repository root rather than the current directory. A relative default
-   * silently gives the API and the indexer different databases when they are
-   * started from different places, and the only symptom is an empty
-   * leaderboard.
+   * @param path Defaults to `data/prestocks.db` under the repository root, not
+   * the working directory, so the API and indexer share one database wherever
+   * they are started.
    */
   constructor(path = process.env["DATABASE_PATH"] ?? defaultDatabasePath()) {
     mkdirSync(dirname(path), { recursive: true });
@@ -103,19 +131,15 @@ export class Store {
   }
 
   /**
-   * Record a snapshot and its prices atomically.
-   *
-   * Snapshots are unique by timestamp; re-running the indexer within the same
-   * second reuses the existing row rather than failing, which keeps a retry
-   * from being destructive.
+   * Record a snapshot and its prices atomically. Snapshots are unique by
+   * timestamp; a retry with the same timestamp reuses the row.
    */
   writeSnapshot(args: {
     readonly takenAt: Date;
     readonly epoch: number;
     readonly prices: readonly PriceRow[];
   }): number {
-    // Milliseconds. See migration 6: seconds let two snapshots inside the
-    // same second collide on the unique index.
+    // Milliseconds (migration 6), so snapshots in one second stay distinct.
     const takenAt = args.takenAt.getTime();
 
     return this.#db.transaction(() => {
@@ -144,6 +168,28 @@ export class Store {
       }
       return id;
     })();
+  }
+
+  /**
+   * Market prices from the recorded snapshot nearest a moment, if one lies
+   * within `toleranceMs` of it. What a "24 hours ago" price is read from.
+   */
+  marketPricesNear(atMs: number, toleranceMs: number): { takenAt: number; prices: Map<string, number> } | null {
+    const row = this.#db
+      .query(
+        `SELECT id, taken_at FROM market_snapshot
+          WHERE taken_at BETWEEN ? AND ?
+          ORDER BY ABS(taken_at - ?) LIMIT 1`,
+      )
+      .get(atMs - toleranceMs, atMs + toleranceMs, atMs) as { id: number; taken_at: number } | null;
+    if (!row) return null;
+    const prices = new Map<string, number>();
+    for (const p of this.#db
+      .query("SELECT symbol, market_usd FROM token_price WHERE snapshot_id = ? AND market_usd IS NOT NULL")
+      .all(row.id) as { symbol: string; market_usd: number }[]) {
+      prices.set(p.symbol, p.market_usd);
+    }
+    return { takenAt: row.taken_at, prices };
   }
 
   writeIndexLevel(args: {
@@ -255,6 +301,18 @@ export class Store {
     return row.n;
   }
 
+  /** The newest trades across every wallet, for a live feed. */
+  recentTrades(limit = 50): TradeRow[] {
+    const rows = this.#db
+      .query(
+        `SELECT signature, owner, symbol, slot, block_time AS blockTime,
+                delta_raw AS deltaRaw, ui_amount AS uiAmount, value_usd AS valueUsd
+         FROM trade WHERE value_usd IS NOT NULL ORDER BY slot DESC LIMIT ?`,
+      )
+      .all(limit) as (Omit<TradeRow, "deltaRaw"> & { deltaRaw: string })[];
+    return rows.map((r) => ({ ...r, deltaRaw: BigInt(r.deltaRaw) }));
+  }
+
   tradesFor(owner: string, limit = 100): TradeRow[] {
     const rows = this.#db
       .query(
@@ -267,11 +325,8 @@ export class Store {
   }
 
   /**
-   * Save a strategy and its constituents atomically.
-   *
-   * A strategy whose weights half-saved would be a basket nobody authored,
-   * so the constituent rows are replaced wholesale inside the transaction
-   * rather than merged.
+   * Save a strategy and its constituents atomically; constituent rows are
+   * replaced wholesale, not merged.
    */
   writeStrategy(strategy: StrategyRow): void {
     this.#db.transaction(() => {
@@ -340,13 +395,9 @@ export class Store {
   }
 
   /**
-   * List strategies, newest first.
-   *
-   * Drafts are opt-in. Passing a creator used to switch the filter from
-   * "published" to "this wallet", which returned that wallet's unpublished
-   * work to anyone who typed its address -- and a wallet address is public.
-   * Now a creator narrows the list, and only `includeDrafts` widens it, so
-   * the default is safe and a caller must ask for the unsafe thing.
+   * List strategies, newest first. Drafts appear only with `includeDrafts`;
+   * `creator` only narrows the list, since a wallet address is public and must
+   * not expose that wallet's drafts.
    */
   listStrategies(
     options: {
@@ -388,10 +439,8 @@ export class Store {
   }
 
   /**
-   * The level and weights last recorded for an index.
-   *
-   * The weights matter: a period's return must be measured with the basket
-   * that was actually held during it, not with one recomputed from today's
+   * The level and weights last recorded for an index. A period's return is
+   * measured with the basket held during it, not one recomputed from today's
    * valuations.
    */
   lastIndexState(indexId: string): {
@@ -425,5 +474,286 @@ export class Store {
       )
       .all(indexId, limit) as { takenAt: number; level: number }[];
     return rows.reverse().map((r) => ({ takenAt: new Date(r.takenAt), level: r.level }));
+  }
+
+  /* ------------------------------------------------------------ trading */
+
+  /** How many trades the index holds for a wallet, and over what span. */
+  tradeSummary(owner: string): TradeSummary {
+    const row = this.#db
+      .query(
+        `SELECT COUNT(*) AS count, MIN(block_time) AS firstAt, MAX(block_time) AS lastAt
+         FROM trade WHERE owner = ?`,
+      )
+      .get(owner) as { count: number; firstAt: number | null; lastAt: number | null };
+    return { count: row.count, firstAt: row.firstAt, lastAt: row.lastAt };
+  }
+
+  /* ----------------------------------------------------------- profiles */
+
+  profile(wallet: string): ProfileRow | null {
+    const row = this.#db
+      .query(
+        `SELECT wallet, name, handle, bio, created_at AS createdAt, updated_at AS updatedAt
+         FROM profile WHERE wallet = ?`,
+      )
+      .get(wallet) as ProfileRow | null;
+    return row ?? null;
+  }
+
+  profileByHandle(handle: string): ProfileRow | null {
+    const row = this.#db
+      .query(
+        `SELECT wallet, name, handle, bio, created_at AS createdAt, updated_at AS updatedAt
+         FROM profile WHERE handle = ?`,
+      )
+      .get(handle.toLowerCase()) as ProfileRow | null;
+    return row ?? null;
+  }
+
+  /** Profiles for many wallets at once, for lists that show names. */
+  profiles(wallets: readonly string[]): Map<string, ProfileRow> {
+    const out = new Map<string, ProfileRow>();
+    const unique = [...new Set(wallets)];
+    // Chunked so no list can exceed SQLite's bound-parameter limit.
+    for (let i = 0; i < unique.length; i += 200) {
+      const chunk = unique.slice(i, i + 200);
+      const rows = this.#db
+        .query(
+          `SELECT wallet, name, handle, bio, created_at AS createdAt, updated_at AS updatedAt
+           FROM profile WHERE wallet IN (${chunk.map(() => "?").join(", ")})`,
+        )
+        .all(...chunk) as ProfileRow[];
+      for (const row of rows) out.set(row.wallet, row);
+    }
+    return out;
+  }
+
+  /**
+   * Create or update a profile, keeping its creation time. Returns "taken",
+   * rather than throwing, when another wallet already has the handle.
+   */
+  writeProfile(args: {
+    readonly wallet: string;
+    readonly name: string;
+    readonly handle: string | null;
+    readonly bio: string;
+    readonly now: number;
+  }): "ok" | "taken" {
+    const owner = args.handle === null ? null : this.profileByHandle(args.handle);
+    if (owner && owner.wallet !== args.wallet) return "taken";
+    try {
+      this.#db
+        .query(
+          `INSERT INTO profile (wallet, name, handle, bio, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (wallet) DO UPDATE SET
+             name = excluded.name, handle = excluded.handle, bio = excluded.bio,
+             updated_at = excluded.updated_at`,
+        )
+        .run(args.wallet, args.name, args.handle, args.bio, args.now, args.now);
+    } catch (error) {
+      // Two wallets claiming one handle at once both pass the check above; the
+      // unique index decides.
+      if (String(error).includes("UNIQUE")) return "taken";
+      throw error;
+    }
+    return "ok";
+  }
+
+  /* ------------------------------------------------------------ avatars */
+
+  /**
+   * Each wallet's picture as a short token: "p3" for preset 3, "u<updatedAt>"
+   * for an upload, so the token changes with every upload and a link built from
+   * it is never stale. Wallets with no row are absent.
+   */
+  avatars(wallets: readonly string[]): Map<string, string> {
+    const out = new Map<string, string>();
+    const unique = [...new Set(wallets)];
+    for (let i = 0; i < unique.length; i += 200) {
+      const chunk = unique.slice(i, i + 200);
+      const rows = this.#db
+        .query(
+          `SELECT wallet, kind, preset, updated_at AS updatedAt
+           FROM avatar WHERE wallet IN (${chunk.map(() => "?").join(", ")})`,
+        )
+        .all(...chunk) as { wallet: string; kind: string; preset: number | null; updatedAt: number }[];
+      for (const row of rows) out.set(row.wallet, row.kind === "upload" ? `u${row.updatedAt}` : `p${row.preset}`);
+    }
+    return out;
+  }
+
+  avatar(wallet: string): string | null {
+    return this.avatars([wallet]).get(wallet) ?? null;
+  }
+
+  /** The picture a wallet uploaded; null when it shows a character instead. */
+  avatarImage(wallet: string): AvatarImage | null {
+    const row = this.#db
+      .query(`SELECT mime, bytes, updated_at AS updatedAt FROM avatar WHERE wallet = ? AND kind = 'upload'`)
+      .get(wallet) as { mime: string; bytes: Uint8Array; updatedAt: number } | null;
+    return row ? { mime: row.mime, bytes: new Uint8Array(row.bytes), updatedAt: row.updatedAt } : null;
+  }
+
+  // Writes keep updated_at increasing so two uploads in one millisecond get
+  // different tokens and a cached first picture is never shown for the second.
+
+  setAvatarPreset(wallet: string, preset: number, now: number): void {
+    this.#db
+      .query(
+        `INSERT INTO avatar (wallet, kind, preset, mime, bytes, updated_at) VALUES (?, 'preset', ?, NULL, NULL, ?)
+         ON CONFLICT (wallet) DO UPDATE SET kind = 'preset', preset = excluded.preset, mime = NULL, bytes = NULL,
+           updated_at = MAX(excluded.updated_at, avatar.updated_at + 1)`,
+      )
+      .run(wallet, preset, now);
+  }
+
+  setAvatarUpload(wallet: string, mime: string, bytes: Uint8Array, now: number): void {
+    this.#db
+      .query(
+        `INSERT INTO avatar (wallet, kind, preset, mime, bytes, updated_at) VALUES (?, 'upload', NULL, ?, ?, ?)
+         ON CONFLICT (wallet) DO UPDATE SET kind = 'upload', preset = NULL, mime = excluded.mime, bytes = excluded.bytes,
+           updated_at = MAX(excluded.updated_at, avatar.updated_at + 1)`,
+      )
+      .run(wallet, mime, bytes, now);
+  }
+
+  /** Back to the character the wallet's address picks. */
+  clearAvatar(wallet: string): void {
+    this.#db.query("DELETE FROM avatar WHERE wallet = ?").run(wallet);
+  }
+
+  /* ------------------------------------------------------------ follows */
+
+  /** Start following. Following twice is still one follow. */
+  follow(follower: string, followee: string, now: number): void {
+    this.#db
+      .query("INSERT OR IGNORE INTO follow (follower, followee, created_at) VALUES (?, ?, ?)")
+      .run(follower, followee, now);
+  }
+
+  unfollow(follower: string, followee: string): void {
+    this.#db.query("DELETE FROM follow WHERE follower = ? AND followee = ?").run(follower, followee);
+  }
+
+  isFollowing(follower: string, followee: string): boolean {
+    return (
+      this.#db.query("SELECT 1 AS yes FROM follow WHERE follower = ? AND followee = ?").get(follower, followee) !==
+      null
+    );
+  }
+
+  followCounts(wallet: string): { readonly followers: number; readonly following: number } {
+    const followers = this.#db.query("SELECT COUNT(*) AS n FROM follow WHERE followee = ?").get(wallet) as {
+      n: number;
+    };
+    const following = this.#db.query("SELECT COUNT(*) AS n FROM follow WHERE follower = ?").get(wallet) as {
+      n: number;
+    };
+    return { followers: followers.n, following: following.n };
+  }
+
+  /** Wallets the viewer follows that also follow this one. */
+  mutualFollowers(viewer: string, wallet: string): number {
+    const row = this.#db
+      .query(
+        `SELECT COUNT(*) AS n FROM follow f
+         WHERE f.followee = ? AND f.follower IN (SELECT followee FROM follow WHERE follower = ?)`,
+      )
+      .get(wallet, viewer) as { n: number };
+    return row.n;
+  }
+
+  /** Who follows this wallet, newest first. */
+  followers(wallet: string, limit = 100): FollowRow[] {
+    return this.#db
+      .query(
+        `SELECT follower AS wallet, created_at AS at FROM follow
+         WHERE followee = ? ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(wallet, limit) as FollowRow[];
+  }
+
+  /** Who this wallet follows, newest first. */
+  following(wallet: string, limit = 100): FollowRow[] {
+    return this.#db
+      .query(
+        `SELECT followee AS wallet, created_at AS at FROM follow
+         WHERE follower = ? ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(wallet, limit) as FollowRow[];
+  }
+
+  /** The newest trades by the wallets this one follows. */
+  followedTrades(follower: string, limit = 50): TradeRow[] {
+    const rows = this.#db
+      .query(
+        `SELECT t.signature, t.owner, t.symbol, t.slot, t.block_time AS blockTime,
+                t.delta_raw AS deltaRaw, t.ui_amount AS uiAmount, t.value_usd AS valueUsd
+         FROM trade t JOIN follow f ON f.followee = t.owner
+         WHERE f.follower = ? AND t.value_usd IS NOT NULL
+         ORDER BY t.slot DESC LIMIT ?`,
+      )
+      .all(follower, limit) as (Omit<TradeRow, "deltaRaw"> & { deltaRaw: string })[];
+    return rows.map((r) => ({ ...r, deltaRaw: BigInt(r.deltaRaw) }));
+  }
+
+  /* ----------------------------------------------------------- sessions */
+
+  /**
+   * Record a session by the hash of its token.
+   *
+   * `proof` digests the signature that bought it and is unique among stored
+   * sessions, so a spent signature returns "used" even on a restarted or
+   * second server. A wallet keeps its newest `keep` sessions, and expired
+   * sessions are swept here.
+   */
+  createSession(
+    tokenHash: string,
+    wallet: string,
+    now: number,
+    expiresAt: number,
+    proof: string | null = null,
+    keep = 10,
+  ): "ok" | "used" {
+    try {
+      this.#db.transaction(() => {
+        this.#db.query("DELETE FROM session WHERE expires_at <= ?").run(now);
+        this.#db
+          .query("INSERT INTO session (token_hash, wallet, created_at, expires_at, proof) VALUES (?, ?, ?, ?, ?)")
+          .run(tokenHash, wallet, now, expiresAt, proof);
+        this.#db
+          .query(
+            `DELETE FROM session WHERE wallet = ? AND token_hash NOT IN
+               (SELECT token_hash FROM session WHERE wallet = ? ORDER BY created_at DESC, rowid DESC LIMIT ?)`,
+          )
+          .run(wallet, wallet, keep);
+      })();
+    } catch (error) {
+      if (String(error).includes("UNIQUE")) return "used";
+      throw error;
+    }
+    return "ok";
+  }
+
+  /** How many live sessions a wallet has. */
+  sessionCount(wallet: string, now: number): number {
+    const row = this.#db
+      .query("SELECT COUNT(*) AS n FROM session WHERE wallet = ? AND expires_at > ?")
+      .get(wallet, now) as { n: number };
+    return row.n;
+  }
+
+  /** The wallet a live session belongs to, or null. */
+  sessionWallet(tokenHash: string, now: number): string | null {
+    const row = this.#db
+      .query("SELECT wallet FROM session WHERE token_hash = ? AND expires_at > ?")
+      .get(tokenHash, now) as { wallet: string } | null;
+    return row?.wallet ?? null;
+  }
+
+  endSession(tokenHash: string): void {
+    this.#db.query("DELETE FROM session WHERE token_hash = ?").run(tokenHash);
   }
 }
