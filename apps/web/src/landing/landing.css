@@ -693,6 +693,9 @@
 .highlights {
   --chart-up: var(--up);
   --chart-down: var(--down);
+
+  padding-top: clamp(64px, 8vw, 104px);
+  padding-bottom: clamp(32px, 4vw, 56px);
 }
 
 .highlights h2 span {
@@ -928,6 +931,7 @@
 /* ---------------------------------------------------------- self-custody */
 
 .custody {
+  padding-top: clamp(56px, 7vw, 96px);
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   align-items: center;

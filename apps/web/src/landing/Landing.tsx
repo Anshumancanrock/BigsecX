@@ -48,8 +48,8 @@ export function Landing() {
       <BuiltOn />
 
       <main className="wrap">
-        <TradersSection />
         <HighlightsSection market={snapshot} />
+        <TradersSection />
         <CustodySection market={snapshot} />
 
         <section className="prose">
