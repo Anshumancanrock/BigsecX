@@ -210,6 +210,11 @@ Without a persistent volume the database starts empty on every restart: the
 indexer refills recent trades, but profiles, follows and published baskets
 are lost.
 
+`.github/workflows/azure.yml` deploys to an Azure App Service (Linux, Node
+stack) on every push to `master`, shipping the Bun binary with the app. It
+needs the app's publish profile in the `AZURE_WEBAPP_PUBLISH_PROFILE` secret
+and the startup command `sh /home/site/wwwroot/startup.sh`.
+
 ## Disclaimer
 
 PreStocks tokens give economic exposure through an issuer-controlled SPV; they
