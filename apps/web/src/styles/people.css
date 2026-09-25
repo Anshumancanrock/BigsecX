@@ -1,0 +1,448 @@
+/*
+ * Faces, the profile picture chooser and the leaderboard podium, for phone
+ * and desktop. Surfaces use the glass tokens, which the desktop sets to plain
+ * white; desktop-only overrides are at the end, under .is-desk.
+ */
+
+/* ================================================================= faces */
+
+/* The picture fills the circle; the circle is tinted while it loads. */
+.face {
+  position: relative;
+  overflow: hidden;
+}
+
+.face img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  user-select: none;
+}
+
+/* A hairline inside the edge, so a light picture keeps its circle on white. */
+.face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
+  pointer-events: none;
+}
+
+.face.ghost::after {
+  content: none;
+}
+
+/* ======================================================= profile picture */
+
+.picture-chooser {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid hsl(var(--ink) / 0.08);
+}
+
+.picture-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.picture-face {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  line-height: 0;
+}
+
+/* A turning ring while a picture uploads. */
+.picture-face.busy::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 2.5px solid hsl(var(--mint));
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.picture-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.picture-words b {
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.picture-words small {
+  font-size: 13px;
+  line-height: 1.4;
+  color: hsl(var(--fg-muted));
+}
+
+.picture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.picture-characters {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.picture-character {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border-radius: 50%;
+  transition:
+    transform 0.15s var(--ease-out, ease-out),
+    box-shadow 0.15s;
+}
+
+.picture-character img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+@media (hover: hover) {
+  .picture-character:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+}
+
+/* The selected character: a ring in the app's green, clear of the picture. */
+.picture-character.on {
+  box-shadow:
+    0 0 0 2.5px hsl(var(--page)),
+    0 0 0 5px hsl(var(--mint-deep));
+}
+
+.picture-character:disabled:not(.on) {
+  opacity: 0.55;
+}
+
+.picture-character.busy {
+  animation: ghost-pulse 1s ease-in-out infinite;
+}
+
+.picture-problem {
+  margin-top: -6px;
+}
+
+@media (max-width: 460px) {
+  .picture-characters {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+/* ============================================================== trophies */
+
+.trophy {
+  display: block;
+  flex: none;
+}
+
+/* A trophy standing in for a rank number in a row. */
+.medal-trophy {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  overflow: visible;
+}
+
+/* The profile's rank, in the metal of the place. Scoped under .app so it
+   outranks each stylesheet's plain rank chip. */
+.app .stat-chip.rank .trophy {
+  margin: -5px -2px -5px -5px;
+}
+
+.app .stat-chip.rank.gold {
+  border-color: hsl(43 80% 55% / 0.55);
+  background: linear-gradient(135deg, hsl(48 100% 93%), hsl(43 95% 82%));
+  color: hsl(34 85% 25%);
+}
+
+.app .stat-chip.rank.silver {
+  border-color: hsl(214 15% 60% / 0.45);
+  background: linear-gradient(135deg, hsl(210 25% 97%), hsl(213 16% 86%));
+  color: hsl(215 18% 28%);
+}
+
+.app .stat-chip.rank.bronze {
+  border-color: hsl(24 60% 50% / 0.45);
+  background: linear-gradient(135deg, hsl(30 100% 94%), hsl(24 75% 83%));
+  color: hsl(20 65% 27%);
+}
+
+/* On Explore's trader cards and its banner. */
+.ex-trophy {
+  flex: none;
+  margin: -6px -4px -6px 0;
+  line-height: 0;
+}
+
+.ex-panel-trophy {
+  display: grid;
+  flex: none;
+  width: 26px;
+  place-items: center;
+  line-height: 0;
+}
+
+/* ================================================================ podium */
+
+.podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  margin: 18px 0 6px;
+}
+
+.podium-card {
+  --metal-glow: hsl(0 0% 50% / 0.12);
+  --metal-ring: linear-gradient(135deg, #fff, #ccc);
+  --metal-text: hsl(var(--fg-muted));
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 10px 14px;
+  overflow: hidden;
+  border: 1px solid var(--gl-edge);
+  border-radius: 22px;
+  background: var(--gl-fill);
+  box-shadow: var(--gl-shadow);
+  text-align: center;
+}
+
+/* Second, first, third across the screen; the winner raised in the middle. */
+.podium-card.silver {
+  order: 1;
+}
+
+.podium-card.gold {
+  order: 2;
+  padding-top: 30px;
+}
+
+.podium-card.bronze {
+  order: 3;
+}
+
+/* The light of each metal, pooling at the top of its card. */
+.podium-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 70%;
+  background: radial-gradient(90% 75% at 50% 0%, var(--metal-glow), transparent 72%);
+  pointer-events: none;
+}
+
+.podium-card > * {
+  position: relative;
+}
+
+.podium-card.gold {
+  --metal-glow: hsl(46 100% 58% / 0.34);
+  --metal-ring: linear-gradient(145deg, #fff3c4, #f7c744 45%, #c98a16);
+  --metal-text: hsl(36 85% 32%);
+
+  border-color: hsl(44 85% 58% / 0.5);
+}
+
+.podium-card.silver {
+  --metal-glow: hsl(214 30% 72% / 0.34);
+  --metal-ring: linear-gradient(145deg, #ffffff, #d5dce5 45%, #8f9baa);
+  --metal-text: hsl(215 14% 40%);
+}
+
+.podium-card.bronze {
+  --metal-glow: hsl(24 85% 60% / 0.28);
+  --metal-ring: linear-gradient(145deg, #ffe2c8, #e3935a 45%, #a55a2b);
+  --metal-text: hsl(22 60% 36%);
+}
+
+.podium-person {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  color: inherit;
+}
+
+.podium-trophy {
+  display: block;
+  line-height: 0;
+}
+
+.podium-place {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--metal-text);
+}
+
+/* The face in a ring of its metal. */
+.podium-face {
+  margin: 8px 0 6px;
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--metal-ring);
+  line-height: 0;
+}
+
+.podium-face .face {
+  box-shadow: 0 0 0 2px hsl(0 0% 100%);
+}
+
+.podium-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podium-person .holding-logos {
+  justify-content: center;
+  min-height: 16px;
+}
+
+.podium-main {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.podium-card.gold .podium-main {
+  font-size: 21px;
+}
+
+.podium-side {
+  font-size: 12px;
+  color: hsl(var(--fg-muted));
+}
+
+.podium-side .num {
+  font-weight: 650;
+  color: hsl(var(--fg));
+}
+
+.podium-action {
+  display: flex;
+  justify-content: center;
+  min-height: 32px;
+}
+
+.podium-action .follow-btn.sm {
+  min-width: 0;
+}
+
+.podium-card.ghost {
+  height: 250px;
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.podium-card.gold.ghost {
+  height: 276px;
+}
+
+/* =============================================================== desktop */
+
+.is-desk .podium {
+  gap: 16px;
+  margin: 20px 0 0;
+}
+
+.is-desk .podium-card {
+  gap: 14px;
+  padding: 24px 18px 20px;
+  border-radius: 14px;
+}
+
+.is-desk .podium-card.gold {
+  padding-top: 40px;
+}
+
+/* Bigger trophies where there is room; the drawing scales from its viewBox. */
+.is-desk .podium-card .trophy {
+  width: 64px;
+  height: 64px;
+}
+
+.is-desk .podium-card.gold .trophy {
+  width: 80px;
+  height: 80px;
+}
+
+.is-desk .podium-name {
+  font-size: 15.5px;
+}
+
+.is-desk .podium-main {
+  font-size: 24px;
+}
+
+.is-desk .podium-card.gold .podium-main {
+  font-size: 28px;
+}
+
+.is-desk .podium-side {
+  font-size: 13px;
+}
+
+.is-desk .podium-card.ghost {
+  height: 300px;
+  border: 0;
+  background: hsl(var(--d-well));
+  box-shadow: none;
+}
+
+.is-desk .podium-card.gold.ghost {
+  height: 326px;
+}
+
+/* The wallet chip in the header. */
+.is-desk .profile .face {
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picture-face.busy::after,
+  .picture-character.busy,
+  .podium-card.ghost {
+    animation: none;
+  }
+}
