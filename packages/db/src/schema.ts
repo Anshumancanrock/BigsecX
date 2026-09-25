@@ -1,12 +1,7 @@
 /**
- * SQLite schema and migrations.
- *
- * SQLite because the workload is a few hundred rows per snapshot and a handful
- * of readers: Postgres would add an operational dependency without buying
- * anything at this size. The schema is deliberately written in plain portable
- * SQL so moving later is a connection change rather than a rewrite.
- *
- * Migrations run forward only, tracked by `user_version`.
+ * SQLite schema and migrations. SQLite fits a few hundred rows per snapshot
+ * and a handful of readers; the SQL stays portable so moving engines is a
+ * connection change. Migrations run forward only, tracked by `user_version`.
  */
 
 import type { Database } from "bun:sqlite";
@@ -79,24 +74,15 @@ const MIGRATIONS: readonly string[] = [
     updated_at      INTEGER NOT NULL
   );
   `,
-  // 3: drop holder snapshots. Every free RPC endpoint refuses
-  // getTokenLargestAccounts, so this table was never populated; trades
-  // reconstructed from transaction history replaced it. Leaving the table in
-  // place invited reads against a source nothing writes, which is exactly the
-  // bug that shipped -- the leaderboard queried it and silently returned
-  // nothing.
+  // 3: drop holder_position, which nothing writes; trades replace it.
   `
   DROP TABLE IF EXISTS holder_position;
   `,
-  // 4: the signature cursor keys on any address. Pool accounts are indexed
-  // alongside mints, because a mint's signature list is mostly transfers and
-  // account creations while a pool's is almost entirely trades.
+  // 4: key cursors on any address, since pools (mostly trades) are indexed too.
   `
   ALTER TABLE index_cursor RENAME COLUMN mint TO address;
   `,
-  // 5: authored strategies. Constituents live in their own table rather than
-  // a JSON column so a strategy can be found by what it holds -- "who else
-  // holds SpaceX" is a question the product asks constantly.
+  // 5: strategies, with constituents in their own table to query by holding.
   `
   CREATE TABLE strategy (
     id                TEXT    PRIMARY KEY,
@@ -125,44 +111,77 @@ const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX idx_constituent_symbol ON strategy_constituent (symbol);
   `,
-  // 6: snapshot timestamps in milliseconds.
-  //
-  // Seconds were too coarse in two ways. Two snapshots inside the same second
-  // collided on the unique taken_at, so the second silently overwrote the
-  // first's prices and the index level then chained against itself and
-  // flatlined for that interval. And a create response echoing an in-memory
-  // Date disagreed with every later read, because the stored value had lost
-  // its milliseconds.
+  // 6: snapshot timestamps in ms, so snapshots in one second stay distinct.
   `
   UPDATE market_snapshot SET taken_at = taken_at * 1000;
+  `,
+  // 7: profiles, follows, sessions (ms); sessions keep only a token hash.
+  `
+  CREATE TABLE profile (
+    wallet     TEXT    PRIMARY KEY,
+    name       TEXT    NOT NULL DEFAULT '',
+    -- Lowercase. Null until the wallet picks one; SQLite lets a unique
+    -- index hold any number of nulls.
+    handle     TEXT,
+    bio        TEXT    NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE UNIQUE INDEX idx_profile_handle ON profile (handle);
+
+  CREATE TABLE follow (
+    follower   TEXT    NOT NULL,
+    followee   TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (follower, followee)
+  );
+  CREATE INDEX idx_follow_followee ON follow (followee, created_at);
+
+  CREATE TABLE session (
+    token_hash TEXT    PRIMARY KEY,
+    wallet     TEXT    NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_session_wallet ON session (wallet);
+  `,
+  // 8: a unique proof per session so a signature signs in once; expiry index.
+  `
+  ALTER TABLE session ADD COLUMN proof TEXT;
+  CREATE UNIQUE INDEX idx_session_proof ON session (proof);
+  CREATE INDEX idx_session_expires ON session (expires_at);
+  `,
+  // 9: avatars, a preset or a small upload; no row means the default picture.
+  `
+  CREATE TABLE avatar (
+    wallet     TEXT    PRIMARY KEY,
+    kind       TEXT    NOT NULL CHECK (kind IN ('preset', 'upload')),
+    preset     INTEGER,
+    mime       TEXT,
+    bytes      BLOB,
+    updated_at INTEGER NOT NULL,
+    CHECK (
+      (kind = 'preset' AND preset IS NOT NULL AND bytes IS NULL AND mime IS NULL) OR
+      (kind = 'upload' AND preset IS NULL AND bytes IS NOT NULL AND mime IS NOT NULL)
+    )
+  );
   `,
 ];
 
 export function migrate(db: Database): number {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
-  // The API and the indexer both open this file and both run migrations at
-  // startup. Without a busy timeout, whichever loses the race to the write
-  // lock fails immediately with SQLITE_BUSY and that process dies at boot.
+  // The API and indexer both migrate this file at startup; without a busy
+  // timeout the loser of the write-lock race fails with SQLITE_BUSY.
   db.exec("PRAGMA busy_timeout = 5000");
 
   for (let version = 0; version < MIGRATIONS.length; version++) {
     const sql = MIGRATIONS[version];
     if (!sql) continue;
 
-    // The version is re-read INSIDE the transaction, and the transaction is
-    // IMMEDIATE so it takes the write lock before reading rather than
-    // upgrading afterwards.
-    //
-    // Reading the version once up front was a data-corrupting race. The API
-    // and the indexer both construct a Store against the same file and are
-    // started together, so both could read version 5, and both would then
-    // run migration 6 -- a non-idempotent UPDATE multiplying every timestamp
-    // by 1000. Applied twice it multiplies by a million, which puts every
-    // snapshot in the year 58661. Reproduced before this change.
-    //
-    // A migration that is already applied is skipped rather than failing:
-    // losing the race is normal, not an error.
+    // Read the version inside an IMMEDIATE transaction, which takes the write
+    // lock first, so two processes starting together cannot both apply a
+    // migration (6 is a non-idempotent UPDATE). The loser skips it.
     db.transaction(() => {
       const current = (db.query("PRAGMA user_version").get() as { user_version: number })
         .user_version;
