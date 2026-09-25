@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  FEE_CHANGE_WINDOW_SLOTS,
   UNCAPPED_FEE,
   calculateEpochFee,
   calculateFee,
   epochFee,
+  landingFeeBps,
   pendingFeeChange,
   postFeeAmount,
   preFeeAmount,
@@ -15,8 +17,8 @@ const ONE = 10_000n; // ONE_IN_BASIS_POINTS
 
 /**
  * The fixture from `test_transfer_fee_config()` in
- * spl-token-2022/interface/src/extension/transfer_fee/mod.rs. Keeping the same
- * numbers means these tests fail if our port ever drifts from the chain.
+ * spl-token-2022/interface/src/extension/transfer_fee/mod.rs, so any drift of
+ * the port from the chain fails here.
  */
 const OLDER_EPOCH = 1;
 const NEWER_EPOCH = 100;
@@ -25,7 +27,7 @@ const UPSTREAM: TransferFeeConfig = {
   newerTransferFee: { epoch: NEWER_EPOCH, maximumFee: 5_000n, transferFeeBasisPoints: 1 },
 };
 
-/** The live PreStocks schedule, read from mainnet on 2026-09-19. */
+/** A PreStocks fee schedule as read from mainnet. */
 const PRESTOCKS: TransferFeeConfig = {
   olderTransferFee: { epoch: 1032, maximumFee: UNCAPPED_FEE, transferFeeBasisPoints: 50 },
   newerTransferFee: { epoch: 1039, maximumFee: UNCAPPED_FEE, transferFeeBasisPoints: 100 },
@@ -45,8 +47,8 @@ describe("epochFee (port of get_epoch_fee)", () => {
   });
 
   test("PreStocks is still on 50 bps at epoch 1037", () => {
-    // The whole point of the port: reading newerTransferFee unconditionally
-    // would quote 100 bps here, double the live rate.
+    // Reading newerTransferFee unconditionally would quote 100 bps here,
+    // double the rate in force.
     expect(epochFee(PRESTOCKS, 1037).transferFeeBasisPoints).toBe(50);
     expect(epochFee(PRESTOCKS, 1038).transferFeeBasisPoints).toBe(50);
     expect(epochFee(PRESTOCKS, 1039).transferFeeBasisPoints).toBe(100);
@@ -147,5 +149,40 @@ describe("pendingFeeChange", () => {
       newerTransferFee: { epoch: 9, maximumFee: UNCAPPED_FEE, transferFeeBasisPoints: 50 },
     };
     expect(pendingFeeChange(flat, 1)).toBeNull();
+  });
+});
+
+describe("the fee a transaction built now pays when it lands", () => {
+  // A mainnet schedule: 1% until epoch 1043, then 3%.
+  const change = { toBps: 300, atEpoch: 1043 };
+
+  test("is the fee in force when nothing is scheduled", () => {
+    expect(landingFeeBps(100, null, { epoch: 1042, slotsLeft: 10 })).toBe(100);
+  });
+
+  test("is the fee in force while the change is more than the window away", () => {
+    expect(landingFeeBps(100, change, { epoch: 1042, slotsLeft: 227_083 })).toBe(100);
+    expect(landingFeeBps(100, change, { epoch: 1042, slotsLeft: FEE_CHANGE_WINDOW_SLOTS + 1 })).toBe(100);
+  });
+
+  test("is the new fee in the last minutes before the change", () => {
+    expect(landingFeeBps(100, change, { epoch: 1042, slotsLeft: FEE_CHANGE_WINDOW_SLOTS })).toBe(300);
+    expect(landingFeeBps(100, change, { epoch: 1042, slotsLeft: 40 })).toBe(300);
+  });
+
+  test("is the new fee once the cluster has passed the change, whatever the snapshot said", () => {
+    expect(landingFeeBps(100, change, { epoch: 1043, slotsLeft: 431_000 })).toBe(300);
+  });
+
+  test("assumes the higher fee when the cluster's position is unknown", () => {
+    expect(landingFeeBps(100, change, null)).toBe(300);
+  });
+
+  test("never allows for less than the fee in force when the fee is falling", () => {
+    expect(landingFeeBps(300, { toBps: 100, atEpoch: 1043 }, { epoch: 1042, slotsLeft: 10 })).toBe(300);
+  });
+
+  test("ignores a change two epochs out", () => {
+    expect(landingFeeBps(100, { toBps: 300, atEpoch: 1044 }, { epoch: 1042, slotsLeft: 10 })).toBe(100);
   });
 });

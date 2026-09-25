@@ -1,17 +1,8 @@
 /**
- * Token-2022 transfer-fee arithmetic.
- *
- * Ported from `spl-token-2022/interface/src/extension/transfer_fee/mod.rs`.
- * Two details are easy to get wrong and both change user-visible numbers:
- *
- *   1. The fee is a *ceiling* division, not a rounding or a floor.
- *   2. A mint carries two fee schedules. The newer one only applies once the
- *      cluster reaches its epoch; until then the older one is live. Reading
- *      `newerTransferFee` unconditionally is the common bug.
- *
- * PreStocks mints are mid-transition: `olderTransferFee` is 50 bps and
- * `newerTransferFee` is 100 bps from epoch 1039. Quoting 1% before that epoch
- * overstates the cost by 2x.
+ * Token-2022 transfer-fee arithmetic, ported from
+ * `spl-token-2022/interface/src/extension/transfer_fee/mod.rs`. The fee is a
+ * ceiling division, and of a mint's two schedules `newerTransferFee` applies
+ * only from its epoch; `olderTransferFee` is live until then.
  */
 
 const MAX_FEE_BASIS_POINTS = 10_000n;
@@ -99,11 +90,8 @@ export function calculateEpochFee(
 }
 
 /**
- * Describe a pending fee change, if one is scheduled.
- *
- * Surfacing this matters: a user sizing a trade today is quoted 50 bps, and the
- * same trade after epoch 1039 costs 100 bps. Returns `null` when the newer
- * schedule is already live or identical to the older one.
+ * Describe a scheduled fee change that is not yet live. Null when the newer
+ * schedule is already live or charges the same rate as the older one.
  */
 export function pendingFeeChange(
   config: TransferFeeConfig,
@@ -117,4 +105,30 @@ export function pendingFeeChange(
     toBps: newer.transferFeeBasisPoints,
     atEpoch: newer.epoch,
   };
+}
+
+/**
+ * How close to an epoch's end a scheduled fee change is allowed for: 3,000
+ * slots (about 20 minutes) covers a blockhash's ~150-block life plus slow
+ * signing, and is small against a two-day epoch.
+ */
+export const FEE_CHANGE_WINDOW_SLOTS = 3_000;
+
+/**
+ * The transfer fee, in basis points, a transaction built now may pay when it
+ * lands. The higher of the current and scheduled fees applies within
+ * `windowSlots` of a change due next epoch (the transaction may land after the
+ * boundary), once the change has passed, or when the clock is unknown.
+ */
+export function landingFeeBps(
+  inForceBps: number,
+  pending: { readonly toBps: number; readonly atEpoch: number } | null,
+  clock: { readonly epoch: number; readonly slotsLeft: number } | null,
+  windowSlots = FEE_CHANGE_WINDOW_SLOTS,
+): number {
+  if (!pending) return inForceBps;
+  const higher = Math.max(inForceBps, pending.toBps);
+  if (!clock || clock.epoch >= pending.atEpoch) return higher;
+  if (clock.epoch + 1 === pending.atEpoch && clock.slotsLeft <= windowSlots) return higher;
+  return inForceBps;
 }
