@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createApp } from "../src/index.ts";
+import { createApp } from "../src/app.ts";
 import { makeServices, type FakeOptions } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
@@ -124,7 +124,7 @@ describe("copy build", () => {
   });
 
   test("runs the same refusals as any other build", async () => {
-    // Follower has no USDC, so the copy must be refused exactly as an index
+    // The follower has no USDC, so the copy is refused exactly as an index
     // mirror would be.
     const res = await post(app({ ...leaderBook, usdcRaw: 0n }), "/api/copy/build", {
       leader: LEADER,
@@ -170,22 +170,15 @@ describe("copy build", () => {
 
 describe("preview matches build", () => {
   /**
-   * Regression for the worst bug found in review.
-   *
-   * Copy build passed the follower's existing holdings into the rebalancer
-   * alongside the capital, so the target became (existing + capital). A
-   * follower holding $5,000 elsewhere saw a preview promising $600 and $400
-   * and received a bundle selling $5,000 of an untouched position and buying
-   * $3,600 and $2,400 -- six times the size, liquidating a holding they had
-   * never agreed to sell, after approving the preview.
-   *
-   * The invariant that prevents it is proven in packages/core: deploying
-   * capital with no holdings yields exactly weight x capital in buys. Here
-   * we check the route never reports a sell-shaped refusal, which is what
-   * leaked holdings would produce.
+   * A copy spends only the new capital: the follower's existing holdings must
+   * never enter the rebalance, or the target becomes existing + capital and the
+   * bundle sells positions the follower never agreed to sell. The core
+   * invariant (no holdings in, exactly weight x capital in buys) is tested in
+   * packages/core; this checks the route never reports a sell-shaped refusal.
    */
   test("a copy of new capital never trips a sell-shaped refusal", async () => {
-    const a = app({ ...leaderBook, usdcRaw: 100_000_000_000n });
+    // quoteThrows makes every leg defer, so the reason is what is under test.
+    const a = app({ ...leaderBook, usdcRaw: 100_000_000_000n, quoteThrows: true });
     const res = await post(a, "/api/copy/build", {
       leader: LEADER,
       follower: FOLLOWER,
@@ -193,7 +186,7 @@ describe("preview matches build", () => {
     });
     const body = (await res.json()) as { problems?: { kind: string }[] };
 
-    // The fake cannot quote, so every leg defers and the build refuses --
+    // Nothing can be quoted, so every leg defers and the build refuses --
     // which is itself correct: nothing should be bundled that could not be
     // priced. What matters is the reason. Selling or non-atomicity would
     // mean the follower's holdings had leaked into the target.
@@ -204,7 +197,8 @@ describe("preview matches build", () => {
   });
 
   test("the preview is sized from capital alone", async () => {
-    const a = app({ ...leaderBook, usdcRaw: 100_000_000_000n });
+    // quoteThrows makes every leg defer, so the reason is what is under test.
+    const a = app({ ...leaderBook, usdcRaw: 100_000_000_000n, quoteThrows: true });
     const preview = (await (
       await post(a, "/api/copy/preview", { leader: LEADER, capitalUsd: 1_000 })
     ).json()) as { deployUsd: number; positions: { usd: number }[] };
@@ -248,5 +242,29 @@ describe("stop check", () => {
       stopLossFraction: 1,
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("copying a leader who holds outside their associated accounts", () => {
+  /*
+   * The copy target is the leader's whole book, not only the ATA balances a
+   * swap can spend: a wallet can hold most of its value in other accounts, and
+   * a follower buys fresh with its own USDC.
+   */
+  test("the copy follows the whole book, not the dust in the ATA", async () => {
+    const raw = (n: number) => BigInt(Math.round(n * 1e9));
+    const a = app({
+      // $1 of ANTHROPIC in the ATA...
+      balances: { ANTHROPIC: raw(0.01) },
+      // ...and $9,000 of KALSHI and $1,000 more ANTHROPIC elsewhere.
+      stray: { KALSHI: [raw(90)], ANTHROPIC: [raw(10)] },
+      priceUsd: { ANTHROPIC: 100, KALSHI: 100 },
+    });
+    const res = await post(a, "/api/copy/preview", { leader: LEADER, capitalUsd: 1_000 });
+    const body = (await res.json()) as { positions: { symbol: string; weight: number }[] };
+    const bySymbol = Object.fromEntries(body.positions.map((p) => [p.symbol, p.weight]));
+    // Built from the ATA alone this would be 100% ANTHROPIC.
+    expect(bySymbol["KALSHI"]).toBeCloseTo(0.9, 2);
+    expect(bySymbol["ANTHROPIC"]).toBeCloseTo(0.1, 2);
   });
 });

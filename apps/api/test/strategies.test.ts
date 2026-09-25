@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createApp } from "../src/index.ts";
-import { bodyDigest, canonicalMessage } from "../src/auth.ts";
+import { createApp } from "../src/app.ts";
+import { bodyDigest, canonicalMessage } from "../src/lib/auth.ts";
 import { TestWallet, makeServices } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
@@ -142,10 +142,8 @@ describe("creating strategies", () => {
 
 describe("authentication", () => {
   /**
-   * Before signatures, a caller asserted its own address. That was not a
-   * missing feature but forgery: anyone could publish a basket attributed to
-   * any wallet, and on a product that ranks traders by verified record a
-   * forged authorship destroys the record.
+   * Publishing requires a signature from the creator wallet; without it anyone
+   * could publish a basket attributed to any wallet and corrupt its record.
    */
   test("refuses to attribute a strategy to a wallet the caller cannot sign for", async () => {
     // Alice signs, but claims to be Bob.
@@ -301,7 +299,7 @@ describe("visibility and ownership", () => {
     };
     expect(byCreator.strategies).toHaveLength(0);
 
-    // Reading your own drafts requires proving the wallet is yours.
+    // Reading one's own drafts requires proving wallet ownership.
     const mine = (await (
       await send(a, "POST", "/api/strategies/mine", await signed(alice, "list-drafts", "mine", {}))
     ).json()) as { strategies: { id: string }[] };
@@ -375,23 +373,36 @@ describe("visibility and ownership", () => {
 
 describe("response consistency", () => {
   test("the create response equals a subsequent read", async () => {
-    // Timestamps persist to the second, so echoing the in-memory value gave
-    // the caller a createdAt that changed on the next fetch.
+    // Timestamps persist to the second, so the response must echo the stored
+    // value, not the in-memory one, or createdAt would change on the next fetch.
+    //
+    // Published, because an unpublished draft is 404 by id (see "a draft is not
+    // readable by id" below); the property holds either way.
+    const a = app();
+    const created = (await (
+      await send(a, "POST", "/api/strategies", await draft({ published: true }))
+    ).json()) as { id: string };
+    const fetched = await (await a.request(`/api/strategies/${created.id}`)).json();
+    expect(fetched).toEqual(created);
+  });
+
+  test("a draft is not readable by id, however consistent it would be", async () => {
+    // The access rule wins over the consistency rule: drafts are hidden from
+    // anyone holding an id, as they are on the list endpoint.
     const a = app();
     const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as {
       id: string;
+      published: boolean;
     };
-    const fetched = await (await a.request(`/api/strategies/${created.id}`)).json();
-    expect(fetched).toEqual(created);
+    expect(created.published).toBe(false);
+    expect((await a.request(`/api/strategies/${created.id}`)).status).toBe(404);
   });
 });
 
 describe("a published strategy can be bought", () => {
   /**
-   * The product's loop. Authoring and execution were built separately and
-   * never joined: a user could create a basket, publish it, and then find no
-   * way to buy it, because the mirror routes accepted only a system index id
-   * or inline weights and answered "unknown index" for a strategy id.
+   * A published strategy can be bought through the mirror routes by its id,
+   * not only system indexes and inline weights.
    */
   test("its id resolves as a mirror target", async () => {
     const a = app();
@@ -512,7 +523,6 @@ describe("retracting", () => {
   });
 });
 
-
 describe("overlap", () => {
   test("reveals concentration hidden across baskets", async () => {
     const a = app();
@@ -593,7 +603,9 @@ describe("drift", () => {
   test("reports whether a wallet has drifted past the strategy threshold", async () => {
     const a = app();
     const created = (await (
-      await send(a, "POST", "/api/strategies", await draft({ guardrails: { driftBps: 300 } }))
+      // Published: drift reports the target allocation, so it refuses a
+      // draft. The drift maths under test is the same either way.
+      await send(a, "POST", "/api/strategies", await draft({ guardrails: { driftBps: 300 }, published: true }))
     ).json()) as { id: string };
 
     const inside = (await (

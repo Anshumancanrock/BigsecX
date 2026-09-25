@@ -1,15 +1,7 @@
 /**
- * Copy routes.
- *
- * Copying mirrors a leader's current allocation, not their last transaction.
- * A leader spending $700 out of a $100,000 book moved 0.7% of their
- * portfolio; a follower with $1,000 copying the dollar amount would move 70%
- * of theirs. Weights make the relationship proportional at any size.
- *
- * Nothing is custodial. A preview computes target weights, a build returns
- * unsigned transactions, and the follower signs. Stopping needs no on-chain
- * action, because no standing authority was ever granted -- which is also
- * why there is no "stop" endpoint here: there is nothing to revoke.
+ * Copy routes. A follower copies the leader's current allocation by weight,
+ * so the copy is proportional at any size. Builds return unsigned
+ * transactions, and stopping needs no endpoint because no authority is granted.
  */
 
 import { Hono } from "hono";
@@ -20,19 +12,19 @@ import {
   type CopyLimits,
   type Weight,
 } from "@ps/core";
-import type { Services } from "./context.ts";
+import type { MarketSnapshot } from "@ps/market";
+import type { Services } from "../context.ts";
+import { buildForTarget } from "../lib/builds.ts";
+import { BadRequest, readJson, requireBase58Address, requireFiniteUsd, requireInt, toNumber } from "../lib/validate.ts";
 import { readPortfolio } from "./portfolio.ts";
-import { buildForTarget } from "./build-guards.ts";
-import { BadRequest, requireBase58Address, requireFiniteUsd, requireInt } from "./validate.ts";
 
 /** Matches the ceiling the copy domain enforces, against ~$2.6M of depth. */
 const MAX_COPY_CAPITAL_USD = 1_000_000;
-import type { MarketSnapshot } from "@ps/market";
 
 function parseLimits(body: Record<string, unknown>): CopyLimits {
   const fraction = (key: string, fallback: number): number => {
     if (body[key] === undefined || body[key] === null) return fallback;
-    const parsed = Number(body[key]);
+    const parsed = toNumber(body[key], key);
     if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
       throw new BadRequest(`${key} must be a fraction between 0 and 1`);
     }
@@ -46,9 +38,8 @@ function parseLimits(body: Record<string, unknown>): CopyLimits {
 
   const stopLossRaw = body["stopLossFraction"];
   const limits: CopyLimits = {
-    // Checked against the copy ceiling here rather than the generic deploy
-    // ceiling, so an oversized request is refused at the edge with one
-    // message instead of passing validation and failing later with another.
+    // The copy ceiling rather than the generic deploy ceiling, so an oversized
+    // copy is refused here with one clear message.
     capitalUsd: requireFiniteUsd(body["capitalUsd"], "capitalUsd", {
       min: 1,
       max: MAX_COPY_CAPITAL_USD,
@@ -76,8 +67,25 @@ async function leaderWeights(
   leader: string,
   snapshot: MarketSnapshot,
 ): Promise<{ readonly weights: Weight[]; readonly totalUsd: number; readonly unpriced: string[] }> {
-  const portfolio = await readPortfolio(services, leader, snapshot);
-  return { weights: portfolio.weights, totalUsd: portfolio.totalUsd, unpriced: portfolio.unpriced };
+  const portfolio = await readPortfolio(services, leader, snapshot, { includeStranded: true });
+
+  // The leader's whole book, including tokens outside the associated accounts:
+  // a follower buys fresh with USDC, so what matters is how the leader is
+  // allocated, not what a swap could spend.
+  const usdBySymbol = new Map<string, number>();
+  for (const p of portfolio.positions) {
+    if (p.valueUsd !== null) usdBySymbol.set(p.symbol, (usdBySymbol.get(p.symbol) ?? 0) + p.valueUsd);
+  }
+  for (const e of portfolio.elsewhere) {
+    if (e.valueUsd !== null) usdBySymbol.set(e.symbol, (usdBySymbol.get(e.symbol) ?? 0) + e.valueUsd);
+  }
+
+  const totalUsd = [...usdBySymbol.values()].reduce((sum, v) => sum + v, 0);
+  const weights =
+    totalUsd > 0
+      ? [...usdBySymbol].map(([symbol, usd]) => ({ symbol, weight: usd / totalUsd }))
+      : [];
+  return { weights, totalUsd, unpriced: portfolio.unpriced };
 }
 
 export function registerCopyRoutes(
@@ -86,11 +94,8 @@ export function registerCopyRoutes(
   market: () => Promise<MarketSnapshot>,
 ): void {
   /**
-   * What a follower would hold if they started copying now.
-   *
-   * Read-only and cheap, so it can be shown before a wallet is even
-   * connected. Every dropped position is named with its reason; a preview
-   * that quietly omits part of the leader's book is worse than no preview.
+   * What a follower would hold if they started copying now. Read-only; every
+   * position left out is named with its reason.
    */
   app.post("/api/copy/preview", async (c) => {
     const body = await readJson(c);
@@ -147,12 +152,7 @@ export function registerCopyRoutes(
     });
   });
 
-  /**
-   * Unsigned transactions that move a follower onto a leader's allocation.
-   *
-   * Runs the same refusals as every other build, so a copy cannot ship a
-   * bundle that mirroring an index would have rejected.
-   */
+  /** Unsigned transactions that buy the leader's allocation, with the same refusals as every other build. */
   app.post("/api/copy/build", async (c) => {
     const body = await readJson(c);
     const leader = requireBase58Address(body["leader"], "leader");
@@ -181,19 +181,9 @@ export function registerCopyRoutes(
       );
     }
 
-    // Deliberately no holdings.
-    //
-    // Copying with $1,000 deploys $1,000 into the leader's allocation. It is
-    // not a rebalance of everything the follower owns. Passing their existing
-    // positions here made planRebalance target (existing + capital), so a
-    // follower holding $5,000 elsewhere saw a preview promising $600 and
-    // $400 and got a bundle selling $5,000 of an untouched position and
-    // buying $3,600 and $2,400 -- six times the size, liquidating a holding
-    // they never agreed to sell, after they had already approved the
-    // preview.
-    //
-    // With no holdings, planRebalance produces exactly weight x deployUsd per
-    // leg, which is the preview by construction rather than by coincidence.
+    // No holdings: a copy deploys new capital into the leader's allocation and
+    // never rebalances the rest of the wallet. With none, planRebalance yields
+    // exactly weight x deployUsd per leg, which is what the preview shows.
     const outcome = await buildForTarget(services, {
       owner: follower,
       target: preview.targetWeights,
@@ -229,9 +219,8 @@ export function registerCopyRoutes(
       deferred: outcome.plan.deferred,
       totalUsd: outcome.plan.totalUsd,
       costFraction: outcome.plan.costFraction,
-      // Stated because it is the one thing a follower could reasonably get
-      // wrong: this adds a sleeve, it does not rebalance the whole wallet.
-      scope: "Deploys the stated capital into the leader's allocation. Existing holdings are left untouched.",
+      // Stated explicitly: a copy adds to the wallet and never rebalances it.
+      scope: "Buys the mix this trader holds right now, with the amount you chose. Nothing you already own is sold.",
       ...outcome.bundle,
       atomic: false,
       note:
@@ -241,12 +230,8 @@ export function registerCopyRoutes(
   });
 
   /**
-   * Whether a follower's drawdown has reached their stop.
-   *
-   * Stateless: the caller supplies the peak and current values it has been
-   * tracking. Keeping the running peak server-side would mean holding an
-   * authoritative record of somebody's balance, which this service
-   * deliberately does not do.
+   * Whether a follower's drawdown has reached their stop. Stateless: the
+   * caller tracks the peak, so the server keeps no record of anyone's balance.
    */
   app.post("/api/copy/stop-check", async (c) => {
     const body = await readJson(c);
@@ -256,7 +241,7 @@ export function registerCopyRoutes(
     const stopLossRaw = body["stopLossFraction"];
     let stopLossFraction: number | undefined;
     if (stopLossRaw !== undefined && stopLossRaw !== null) {
-      const parsed = Number(stopLossRaw);
+      const parsed = toNumber(stopLossRaw, "stopLossFraction");
       if (!Number.isFinite(parsed) || parsed <= 0 || parsed >= 1) {
         throw new BadRequest("stopLossFraction must be a fraction between 0 and 1");
       }
@@ -272,17 +257,4 @@ export function registerCopyRoutes(
         : "Continue.",
     });
   });
-}
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown>> {
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    throw new BadRequest("body must be valid JSON");
-  }
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new BadRequest("body must be a JSON object");
-  }
-  return body as Record<string, unknown>;
 }

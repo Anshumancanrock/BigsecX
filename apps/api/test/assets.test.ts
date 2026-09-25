@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createApp } from "../src/index.ts";
+import { createApp } from "../src/app.ts";
 import { makeServices, type FakeOptions } from "./fakes.ts";
 import type { Store } from "@ps/db";
 

@@ -1,15 +1,8 @@
 /**
- * Asset routes: everything known about one company.
- *
- * This is where the issuer's own statistics finally get used. PreStocks
- * publishes an undocumented `/api/stats` carrying 412 days of cumulative
- * volume and 60 weeks of holder counts per symbol -- the only long history
- * available for this market, and free. A market page without it shows price
- * and nothing about whether anyone is actually trading or holding.
- *
- * The series are reported as the issuer reports them, differenced into daily
- * figures, with the day in progress excluded from "latest" because a partial
- * day is not comparable with the full days beside it.
+ * Asset routes: price and activity per company. Activity comes from the
+ * issuer's undocumented `/api/stats` (cumulative volume by day, holders by
+ * week). It is optional: when it fails, `activityAvailable` is false and the
+ * activity fields are empty.
  */
 
 import { Hono } from "hono";
@@ -21,16 +14,11 @@ import {
   latestHolders,
   volumeSeries,
 } from "@ps/market";
-import type { Services } from "./context.ts";
-import { requireInt } from "./validate.ts";
+import type { Services } from "../context.ts";
+import { requireInt } from "../lib/validate.ts";
 import type { MarketSnapshot } from "@ps/market";
 
-/**
- * Issuer statistics, or nothing.
- *
- * The endpoint rate limits and is not essential to any price, so a failure
- * costs the activity columns and nothing else.
- */
+/** Issuer statistics, or null. The endpoint rate limits, and a failure should cost only the activity columns. */
 async function tryStats(services: Services) {
   try {
     return await services.issuer.stats();
@@ -54,8 +42,8 @@ export function registerAssetRoutes(
 
     return c.json({
       asOf: snapshot.takenAt.toISOString(),
-      // Said plainly, so an empty activity column reads as an upstream
-      // failure rather than as no trading.
+      // Lets a client show an empty activity column as an upstream failure,
+      // not as no trading.
       activityAvailable: stats !== null,
       assets: snapshot.tokens.map((t) => ({
         symbol: t.token.symbol,

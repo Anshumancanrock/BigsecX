@@ -1,15 +1,7 @@
 /**
- * Strategy routes: the creator side of the product.
- *
- * Authoring is separated from the market and mirror routes because it is the
- * only part of the API that writes durable state a user owns. Ownership is
- * enforced on every mutation: a strategy id is public, so nothing may be
- * changed or removed on the strength of knowing one.
- *
- * Mutations require a signature from the wallet they claim. Asserting an
- * address was not merely unauthenticated, it was forgeable: anyone could
- * publish a basket attributed to any wallet, and on a product that ranks
- * traders by verified record, forged authorship destroys the record.
+ * Strategy authoring: the only routes that write durable state a user owns.
+ * Every mutation needs a signature from the creator wallet, and update and
+ * delete also check ownership, since strategy ids are public.
  */
 
 import { Hono } from "hono";
@@ -25,21 +17,24 @@ import {
   type Weight,
 } from "@ps/core";
 import type { StrategyRow } from "@ps/db";
-import type { Services } from "./context.ts";
-import { authorize, bodyDigest, canonicalMessage, signatureRequired } from "./auth.ts";
-import { BadRequest, parseWeights, requireBase58Address, requireInt } from "./validate.ts";
+import type { Services } from "../context.ts";
+import { publicStrategy } from "../lib/access.ts";
+import { authorize, bodyDigest, canonicalMessage, signatureRequired } from "../lib/auth.ts";
+import {
+  BadRequest,
+  parseWeights,
+  readJson,
+  requireBase58Address,
+  requireInt,
+  sanitizeDisplayText,
+  toNumber,
+} from "../lib/validate.ts";
 
 const REBALANCE: readonly RebalanceFrequency[] = ["manual", "daily", "weekly", "monthly"];
 /** Nothing legitimate overlaps more baskets than this. */
 const MAX_OVERLAP_HOLDINGS = 32;
 
-/**
- * Identify the caller and prove it.
- *
- * The signature is bound to the action and the resource, so one authorising
- * a create cannot be lifted onto a delete, and one for another strategy
- * cannot be replayed here.
- */
+/** The creator wallet, once its signature over this action and resource is verified. */
 async function requireCreator(
   body: Record<string, unknown>,
   action: string,
@@ -99,7 +94,7 @@ function parseGuardrails(value: unknown): Partial<Guardrails> | undefined {
   const raw = value as Record<string, unknown>;
   const fraction = (key: string): number | undefined => {
     if (raw[key] === undefined || raw[key] === null) return undefined;
-    const parsed = Number(raw[key]);
+    const parsed = toNumber(raw[key], `guardrails.${key}`);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
       throw new BadRequest(`guardrails.${key} must be a fraction between 0 and 1`);
     }
@@ -132,12 +127,7 @@ function parseRebalance(value: unknown): RebalanceFrequency {
   return value as RebalanceFrequency;
 }
 
-/**
- * A url-safe id derived from the name, with a random suffix.
- *
- * Readable ids make shared links legible, and the suffix keeps two people
- * naming a basket "AI Index" from colliding.
- */
+/** A readable, url-safe id from the name, with a random suffix so equal names do not collide. */
 function strategyId(name: string): string {
   const slug = name
     .toLowerCase()
@@ -150,12 +140,8 @@ function strategyId(name: string): string {
 
 export function registerStrategyRoutes(app: Hono, services: Services): void {
   /**
-   * The exact message a wallet must sign.
-   *
-   * A POST because the signature covers the request body, so deriving the
-   * message needs that body. Served rather than documented: a client that
-   * derived it even slightly differently would get an opaque verification
-   * failure with nothing to debug.
+   * The exact message a wallet must sign. A POST because the message covers
+   * the request body; served so no client has to re-derive it.
    */
   app.post("/api/auth/message", async (c) => {
     const body = await readJson(c);
@@ -186,13 +172,7 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /**
-   * Published strategies, optionally narrowed to one creator.
-   *
-   * Drafts are never returned here. A wallet address is public, so filtering
-   * by creator cannot be what unlocks that wallet's unpublished work -- see
-   * /api/strategies/mine, which requires a signature.
-   */
+  /** Published strategies, optionally filtered by creator or holding. Drafts are listed only by /api/strategies/mine. */
   app.get("/api/strategies", (c) => {
     const creator = c.req.query("creator");
     const holding = c.req.query("holding");
@@ -206,12 +186,7 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     return c.json({ strategies: rows.map(toDto), scope: "published" });
   });
 
-  /**
-   * A creator's own strategies, drafts included.
-   *
-   * A POST because it carries a signature: reading your own unpublished work
-   * requires proving the wallet is yours.
-   */
+  /** A creator's own strategies, drafts included. A POST because it carries the creator's signature. */
   app.post("/api/strategies/mine", async (c) => {
     const body = await readJson(c);
     const creator = await requireCreator(body, "list-drafts", "mine");
@@ -221,8 +196,9 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     return c.json({ strategies: rows.map(toDto), scope: "creator" });
   });
 
+  /** One published strategy. A draft answers 404, the same as an unknown id. */
   app.get("/api/strategies/:id", (c) => {
-    const row = services.store.getStrategy(c.req.param("id"));
+    const row = publicStrategy(services.store, c.req.param("id"));
     if (!row) return c.json({ error: "unknown strategy" }, 404);
     return c.json(toDto(row));
   });
@@ -231,12 +207,14 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     const body = await readJson(c);
     const creator = await requireCreator(body, "create-strategy", "new");
 
-    // parseWeights rejects unknown symbols, duplicates and non-positive
-    // values before the domain sees them, so the domain reports allocation
-    // problems rather than typing mistakes.
+    // parseWeights rejects unknown symbols, duplicates and non-positive values
+    // first, so the domain reports allocation problems rather than typos.
     const constituents = parseWeights(body["weights"]);
-    const name = typeof body["name"] === "string" ? body["name"] : "";
-    const description = typeof body["description"] === "string" ? body["description"] : undefined;
+    // Sanitised before the length check, or a name of sixty zero-width
+    // characters would pass and render as nothing.
+    const name = typeof body["name"] === "string" ? sanitizeDisplayText(body["name"]) : "";
+    const description =
+      typeof body["description"] === "string" ? sanitizeDisplayText(body["description"]) : undefined;
 
     const guardrails = parseGuardrails(body["guardrails"]);
 
@@ -260,9 +238,8 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     }
 
     services.store.writeStrategy(toRow(strategy));
-    // Respond with what persisted, not with what was about to be persisted.
-    // Timestamps are stored to the second, so echoing the in-memory value
-    // would give the caller a createdAt that changes on the next read.
+    // Respond with the stored row: timestamps are stored to the second, so the
+    // in-memory value would differ from the next read.
     const saved = services.store.getStrategy(strategy.id);
     if (!saved) throw new Error(`strategy ${strategy.id} vanished after write`);
     return c.json(toDto(saved), 201);
@@ -279,12 +256,14 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     if (existing.creator !== creator) return c.json({ error: "not your strategy" }, 403);
 
     const constituents = parseWeights(body["weights"] ?? existing.weights);
-    const name = typeof body["name"] === "string" ? body["name"] : existing.name;
+    // Sanitised on update too, or a rename would bypass the check on create.
+    const name = typeof body["name"] === "string" ? sanitizeDisplayText(body["name"]) : existing.name;
     const description =
-      typeof body["description"] === "string" ? body["description"] : existing.description;
+      typeof body["description"] === "string"
+        ? sanitizeDisplayText(body["description"])
+        : existing.description;
 
-    // Guardrails the caller omits keep the values already stored, so a rename
-    // does not quietly drop the limits the author committed to.
+    // Omitted guardrails keep their stored values.
     const guardrails = parseGuardrails(body["guardrails"]) ?? {
       maxWeight: existing.maxWeight,
       minWeight: existing.minWeight,
@@ -306,8 +285,7 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
         {
           id,
           now: new Date(),
-          // An explicit boolean wins, so a creator can retract a basket.
-          // Or-ing with the stored value made publication permanent.
+          // An explicit boolean wins, so a creator can unpublish.
           published: typeof body["published"] === "boolean" ? body["published"] : existing.published,
         },
       );
@@ -316,7 +294,7 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
       throw error;
     }
 
-    // Creation time belongs to the original, not to this edit.
+    // Keep the original creation time.
     services.store.writeStrategy({ ...toRow(strategy), createdAt: existing.createdAt });
     const saved = services.store.getStrategy(id);
     if (!saved) throw new Error(`strategy ${id} vanished after write`);
@@ -335,21 +313,14 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     return c.json({ deleted: c.req.param("id") });
   });
 
-  /**
-   * Combined exposure across several strategies.
-   *
-   * Thematic baskets share constituents, so someone holding three is usually
-   * far more concentrated than they believe. This is the number that tells
-   * them.
-   */
+  /** Combined exposure across several published strategies, which often share constituents. */
   app.post("/api/strategies/overlap", async (c) => {
     const body = await readJson(c);
     const entries = body["holdings"];
     if (!Array.isArray(entries) || entries.length === 0) {
       throw new BadRequest("holdings must be a non-empty array of { strategyId, usd }");
     }
-    // Each entry costs a database read, and nothing legitimate needs more
-    // than a handful.
+    // Each entry costs a database read.
     if (entries.length > MAX_OVERLAP_HOLDINGS) {
       throw new BadRequest(`holdings must contain at most ${MAX_OVERLAP_HOLDINGS} entries`);
     }
@@ -358,11 +329,11 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     for (const entry of entries) {
       const { strategyId: id, usd } = (entry ?? {}) as { strategyId?: unknown; usd?: unknown };
       if (typeof id !== "string") throw new BadRequest("each holding needs a strategyId");
-      const amount = Number(usd);
+      const amount = toNumber(usd, `usd for ${id}`);
       if (!Number.isFinite(amount) || amount <= 0) {
         throw new BadRequest(`usd for ${id} must be a positive finite number`);
       }
-      const row = services.store.getStrategy(id);
+      const row = publicStrategy(services.store, id);
       if (!row) return c.json({ error: `unknown strategy ${id}` }, 404);
       resolved.push({ weights: row.weights, usd: amount, id: row.id, name: row.name });
     }
@@ -383,7 +354,8 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
   /** Whether a wallet's actual weights have drifted from a strategy. */
   app.post("/api/strategies/:id/drift", async (c) => {
     const body = await readJson(c);
-    const row = services.store.getStrategy(c.req.param("id"));
+    // The response includes the target weights, so a draft must not resolve here.
+    const row = publicStrategy(services.store, c.req.param("id"));
     if (!row) return c.json({ error: "unknown strategy" }, 404);
 
     const current = parseWeights(body["current"]);
@@ -400,17 +372,4 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
       current: normalized,
     });
   });
-}
-
-async function readJson(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown>> {
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    throw new BadRequest("body must be valid JSON");
-  }
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new BadRequest("body must be a JSON object");
-  }
-  return body as Record<string, unknown>;
 }
