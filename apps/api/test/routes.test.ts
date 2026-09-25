@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createApp } from "../src/index.ts";
+import { createApp } from "../src/app.ts";
 import { makeServices, type FakeOptions } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
@@ -33,6 +33,33 @@ describe("read endpoints", () => {
     const res = await app().app.request("/api/universe");
     const body = (await res.json()) as { tokens: unknown[] };
     expect(body.tokens).toHaveLength(8);
+  });
+
+  test("the day's change comes from our own price a day ago, not the aggregator's", async () => {
+    const { app: a, services } = app({ priceUsd: { OPENAI: 1_000 } });
+    services.store.writeSnapshot({
+      takenAt: new Date(Date.now() - 24 * 60 * 60_000),
+      epoch: 1038,
+      prices: [{ symbol: "OPENAI", marketUsd: 800, markUsd: 800, liquidityUsd: 1_000_000, multiplier: 1, transferFeeBps: 50 }],
+    });
+    const body = (await (await a.request("/api/market")).json()) as {
+      tokens: { symbol: string; marketUsd: number; change24hPct: number }[];
+    };
+    const openai = body.tokens.find((t) => t.symbol === "OPENAI")!;
+    expect(openai.change24hPct).toBeCloseTo((openai.marketUsd / 800 - 1) * 100, 6);
+  });
+
+  test("a snapshot too far from a day ago is not used for the day's change", async () => {
+    const { app: a, services } = app({ priceUsd: { OPENAI: 1_000 } });
+    const before = (await (await a.request("/api/market")).json()) as { tokens: { symbol: string; change24hPct: number }[] };
+    services.store.writeSnapshot({
+      takenAt: new Date(Date.now() - 3 * 24 * 60 * 60_000),
+      epoch: 1038,
+      prices: [{ symbol: "OPENAI", marketUsd: 1, markUsd: 1, liquidityUsd: 1_000_000, multiplier: 1, transferFeeBps: 50 }],
+    });
+    const after = (await (await a.request("/api/market")).json()) as { tokens: { symbol: string; change24hPct: number }[] };
+    const pick = (b: typeof before) => b.tokens.find((t) => t.symbol === "OPENAI")!.change24hPct;
+    expect(pick(after)).toBe(pick(before));
   });
 
   test("market reports prices, the active fee and the pending change", async () => {
@@ -129,7 +156,7 @@ describe("leaderboard over indexed trades", () => {
     expect(body.entries.map((e) => e.owner)).toEqual(["winner", "loser"]);
     expect(body.entries[0]?.pnlUsd).toBeCloseTo(5_000, 6);
     expect(body.entries[1]?.pnlUsd).toBeCloseTo(-10_000, 6);
-    // The loss is measured against capital committed, not against the closing
+    // The loss is measured against the capital committed, not the closing
     // balance, so it is -50% rather than -100%.
     expect(body.entries[1]?.returnFraction).toBeCloseTo(-0.5, 9);
     expect(body.caveats.length).toBeGreaterThan(0);
@@ -169,6 +196,31 @@ describe("leaderboard over indexed trades", () => {
     expect(shown.entries.map((e) => e.owner)).toContain("small");
   });
 
+  test("leaves out a wallet that no longer holds the position it built", async () => {
+    // Seen buying, then emptied out of the indexer's sight: the profit would be
+    // a position that no longer exists, with nothing to copy.
+    const gone = "BCXVQrYm7eDLfhJoof15Wy1SbxBXxxXtkPo7Qh7J3Ux8";
+    const { app: a, services } = app({ priceUsd: { OPENAI: 100 } });
+    services.store.writeTrades([
+      { signature: "g1", owner: gone, symbol: "OPENAI", slot: 10, blockTime: 1, deltaRaw: 1n, uiAmount: 10, valueUsd: 500 },
+    ]);
+    const body = (await (await a.request("/api/leaderboard")).json()) as { entries: unknown[]; caveats: string[] };
+    expect(body.entries).toEqual([]);
+    expect(body.caveats.some((c) => c.includes("no longer holds"))).toBe(true);
+  });
+
+  test("keeps a wallet that still holds it, and says what it holds on chain", async () => {
+    const still = "BCXVQrYm7eDLfhJoof15Wy1SbxBXxxXtkPo7Qh7J3Ux8";
+    const { app: a, services } = app({ priceUsd: { OPENAI: 100 }, balances: { OPENAI: 10_000_000_000_000n } });
+    services.store.writeTrades([
+      { signature: "k1", owner: still, symbol: "OPENAI", slot: 10, blockTime: 1, deltaRaw: 1n, uiAmount: 10, valueUsd: 500 },
+    ]);
+    const body = (await (await a.request("/api/leaderboard")).json()) as {
+      entries: { owner: string; held: string[] | null }[];
+    };
+    expect(body.entries.map((e) => e.owner)).toEqual([still]);
+    expect(body.entries[0]?.held).toContain("OPENAI");
+  });
 
   test("clamps a hostile window instead of failing", async () => {
     const { app: a, services } = app({ priceUsd: { OPENAI: 100 } });
@@ -208,20 +260,26 @@ describe("price truth", () => {
   });
 });
 
-
 describe("mirror/plan validation", () => {
   const cases: [string, unknown, string][] = [
     ["non-numeric deployUsd", { indexId: "prediction", deployUsd: "abc" }, "finite number"],
     ["negative deployUsd", { indexId: "prediction", deployUsd: -5_000 }, "at least 0"],
     ["absurd deployUsd", { indexId: "prediction", deployUsd: 1e30 }, "at most"],
     ["no capital and no holdings", { indexId: "prediction" }, "provide deployUsd"],
-    ["null weight", { weights: [{ symbol: "OPENAI", weight: null }], deployUsd: 100 }, "positive finite"],
+    // Two gates now: a type gate that refuses anything that is not a number,
+    // then the domain check that refuses numbers outside (0, inf).
+    ["null weight", { weights: [{ symbol: "OPENAI", weight: null }], deployUsd: 100 }, "must be a number"],
+    ["boolean weight", { weights: [{ symbol: "OPENAI", weight: true }], deployUsd: 100 }, "must be a number"],
+    ["negative weight", { weights: [{ symbol: "OPENAI", weight: -1 }], deployUsd: 100 }, "positive finite"],
+    ["zero weight", { weights: [{ symbol: "OPENAI", weight: 0 }], deployUsd: 100 }, "positive finite"],
     ["unknown symbol", { weights: [{ symbol: "NOPE", weight: 1 }], deployUsd: 100 }, "unknown symbol"],
     ["duplicate symbol", { weights: [{ symbol: "OPENAI", weight: 1 }, { symbol: "openai", weight: 1 }], deployUsd: 100 }, "duplicate"],
     ["empty weights", { weights: [], deployUsd: 100 }, "must not be empty"],
     ["unknown index", { indexId: "nope", deployUsd: 100 }, "unknown index"],
     ["neither target", {}, "provide indexId, strategyId or weights"],
-    ["holdings with a bad amount", { indexId: "pre8", holdings: [{ symbol: "OPENAI", uiAmount: -1 }] }, "non-negative"],
+    ["holdings with a bad amount", { indexId: "pre8", mode: "rebalance", holdings: [{ symbol: "OPENAI", uiAmount: -1 }] }, "non-negative"],
+    ["an unknown mode", { indexId: "pre8", mode: "swap", deployUsd: 100 }, "mode must be"],
+    ["a purchase with nothing to spend", { indexId: "pre8" }, "provide deployUsd"],
   ];
 
   for (const [name, body, expected] of cases) {
@@ -235,6 +293,7 @@ describe("mirror/plan validation", () => {
   test("rejects holdings sized in base units rather than shares", async () => {
     const res = await post(app().app, "/api/mirror/plan", {
       indexId: "pre8",
+      mode: "rebalance",
       holdings: [{ symbol: "OPENAI", uiAmount: 1e15 }],
     });
     expect(res.status).toBe(400);
@@ -295,6 +354,7 @@ describe("mirror/build guards", () => {
         weights: [{ symbol: "POLYMARKET", weight: 1 }],
         deployUsd: 0,
         owner: OWNER,
+        mode: "rebalance",
       },
     );
     expect(res.status).toBe(409);
@@ -321,6 +381,7 @@ describe("mirror/build guards", () => {
         weights: [{ symbol: "POLYMARKET", weight: 1 }],
         deployUsd: 3_000,
         owner: OWNER,
+        mode: "rebalance",
       },
     );
     expect(res.status).toBe(409);
@@ -368,6 +429,7 @@ describe("mirror/build guards", () => {
         weights: [{ symbol: "POLYMARKET", weight: 1 }],
         deployUsd: 1_000,
         owner: OWNER,
+        mode: "rebalance",
       },
     );
     expect(res.status).toBe(409);
@@ -377,9 +439,8 @@ describe("mirror/build guards", () => {
   });
 
   test("ignores holdings asserted in the request body", async () => {
-    // Holdings size every leg. An asserted figure is either a mistake or a
-    // lie: a fabricated position turns a simple purchase into a refused
-    // rebalance, and a real one the caller omitted would be ignored.
+    // Holdings size every leg, so they are read from chain: a fabricated
+    // position would turn a purchase into a refused rebalance.
     const res = await post(app({ usdcRaw: 100_000_000_000n }).app, "/api/mirror/build", {
       indexId: "prediction",
       deployUsd: 100,
@@ -393,10 +454,9 @@ describe("mirror/build guards", () => {
     }
   });
 
-
   test("refuses a basket containing a paused mint", async () => {
-    // The issuer holds pause authority on every mint. A paused mint is not
-    // merely illiquid; every swap touching it fails.
+    // The issuer holds pause authority on every mint; every swap touching a
+    // paused mint fails.
     const res = await post(app({ paused: ["SPACEX"] }).app, "/api/mirror/build", {
       weights: [{ symbol: "SPACEX", weight: 1 }],
       deployUsd: 1_000,
@@ -406,7 +466,6 @@ describe("mirror/build guards", () => {
     const body = (await res.json()) as { problems: { kind: string; symbols?: string[] }[] };
     expect(body.problems.find((p) => p.kind === "paused")?.symbols).toEqual(["SPACEX"]);
   });
-
 
   test("refuses when there is nothing to trade", async () => {
     const res = await post(app().app, "/api/mirror/build", {
@@ -421,18 +480,21 @@ describe("mirror/build guards", () => {
 
 describe("plan and build agree", () => {
   /**
-   * Regression. The planning endpoint resized legs for depth and impact and
-   * deferred the ones the pools could not absorb; the build endpoint then
-   * sent the raw unresized orders. A user saw "NEURALINK reduced, KALSHI
-   * deferred" and signed a bundle doing neither -- the entire execution
-   * policy existed only in the preview.
+   * The build endpoint applies the same depth and impact resizing as the plan
+   * endpoint, so the signed bundle does what the preview showed (a resized
+   * NEURALINK leg, a deferred KALSHI leg).
    */
   test("a build that can price nothing refuses rather than bundling raw orders", async () => {
-    const res = await post(app({ usdcRaw: 100_000_000_000n }).app, "/api/mirror/build", {
-      indexId: "prediction",
-      deployUsd: 1_000,
-      owner: "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL",
-    });
+    // quoteThrows makes the premise explicit: no leg can be quoted.
+    const res = await post(
+      app({ usdcRaw: 100_000_000_000n, quoteThrows: true }).app,
+      "/api/mirror/build",
+      {
+        indexId: "prediction",
+        deployUsd: 1_000,
+        owner: "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL",
+      },
+    );
     expect(res.status).toBe(409);
     const body = (await res.json()) as { problems: { kind: string; deferred?: unknown[] }[] };
     const problem = body.problems.find((p) => p.kind === "no-executable-legs");
@@ -442,12 +504,10 @@ describe("plan and build agree", () => {
   });
 });
 
-
 describe("failure handling", () => {
   test("a price-feed failure degrades instead of taking the API down", async () => {
-    // Every route depends on a snapshot. Letting a Jupiter 429 reject the
-    // whole call 500s the entire API on a cold cache -- the exact condition
-    // seen when the indexer died on a rate limit.
+    // Every route depends on a snapshot, so a Jupiter 429 must degrade rather
+    // than fail the whole API on a cold cache.
     const res = await app({ pricesThrow: true }).app.request("/api/market");
     expect(res.status).toBe(200);
 
