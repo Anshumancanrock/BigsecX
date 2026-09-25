@@ -138,7 +138,7 @@ export function Landing() {
 function Nav() {
   return (
     <nav className="nav" aria-label="Primary">
-      <a className="nav-mark" href="/" onClick={link("/")} aria-label="BasketX home">
+      <a className="nav-mark" href="/" onClick={link("/")} aria-label="Bigsec home">
         <Mark />
       </a>
       <div className="nav-links">
@@ -209,7 +209,7 @@ function Footer() {
   );
 }
 
-/** The BasketX mark: a basket as three stacked bars. */
+/** The Bigsec mark: three stacked bars. */
 function Mark({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">

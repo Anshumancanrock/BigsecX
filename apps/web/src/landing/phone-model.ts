@@ -180,7 +180,7 @@ export function fallbackFrames(): Map<Timeframe, Frame> {
   const target = normalise(balance, range);
   const frames = new Map<Timeframe, Frame>();
   for (const timeframe of TIMEFRAMES) {
-    const random = seeded(`basketx${timeframe}`);
+    const random = seeded(`bigsec${timeframe}`);
     const startAt = 0.15 + 0.15 * random();
     const points: number[] = [];
     let before = 0;

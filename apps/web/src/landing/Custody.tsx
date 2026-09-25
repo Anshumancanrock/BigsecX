@@ -21,7 +21,7 @@ export function CustodySection({ market }: { market: Market | null }) {
           </h2>
           <p className="cu-lead">
             Each trade is a Solana transaction that your own wallet signs, and the tokens go straight to your account.
-            BasketX builds and prices the transaction. It never sees your keys or holds your funds, so there is nothing
+            Bigsec builds and prices the transaction. It never sees your keys or holds your funds, so there is nothing
             with us to lose.
           </p>
           <ul className="cu-points">

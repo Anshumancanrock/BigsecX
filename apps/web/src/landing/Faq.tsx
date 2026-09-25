@@ -24,7 +24,7 @@ export function FaqSection({ market }: { market: Market | null }) {
 
   const items: readonly { q: string; a: string }[] = [
     {
-      q: "What is BasketX?",
+      q: "What is Bigsec?",
       a: "An app for buying tokenized pre-IPO companies on Solana, one at a time or as a basket, straight from your own wallet. It also ranks traders by their on-chain results and lets you follow or copy them.",
     },
     {
@@ -36,13 +36,13 @@ export function FaqSection({ market }: { market: Market | null }) {
       a: `${sentenceList(companies)}. Buy any of them on its own, in a ready-made basket such as the AI labs or space and defence, or in a basket you build yourself.`,
     },
     {
-      q: "Does BasketX hold my money?",
-      a: "No. Every trade is a Solana transaction that your wallet signs, and the tokens go straight to your own account. BasketX builds and relays the transaction, but it never holds your keys or your funds.",
+      q: "Does Bigsec hold my money?",
+      a: "No. Every trade is a Solana transaction that your wallet signs, and the tokens go straight to your own account. Bigsec builds and relays the transaction, but it never holds your keys or your funds.",
     },
     {
       q: "What does it cost?",
       a:
-        "BasketX adds no fee of its own. You pay the market price, the issuer's transfer fee" +
+        "Bigsec adds no fee of its own. You pay the market price, the issuer's transfer fee" +
         (feeBps === null ? "" : ` of ${percentOf(feeBps)}`) +
         (pending ? ` (rising to ${percentOf(pending.toBps)} from Solana epoch ${pending.atEpoch})` : "") +
         ", and Solana network costs, including a small refundable deposit for each new token account. The review screen shows the total before you sign.",

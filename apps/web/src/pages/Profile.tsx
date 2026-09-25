@@ -199,7 +199,7 @@ export function ProfilePage({ wallet, market }: { wallet: string; market: Market
   const share = async () => {
     // A username makes the nicer link; the address one always works.
     const url = `${window.location.origin}${p?.handle ? `/u/${p.handle}` : `/traders/${wallet}`}`;
-    const title = `${name} on BasketX`;
+    const title = `${name} on Bigsec`;
     try {
       if (navigator.share) {
         await navigator.share({ title, url });

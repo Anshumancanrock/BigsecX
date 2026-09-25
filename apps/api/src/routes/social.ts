@@ -33,7 +33,7 @@ const RESERVED = new Set([
   "admin",
   "administrator",
   "api",
-  "basketx",
+  "bigsec",
   "baskets",
   "help",
   "jupiter",
@@ -64,10 +64,10 @@ const RESERVED = new Set([
 ]);
 
 /**
- * Words no username may contain at all, because "basketx_support" and
+ * Words no username may contain at all, because "bigsec_support" and
  * "prestocks_official" impersonate as well as the bare word does.
  */
-const RESERVED_PARTS = ["basketx", "prestocks", "official", "support", "admin", "moderator"];
+const RESERVED_PARTS = ["bigsec", "prestocks", "official", "support", "admin", "moderator"];
 
 const HANDLE = /^[a-z0-9_]{3,20}$/;
 

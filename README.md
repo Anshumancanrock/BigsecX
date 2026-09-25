@@ -1,4 +1,4 @@
-# BasketX
+# Bigsec
 
 Non-custodial trading for [PreStocks](https://prestocks.com) tokenized pre-IPO
 equity on Solana. Buy a single company or a whole basket in one signature,
@@ -202,8 +202,8 @@ The `Dockerfile` builds the site while the image is built and runs all three
 processes in one container on `$PORT` (10000 by default):
 
 ```bash
-docker build -t basketx .
-docker run -p 10000:10000 -v basketx-data:/app/data basketx
+docker build -t bigsec .
+docker run -p 10000:10000 -v bigsec-data:/app/data bigsec
 ```
 
 Without a persistent volume the database starts empty on every restart: the

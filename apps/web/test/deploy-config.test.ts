@@ -16,9 +16,9 @@ describe("the built bundle and the served policy agree", () => {
   });
 
   test("a cross-origin API is named in the policy, or every request is refused", () => {
-    expect(connectSrc("https://api.basketx.app")).toBe("'self' https://api.basketx.app");
+    expect(connectSrc("https://api.bigsec.app")).toBe("'self' https://api.bigsec.app");
     // A path on the base must not leak into the policy; only the origin does.
-    expect(connectSrc("https://api.basketx.app/v1")).toBe("'self' https://api.basketx.app");
+    expect(connectSrc("https://api.bigsec.app/v1")).toBe("'self' https://api.bigsec.app");
     expect(connectSrc("http://localhost:3111")).toBe("'self' http://localhost:3111");
   });
 

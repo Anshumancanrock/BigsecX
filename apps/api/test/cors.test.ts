@@ -28,14 +28,14 @@ describe("cross-origin policy", () => {
   });
 
   test("a configured deployment admits only its own origins", async () => {
-    process.env["ALLOWED_ORIGINS"] = "https://basketx.app, https://www.basketx.app";
+    process.env["ALLOWED_ORIGINS"] = "https://bigsec.app, https://www.bigsec.app";
     const a = app();
 
-    const mine = await preflight(a, "https://basketx.app");
-    expect(mine.headers.get("access-control-allow-origin")).toBe("https://basketx.app");
+    const mine = await preflight(a, "https://bigsec.app");
+    expect(mine.headers.get("access-control-allow-origin")).toBe("https://bigsec.app");
 
-    const second = await preflight(a, "https://www.basketx.app");
-    expect(second.headers.get("access-control-allow-origin")).toBe("https://www.basketx.app");
+    const second = await preflight(a, "https://www.bigsec.app");
+    expect(second.headers.get("access-control-allow-origin")).toBe("https://www.bigsec.app");
 
     // The point of the allow-list: another site must not be able to drive
     // the build and submit routes from its visitors' browsers.

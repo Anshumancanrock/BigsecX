@@ -106,7 +106,7 @@ export function Home({ market }: { market: Market | null }) {
               </svg>
             </span>
             <span>
-              Welcome to <b>BasketX</b>
+              Welcome to <b>Bigsec</b>
             </span>
           </span>
         )}

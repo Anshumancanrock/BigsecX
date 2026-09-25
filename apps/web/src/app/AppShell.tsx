@@ -30,7 +30,7 @@ export function AppShell({ path }: { path: string }) {
 
   useEffect(() => {
     const section = titleFor(path);
-    document.title = section ? `${section} · BasketX` : "BasketX";
+    document.title = section ? `${section} · Bigsec` : "Bigsec";
   }, [path]);
 
   return (

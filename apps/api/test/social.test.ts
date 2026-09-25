@@ -155,7 +155,7 @@ describe("profiles", () => {
     for (const handle of ["ab", "has space", "dash-es", "x".repeat(21), "émile"]) {
       expect((await post(a, "/api/profile", { token, handle })).status).toBe(400);
     }
-    expect((await post(a, "/api/profile", { token, handle: "BasketX" })).status).toBe(400);
+    expect((await post(a, "/api/profile", { token, handle: "Bigsec" })).status).toBe(400);
   });
 
   test("a username belongs to one wallet, whatever its case", async () => {
@@ -322,7 +322,7 @@ describe("hardening", () => {
   test("usernames that impersonate the product or a company are refused", async () => {
     const { app: a } = app();
     const token = await signIn(a, new TestWallet());
-    for (const handle of ["basketx_support", "prestocks_official", "phantom_support", "openai", "SpaceX"]) {
+    for (const handle of ["bigsec_support", "prestocks_official", "phantom_support", "openai", "SpaceX"]) {
       expect((await post(a, "/api/profile", { token, handle })).status).toBe(400);
     }
     // A fan of a company is not the company.

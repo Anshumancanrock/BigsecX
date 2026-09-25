@@ -57,7 +57,7 @@ export function CustodyFigure() {
       <div className="custody-chain">
         <span className="custody-node">Your wallet</span>
         <span className="custody-link" aria-hidden="true" />
-        <span className="custody-node ghost">BasketX builds</span>
+        <span className="custody-node ghost">Bigsec builds</span>
         <span className="custody-link" aria-hidden="true" />
         <span className="custody-node">Your wallet</span>
       </div>

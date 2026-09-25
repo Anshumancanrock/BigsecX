@@ -1,7 +1,7 @@
 /**
  * The copy-trading section under the hero: a headline in a panel surrounded
  * by nine trade cards on slow orbits, the six behind the headline blurred.
- * The cards are illustrations; real wallets are on the leaderboard. BasketX
+ * The cards are illustrations; real wallets are on the leaderboard. Bigsec
  * trades spot tokens only, so every card is a Buy or a Sell.
  */
 

@@ -37,7 +37,7 @@ jobs:
           chmod +x /tmp/bun
           cd /home/site/wwwroot
           export PATH="/tmp:$PATH" SKIP_BUILD=1
-          export DATABASE_PATH="${DATABASE_PATH:-/tmp/basketx/prestocks.db}"
+          export DATABASE_PATH="${DATABASE_PATH:-/tmp/bigsec/prestocks.db}"
           exec bun run start
           EOF
           zip -qr ../release.zip . -x '.git/*'

@@ -79,7 +79,7 @@ export function Learn({ market }: { market: Market | null }) {
           , which also say who is allowed to buy them where you live.
         </p>
         <p className="note">
-          BasketX never holds your money. It prepares each trade; your wallet signs it; the tokens go straight into your
+          Bigsec never holds your money. It prepares each trade; your wallet signs it; the tokens go straight into your
           own wallet.
         </p>
       </section>
@@ -113,7 +113,7 @@ export function Learn({ market }: { market: Market | null }) {
           </span>
         </div>
         <div className="kv">
-          <span>BasketX</span>
+          <span>Bigsec</span>
           <span>Nothing</span>
         </div>
       </section>

@@ -71,7 +71,7 @@ function TopBar({ total }: { total: number | null }) {
   const [transfer, setTransfer] = useState(false);
   return (
     <header className="topbar">
-      <a className="topbar-brand" href="/" onClick={go("/")} aria-label="BasketX home">
+      <a className="topbar-brand" href="/" onClick={go("/")} aria-label="Bigsec home">
         <span className="topbar-mark" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
             <rect x="1" y="3" width="16" height="3" rx="1.5" fill="currentColor" />
@@ -79,7 +79,7 @@ function TopBar({ total }: { total: number | null }) {
             <rect x="1" y="12" width="6.5" height="3" rx="1.5" fill="currentColor" opacity="0.44" />
           </svg>
         </span>
-        <b>BasketX</b>
+        <b>Bigsec</b>
       </a>
       <div className="topbar-search">
         <SearchBox />

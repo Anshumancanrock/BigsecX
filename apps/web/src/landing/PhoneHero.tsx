@@ -158,7 +158,7 @@ export function PhoneHero({ market, indexes }: { market: Market | null; indexes:
 
       <div className="rise">
         <button className="phone-cta" onClick={() => navigate("/dashboard")}>
-          Open BasketX
+          Open Bigsec
         </button>
       </div>
     </div>
