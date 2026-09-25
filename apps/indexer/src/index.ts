@@ -2,12 +2,14 @@
  * Indexer entrypoint. Runs the job once, then on an interval.
  */
 
-import { Rpc } from "@ps/chain";
+import { PUBLIC_RPC_URLS, Rpc } from "@ps/chain";
 import { JupiterClient } from "@ps/market";
 import { Store } from "@ps/db";
 import { runJob } from "./job.ts";
 
-const RPC_URL = process.env["SOLANA_RPC_URL"] ?? "https://solana-rpc.publicnode.com";
+// The API's public RPCs in reverse order, so indexing load falls on the API's
+// fallback endpoint. Either still fails over to the other.
+const RPC_URL = process.env["SOLANA_RPC_URL"] ?? [...PUBLIC_RPC_URLS].reverse();
 const INTERVAL_MS = Number(process.env["INDEXER_INTERVAL_MS"] ?? 5 * 60_000);
 
 const rpc = new Rpc({ url: RPC_URL });
@@ -15,12 +17,8 @@ const jupiter = new JupiterClient();
 const store = new Store();
 
 /**
- * True while a pass is running.
- *
- * A pass took 143 seconds under rate limiting against a shorter interval, so
- * overlap is not theoretical. Two passes at once double the request pressure
- * that caused the slowness, and both read the same cursors before either
- * writes, so the second re-indexes the window the first is already handling.
+ * True while a pass is running. A rate-limited pass can outlast the interval,
+ * and overlapping passes would double the request load and re-read the same cursors.
  */
 let running = false;
 
@@ -43,8 +41,7 @@ async function tick(): Promise<void> {
         (result.tradeError ? ` · trades degraded: ${result.tradeError}` : ""),
     );
   } catch (error) {
-    // A failed tick must not kill the loop: upstreams rate limit, and the
-    // next run will pick up where this one left off.
+    // A failed pass must not stop the loop; the next one resumes from the stored cursors.
     console.error(`[${new Date().toISOString()}] job failed:`, (error as Error).message);
   } finally {
     running = false;
