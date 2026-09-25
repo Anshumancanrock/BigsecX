@@ -39,8 +39,7 @@ const group = (accountCount: number) => ({
 
 describe("compileAndMeasure", () => {
   test("measures a transaction that is over the wire limit instead of throwing", () => {
-    // web3.js serialize() encodes into a fixed 1232-byte buffer and throws
-    // past it; the packer has to know the real size to make a decision.
+    // web3.js serialize() throws past 1232 bytes; the real size is still needed.
     const measured = compileAndMeasure({
       payer: PAYER,
       blockhash: BLOCKHASH,
@@ -201,16 +200,8 @@ describe("instruction adapters", () => {
 });
 
 describe("setup instructions across a multi-transaction bundle", () => {
-  /**
-   * Regression test for a bug that shipped.
-   *
-   * Setup instructions were deduplicated across the whole bundle, so the
-   * "create the USDC destination account" instruction that every sell leg
-   * emits was kept in the first leg's group and dropped from the rest. Those
-   * groups pack into different transactions, so a wallet without a USDC
-   * account would have the first transaction create it and every later one
-   * fail against an account that did not exist yet.
-   */
+  // Every sell leg emits the same "create the USDC account" setup. Each
+  // transaction must keep its own copy, since an earlier one may not land.
   const SETUP_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
   const DESTINATION = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
@@ -269,14 +260,11 @@ describe("setup instructions across a multi-transaction bundle", () => {
 
 describe("sell coverage", () => {
   const balance = (uiAmount: number, frozen = false) =>
-    new Map([["OPENAI", { symbol: "OPENAI", uiAmount, rawAmount: 0n, frozen }]]);
+    new Map([["OPENAI", { symbol: "OPENAI", uiAmount, rawAmount: 0n, frozen, exists: true }]]);
   const prices = new Map([["OPENAI", 100]]);
 
   test("refuses a leg that exceeds the balance", () => {
-    // Regression: a one percent tolerance let a leg one percent over the
-    // balance through, and it then failed on chain with 0x1788 after the
-    // user had signed. A guard that permits the failure it exists to prevent
-    // is worse than none.
+    // A leg 1% over the balance fails on chain with 0x1788, so no percentage slack applies.
     const legs = [{ symbol: "OPENAI", side: "sell" as const, usd: 10_100 }];
     expect(findUncoveredSells(legs, balance(100), prices)).toHaveLength(1);
   });
@@ -287,8 +275,7 @@ describe("sell coverage", () => {
   });
 
   test("refuses a frozen account however much it reports", () => {
-    // The issuer holds freeze authority on every mint. A frozen account
-    // still reports its full balance.
+    // A frozen account still reports its full balance.
     const legs = [{ symbol: "OPENAI", side: "sell" as const, usd: 100 }];
     const result = findUncoveredSells(legs, balance(100, true), prices);
     expect(result).toHaveLength(1);
@@ -303,12 +290,8 @@ describe("sell coverage", () => {
 });
 
 describe("compute budget encoding", () => {
-  /**
-   * The budget instructions are substituted after packing, so their
-   * serialized size must not depend on the values chosen. If it did, a
-   * transaction measured as fitting could overflow once the real numbers
-   * went in.
-   */
+  // Budget instructions are substituted after packing, so their size must not
+  // depend on their values.
   test("budget instruction size is independent of its value", () => {
     const sizes = new Set<number>();
     for (const units of [1, 200_000, 1_400_000]) {
@@ -324,11 +307,7 @@ describe("compute budget encoding", () => {
   });
 
   test("a priority fee is decoded from its little-endian u64", () => {
-    // Regression: the fee was selected by comparing array lengths, which are
-    // equal for every leg, so the first leg's fee was applied to all of them.
-    // Three real legs quoted together returned 94,706, 911,344 and 532,844 --
-    // an order of magnitude apart, so the expensive routes shipped
-    // underpriced and would not land under congestion.
+    // Fees recommended for three real legs, an order of magnitude apart.
     for (const microLamports of [94_706, 911_344, 532_844]) {
       const data = Buffer.from(
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports }).data,

@@ -1,13 +1,7 @@
 /**
- * What a wallet can actually sell.
- *
- * Jupiter spends from the associated token account, not from whatever the
- * owner holds in total. Those differ: a market-maker wallet inspected on
- * mainnet held 133 ANTHROPIC spread over 49 accounts while its ATA held
- * 0.0001, and a sell built against the total failed with custom program error
- * 0x1788 -- insufficient balance in the source account.
- *
- * So sellable balance means the ATA balance, and nothing else.
+ * Wallet balances for trading. Jupiter spends only from the associated token
+ * account, so the sellable balance is the ATA balance; a sell above it fails
+ * with custom program error 0x1788. Tokens in other accounts are reported separately.
  */
 
 import { rawToUi, type ScaledUiAmountConfig } from "@ps/core";
@@ -21,10 +15,8 @@ import {
 import { PublicKey } from "@solana/web3.js";
 
 /**
- * Derive the associated token account for a Token-2022 mint.
- *
- * The token program id is part of the seeds, so passing the legacy program id
- * yields a different, wrong address.
+ * Associated token account address. The token program id is a seed, so it must
+ * be the mint's own program (Token-2022 by default).
  */
 export function associatedTokenAddress(
   owner: string,
@@ -53,22 +45,22 @@ export interface SellableBalance {
   readonly uiAmount: number;
   readonly rawAmount: bigint;
   /**
-   * True when the issuer has frozen this account.
-   *
-   * A frozen account still reports its full balance, so a coverage check that
-   * only compares amounts passes it and the swap fails on chain after the
-   * user has signed. The issuer holds freeze authority on every one of these
-   * mints, so this is a real state, not a theoretical one.
+   * True when the issuer has frozen this account. A frozen account still reports
+   * its full balance, so an amount check alone passes it. The issuer holds
+   * freeze authority on every PreStocks mint.
    */
   readonly frozen: boolean;
+  /**
+   * False when the ATA does not exist yet. A buy opens it, which costs a SOL
+   * rent deposit on top of the network fee.
+   */
+  readonly exists: boolean;
 }
 
 /**
- * Read the owner's sellable balance for every token in the universe.
- *
- * One `getMultipleAccounts` call covers all of them. Accounts that do not
- * exist come back null and are reported as a zero balance rather than being
- * omitted, so a caller can tell "holds nothing" from "was not checked".
+ * Reads the owner's ATA balance for every token in one `getMultipleAccounts`
+ * call. Missing accounts are reported as zero rather than omitted, so "holds
+ * nothing" is distinct from "not checked".
  */
 export async function getSellableBalances(
   rpc: { call: <T>(method: string, params?: unknown[]) => Promise<T> },
@@ -94,6 +86,7 @@ export async function getSellableBalances(
       symbol: token.symbol,
       rawAmount,
       frozen,
+      exists: account !== null && account !== undefined,
       uiAmount: scale
         ? rawToUi(rawAmount, token.decimals, scale, atUnixSeconds)
         : Number(rawAmount) / 10 ** token.decimals,
@@ -102,18 +95,81 @@ export async function getSellableBalances(
   return balances;
 }
 
+/** Tokens a wallet owns but that sit outside its associated token account. */
+export interface StrandedBalance {
+  readonly symbol: string;
+  readonly uiAmount: number;
+  readonly accounts: number;
+}
+
+/**
+ * PreStocks tokens the owner holds outside the ATA: owned, but not spendable by
+ * a swap. Disclosure only, so it returns an empty map on failure or timeout
+ * instead of throwing.
+ */
+export async function getStrandedBalances(
+  rpc: { call: <T>(method: string, params?: unknown[]) => Promise<T> },
+  owner: string,
+  scaleBySymbol: ReadonlyMap<string, ScaledUiAmountConfig>,
+  atUnixSeconds: number,
+  timeoutMs = 8_000,
+): Promise<Map<string, StrandedBalance>> {
+  const stranded = new Map<string, StrandedBalance>();
+  type Page = { value: { pubkey: string; account: ParsedTokenAccount }[] };
+  // One query per mint: filtering by token program returns every Token-2022
+  // account the wallet has, which can be tens of megabytes.
+  const calls = UNIVERSE.map((token) => ({
+    method: "getTokenAccountsByOwner",
+    params: [owner, { mint: token.mint }, { encoding: "jsonParsed" }],
+  }));
+  let pages: Page[];
+  try {
+    // Capped at timeoutMs: the RPC client's own retries run far longer, and no
+    // trade depends on this.
+    pages = await Promise.race([
+      // Separate calls, not a batch: publicnode allows one of these per batch
+      // and mainnet-beta rate limits an eight-item batch.
+      Promise.all(calls.map((c) => rpc.call<Page>(c.method, c.params))),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("stranded scan timed out")), timeoutMs)),
+    ]);
+  } catch {
+    return stranded;
+  }
+  const result: Page = { value: pages.flatMap((page) => (Array.isArray(page?.value) ? page.value : [])) };
+  if (!Array.isArray(result?.value)) return stranded;
+
+  const bySymbolRaw = new Map<string, { raw: bigint; accounts: number }>();
+  for (const entry of result.value) {
+    const info = entry?.account?.data?.parsed?.info as { mint?: string; tokenAmount?: { amount?: string } } | undefined;
+    const token = UNIVERSE.find((t) => t.mint === info?.mint);
+    if (!token || !info?.tokenAmount?.amount) continue;
+    // The ATA is already counted by the portfolio; only the rest is stranded.
+    if (entry.pubkey === associatedTokenAddress(owner, token.mint)) continue;
+
+    const raw = BigInt(info.tokenAmount.amount);
+    if (raw <= 0n) continue;
+    const prior = bySymbolRaw.get(token.symbol) ?? { raw: 0n, accounts: 0 };
+    bySymbolRaw.set(token.symbol, { raw: prior.raw + raw, accounts: prior.accounts + 1 });
+  }
+
+  for (const [symbol, { raw, accounts }] of bySymbolRaw) {
+    const token = UNIVERSE.find((t) => t.symbol === symbol)!;
+    const scale = scaleBySymbol.get(symbol);
+    stranded.set(symbol, {
+      symbol,
+      accounts,
+      uiAmount: scale ? rawToUi(raw, token.decimals, scale, atUnixSeconds) : Number(raw) / 10 ** token.decimals,
+    });
+  }
+  return stranded;
+}
+
 /** Legacy SPL token program, which is what USDC is minted under. */
 const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 /**
- * The stablecoin and lamport balances a buy leg spends.
- *
- * Sell legs were checked against the chain while buy legs were checked
- * against nothing, so a wallet with no USDC -- or with USDC but no SOL for
- * fees -- still received a signable bundle that could not land.
- *
- * USDC is a legacy SPL mint, so its associated account derives under a
- * different token program than the PreStocks ones.
+ * USDC and lamport balances, for checking that buy legs and fees are covered.
+ * USDC is a legacy SPL mint, so its ATA derives under the legacy token program.
  */
 export async function getSpendable(
   rpc: {
@@ -145,14 +201,8 @@ export interface SellCheck {
 }
 
 /**
- * Find sell legs the wallet cannot cover.
- *
- * The tolerance absorbs floating-point noise between valuing a position and
- * valuing the same position a moment later, nothing more. An earlier version
- * used one percent, which does not guard anything: it lets a leg sized one
- * percent above the balance through, and that leg then fails on chain with
- * 0x1788 after the user has signed. A guard that permits the failure it
- * exists to prevent is worse than none, because it reads as a check.
+ * Sell legs the wallet cannot cover. The tolerance only absorbs floating-point
+ * noise: any leg above the balance fails on chain with 0x1788 after signing.
  */
 export function findUncoveredSells(
   legs: readonly { readonly symbol: string; readonly side: "buy" | "sell"; readonly usd: number }[],
