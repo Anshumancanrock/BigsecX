@@ -1360,45 +1360,35 @@
 }
 
 .phone-sub {
-  margin-top: 8px;
+  max-width: 720px;
+  margin: 10px auto 0;
+  text-wrap: balance;
   font-size: 14px;
-  line-height: 20px;
-  color: rgb(0 0 0 / 0.5);
+  line-height: 26px;
+  color: rgb(0 0 0 / 0.55);
 }
 
-.phone-marks {
+/* Company logos inside the sentence, spaced so none covers another. */
+.phone-logos {
   display: inline-flex;
-  margin-right: 4px;
-  vertical-align: text-bottom;
+  gap: 3px;
+  margin: 0 5px 0 1px;
+  vertical-align: -4px;
 }
 
-.phone-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #111;
-  color: #fff;
-  font-size: 8.5px;
-  font-weight: 700;
-  box-shadow: 0 0 0 1px hsl(149 78% 84%);
-}
-
-/* Letters overlap by 4px, less than logos would: a letter with a covered edge
-   stops reading as itself. */
-.phone-mark + .phone-mark {
-  margin-left: -4px;
+.phone-logos .token-logo {
+  background: hsl(0 0% 100%);
+  box-shadow: 0 0 0 1.5px hsl(0 0% 100%);
 }
 
 .phone-sub-badge {
   display: inline-grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 4px;
+  width: 18px;
+  height: 18px;
+  margin: 0 5px 0 1px;
   border-radius: 50%;
-  vertical-align: text-bottom;
+  vertical-align: -4px;
 }
 
 .phone-sub-badge.up {
