@@ -8,3 +8,4 @@ export * from "./indexes.ts";
 export * from "./trader-pnl.ts";
 export * from "./strategy.ts";
 export * from "./copy.ts";
+export * from "./trader-books.ts";
