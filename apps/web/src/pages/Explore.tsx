@@ -14,7 +14,7 @@ import {
   type MarketToken,
 } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
-import { ago, list, pct, price, usd, usdCompact, displayName, signedMoney } from "../lib/format.ts";
+import { displayName, list, pct, price, signedMoney, usd, usdCompact } from "../lib/format.ts";
 import { basketSeries, firstValue, type HistoryTable } from "../lib/series.ts";
 import { navigate, go } from "../lib/router.ts";
 import { useWallet } from "../features/wallet/WalletContext.tsx";
@@ -65,14 +65,6 @@ export function Explore({ market }: { market: Market | null }) {
           <div>
             <dt>Companies</dt>
             <dd className="num">{tokens.length || "—"}</dd>
-          </div>
-          <div>
-            <dt>On offer</dt>
-            <dd className="num">{usdCompact(market?.totalLiquidityUsd ?? null)}</dd>
-          </div>
-          <div>
-            <dt>Prices</dt>
-            <dd>{market ? `Live · ${ago(market.takenAt)}` : "Loading"}</dd>
           </div>
         </dl>
       </header>

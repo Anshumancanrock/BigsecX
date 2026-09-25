@@ -40,7 +40,7 @@ export function AppShell({ path }: { path: string }) {
         <OwnAvatar />
         <div className={`app ${phone ? "is-phone" : "is-desk"}`}>
           <div className="app-glow" aria-hidden="true" />
-          {phone ? <TabBar path={path} /> : <DeskFrame path={path} market={market.data} error={market.error} />}
+          {phone ? <TabBar path={path} /> : <DeskFrame path={path} />}
           <div className="main">
             <div className="content">
               {market.error ? (

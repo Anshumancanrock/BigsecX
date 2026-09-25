@@ -372,59 +372,6 @@ body:has(.app.is-desk) {
   color: hsl(var(--up));
 }
 
-.sidenav-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid hsl(var(--d-line));
-  border-radius: 10px;
-  background: hsl(0 0% 0% / 0.015);
-}
-
-.sidenav-status i {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: hsl(0 0% 0% / 0.25);
-}
-
-.sidenav-status.live i {
-  background: hsl(var(--mint));
-  box-shadow: 0 0 0 3px hsl(var(--mint) / 0.2);
-}
-
-.sidenav-status.slow i {
-  background: hsl(38 92% 52%);
-  box-shadow: 0 0 0 3px hsl(38 92% 52% / 0.2);
-}
-
-.sidenav-status.bad i {
-  background: hsl(var(--down));
-  box-shadow: 0 0 0 3px hsl(var(--down) / 0.18);
-}
-
-.sidenav-status > span {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.3;
-}
-
-.sidenav-status b {
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.sidenav-status small {
-  overflow: hidden;
-  font-size: 11.5px;
-  color: hsl(var(--fg-muted));
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ======================================================= type and heads */
 
 .is-desk .page-head {
@@ -2737,19 +2684,6 @@ body:has(.app.is-desk) {
     display: none;
   }
 
-  .sidenav-status {
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border: 0;
-    background: none;
-  }
-
-  .sidenav-status > span {
-    display: none;
-  }
-
   .is-desk .content {
     padding: 22px 24px 80px;
   }
@@ -2859,11 +2793,6 @@ body:has(.app.is-desk) {
 
 .sidenav-item[aria-current="page"] svg {
   color: hsl(var(--d-mint-ink));
-}
-
-.sidenav-status.live {
-  border-color: hsl(var(--d-mint-line) / 0.7);
-  background: hsl(var(--d-mint-soft) / 0.6);
 }
 
 .is-desk .search {

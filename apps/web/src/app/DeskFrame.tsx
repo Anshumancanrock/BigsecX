@@ -4,8 +4,8 @@
  */
 
 import { useState } from "react";
-import { api, type Market, type Portfolio } from "../lib/api.ts";
-import { ago, list, usd } from "../lib/format.ts";
+import { api, type Portfolio } from "../lib/api.ts";
+import { list, usd } from "../lib/format.ts";
 import { useAsync } from "../lib/useAsync.ts";
 import { go } from "../lib/router.ts";
 import { SearchBox } from "../components/SearchBox.tsx";
@@ -46,7 +46,7 @@ const GROUPS: readonly { readonly label: string | null; readonly sections: reado
 ];
 
 /** The header and the sidebar, sharing one read of what the wallet holds. */
-export function DeskFrame({ path, market, error }: { path: string; market: Market | null; error: string | null }) {
+export function DeskFrame({ path }: { path: string }) {
   const wallet = useWallet();
   const portfolio = useAsync<Portfolio | null>(
     (signal) => (wallet.address ? api.portfolio(wallet.address, signal) : Promise.resolve(null)),
@@ -61,7 +61,7 @@ export function DeskFrame({ path, market, error }: { path: string; market: Marke
   return (
     <>
       <TopBar total={total} />
-      <SideBar path={path} market={market} error={error} />
+      <SideBar path={path} />
     </>
   );
 }
@@ -106,7 +106,7 @@ function TopBar({ total }: { total: number | null }) {
   );
 }
 
-function SideBar({ path, market, error }: { path: string; market: Market | null; error: string | null }) {
+function SideBar({ path }: { path: string }) {
   const wallet = useWallet();
   const mine = wallet.address ? `/traders/${wallet.address}` : null;
   const here = (section: Section) =>
@@ -147,48 +147,8 @@ function SideBar({ path, market, error }: { path: string; market: Market | null;
             <span>Search</span>
           </a>
         </div>
-        <PriceStatus market={market} error={error} />
       </div>
     </nav>
-  );
-}
-
-/** Older than this, the prices on screen are called delayed, not live. */
-const STALE_MS = 2 * 60_000;
-
-/**
- * Price feed status: green when live, amber when a source is slow or the
- * snapshot is minutes old (the server keeps serving its last good one while
- * an upstream is down), red when prices could not be loaded.
- */
-function PriceStatus({ market, error }: { market: Market | null; error: string | null }) {
-  const age = market ? Date.now() - Date.parse(market.takenAt) : 0;
-  const state = error
-    ? "bad"
-    : market?.degraded?.length || age > STALE_MS
-      ? "slow"
-      : market
-        ? "live"
-        : "wait";
-  const words =
-    state === "bad"
-      ? "Prices offline, retrying"
-      : state === "slow"
-        ? age > STALE_MS
-          ? "Prices delayed"
-          : "Some sources slow"
-        : state === "live"
-          ? "Prices live"
-          : "Loading prices";
-  const detail = market ? `${list(market.tokens).length} companies · updated ${ago(market.takenAt)}` : "Connecting to the market";
-  return (
-    <div className={`sidenav-status ${state}`} role="status" title={`${words}. ${detail}.`}>
-      <i aria-hidden="true" />
-      <span>
-        <b>{words}</b>
-        <small>{detail}</small>
-      </span>
-    </div>
   );
 }
 
