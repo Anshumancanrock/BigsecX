@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>BasketX — Own the private market, in one position</title>
+    <meta
+      name="description"
+      content="Thematic baskets of tokenized pre-IPO equity on Solana. Correct prices, depth-aware execution, non-custodial."
+    />
+    <meta name="theme-color" content="#fcfcfd" />
+
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700,800&display=swap"
+    />
+    <!-- Satoshi's variable cut, the one the landing phone is measured in. Fontshare drops it from a request that also asks for static weights, so it has its own. -->
+    <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=satoshi@1&display=swap" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+    <link rel="stylesheet" href="/main.css" />
+
+    <script>
+      /*
+       * Resolve the theme before first paint so a dark-mode visitor never sees
+       * a white flash. Reads an explicit choice first, falls back to the OS.
+       * Wrapped because storage throws in a locked-down browser context.
+       */
+      try {
+        var saved = localStorage.getItem("bx-theme");
+        var dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      } catch (_) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
