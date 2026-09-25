@@ -18,6 +18,7 @@ import {
   WeightsFigure,
 } from "./Figures.tsx";
 import { CustodySection } from "./Custody.tsx";
+import { FaqSection } from "./Faq.tsx";
 import { HighlightsSection } from "./Highlights.tsx";
 import { PhoneHero } from "./PhoneHero.tsx";
 import { TradersSection } from "./Traders.tsx";
@@ -114,6 +115,8 @@ export function Landing() {
             </p>
           </div>
         </section>
+
+        <FaqSection market={snapshot} />
 
         <section className="closer">
           <h2>
