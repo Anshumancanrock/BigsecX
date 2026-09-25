@@ -1,15 +1,8 @@
 /**
- * Turn a rebalance into an execution plan priced against live depth.
- *
- * The core module decides policy; this module pays for the information that
- * policy needs. Each leg is quoted at the size it would actually trade, judged
- * against depth and impact limits, and re-quoted once if it had to shrink.
- *
- * Cost is taken from the fill, not assembled from components. A mainnet
- * simulation established that Jupiter quotes NET of the Token-2022 transfer
- * fee, so the realized price already contains spread, impact and fee. Deriving
- * cost by comparing that price to a reference is both simpler and immune to
- * the double-counting an additive model invites.
+ * Prices a rebalance against live depth: each leg is quoted at its trade size,
+ * judged against depth and impact limits, and re-quoted once if it shrinks.
+ * Whether a Jupiter quote nets the Token-2022 transfer fee depends on the route,
+ * so the fee is taken off every quote (at worst one fee pessimistic).
  */
 
 import {
@@ -36,21 +29,16 @@ export interface PlanRequest {
   /** Reference price per UI share. Realized cost is measured against this. */
   readonly priceUsdBySymbol: ReadonlyMap<string, number>;
   /**
-   * Active ScaledUiAmount multiplier per symbol. Quote amounts are raw base
-   * units, so every conversion between shares and raw units needs this.
-   * Getting it wrong sells five times too much SPACEX.
+   * Active ScaledUiAmount multiplier per symbol, for converting between UI
+   * shares and the raw base units quotes use.
    */
   readonly scaleBySymbol: ReadonlyMap<string, number>;
-  /** Transfer fee in force this epoch, for disclosure. */
+  /** Transfer fee the legs pay when they land, in basis points. Taken off every quote. */
   readonly transferFeeBps: number;
   readonly limits?: ExecutionLimits;
   /**
-   * Route constraint, matched to the one the builder will use.
-   *
-   * Planning and building must price the same route or the cost shown is not
-   * the cost paid. Measured at demo sizes the constraint costs at most
-   * 0.003%, so matching it is free -- and it lets the builder reuse this
-   * quote instead of taking a second one per leg.
+   * Account cap per route. Must match the builder's, or the planned cost is for
+   * a different route than the one built.
    */
   readonly maxAccounts?: number;
 }
@@ -59,7 +47,7 @@ interface Probe {
   readonly impact: number;
   /** Price per UI share the quote implies, all-in. */
   readonly effectivePriceUsd: number;
-  /** Shares received, net of fee. Buys only; null for sells. */
+  /** Shares received, less the transfer fee. Buys only; null for sells. */
   readonly outUi: number | null;
 }
 
@@ -81,6 +69,8 @@ async function probeLeg(
   let quote: Quote;
   let effectivePriceUsd: number;
   let outUi: number | null = null;
+  // Fraction left after the transfer fee; every quote is treated as not netting it.
+  const afterFee = 1 - Math.min(Math.max(request.transferFeeBps, 0), 10_000) / 10_000;
 
   if (order.side === "buy") {
     quote = await jupiter.quote({
@@ -89,8 +79,8 @@ async function probeLeg(
       amount: BigInt(Math.round(usd * 10 ** USDC_DECIMALS)),
       ...(request.maxAccounts !== undefined ? { maxAccounts: request.maxAccounts } : {}),
     });
-    // outAmount is raw and net of fee; scale it to UI shares before pricing.
-    outUi = (Number(quote.outAmount) / 10 ** token.decimals) * multiplier;
+    // outAmount is raw; scale it to UI shares, less the fee, before pricing.
+    outUi = (Number(quote.outAmount) / 10 ** token.decimals) * multiplier * afterFee;
     if (outUi <= 0) throw new Error(`planner: ${order.symbol} quote returned nothing`);
     effectivePriceUsd = usd / outUi;
   } else {
@@ -107,7 +97,9 @@ async function probeLeg(
       amount: rawAmount > 0n ? rawAmount : 1n,
       ...(request.maxAccounts !== undefined ? { maxAccounts: request.maxAccounts } : {}),
     });
-    const proceedsUsd = Number(quote.outAmount) / 10 ** USDC_DECIMALS;
+    // The fee comes off the shares on their way into the pool, so the pool
+    // pays out on that much less.
+    const proceedsUsd = (Number(quote.outAmount) / 10 ** USDC_DECIMALS) * afterFee;
     if (uiAmount <= 0) throw new Error(`planner: ${order.symbol} sell size is zero`);
     effectivePriceUsd = proceedsUsd / uiAmount;
   }
@@ -116,10 +108,8 @@ async function probeLeg(
 }
 
 /**
- * Realized cost against the reference price, as a positive fraction.
- *
- * A buy above reference and a sell below it both cost the user, so the sign is
- * flipped for sells to keep "positive means worse".
+ * Realized cost against the reference price as a fraction, positive when worse
+ * for the user. Spread, impact and fee are all inside it, so none is added separately.
  */
 function costVsReference(
   side: RebalanceOrder["side"],
@@ -135,10 +125,12 @@ export async function buildExecutionPlan(
   request: PlanRequest,
 ): Promise<ExecutionPlan> {
   const limits = request.limits ?? DEFAULT_LIMITS;
-  const legs: PlannedLeg[] = [];
-  const deferred: { symbol: string; usd: number; reason: string }[] = [];
 
-  for (const order of request.orders) {
+  // Orders are planned concurrently: each is judged on its own quote alone, and
+  // results are collected in input order.
+  const planOrder = async (
+    order: RebalanceOrder,
+  ): Promise<{ leg?: PlannedLeg; deferred?: { symbol: string; usd: number; reason: string } }> => {
     const liquidityUsd = request.liquidityUsdBySymbol.get(order.symbol) ?? 0;
     const reference = request.priceUsdBySymbol.get(order.symbol);
 
@@ -146,37 +138,52 @@ export async function buildExecutionPlan(
     try {
       probe = await probeLeg(jupiter, order, order.usd, request);
     } catch (error) {
-      // A leg we cannot price is a leg we must not execute.
-      deferred.push({
-        symbol: order.symbol,
-        usd: order.usd,
-        reason: `could not quote: ${(error as Error).message}`,
-      });
-      continue;
+      // An unpriced leg is deferred, never executed.
+      return {
+        deferred: {
+          symbol: order.symbol,
+          usd: order.usd,
+          reason: `could not quote: ${(error as Error).message}`,
+        },
+      };
     }
 
     const verdict = judgeLeg(
       { symbol: order.symbol, usd: order.usd, priceImpact: probe.impact, liquidityUsd },
       limits,
     );
+    // An impact deferral means shrinking to the impact cap would go below the
+    // minimum ticket. Such an order proceeds at full size if it meets the minimum
+    // ticket and its impact is within the ceiling also used for a spread floor below.
+    const ceiling = (limits.maxFloorImpactBps ?? limits.maxImpactBps) / 10_000;
+    let floorNote: string | null = null;
     if (verdict.kind === "defer") {
-      deferred.push({ symbol: order.symbol, usd: order.usd, reason: verdict.reason });
-      continue;
+      if (verdict.cause !== "impact" || order.usd < limits.minTicketUsd || probe.impact > ceiling) {
+        return {
+          deferred: {
+            symbol: order.symbol,
+            usd: order.usd,
+            reason:
+              verdict.cause === "impact" && probe.impact > ceiling
+                ? `trading even $${limits.minTicketUsd} would cost ${(probe.impact * 100).toFixed(2)}% in price impact — more than the ${ceiling * 100}% we allow`
+                : verdict.reason,
+          },
+        };
+      }
+      floorNote = `${(probe.impact * 100).toFixed(2)}% price impact at the smallest size there is`;
     }
 
-    let usd = verdict.usd;
-    // The size the surviving probe was actually measured at. A depth recheck
-    // can shrink `usd` again after the last quote, and the share count has to
-    // be rescaled rather than reported at the stale size.
+    let usd = verdict.kind === "defer" ? order.usd : verdict.usd;
+    // Size the surviving probe was quoted at. A depth recheck can shrink `usd`
+    // after the last quote, and then the probe's share count no longer applies.
     let measuredAtUsd = order.usd;
-    let note: string | null = verdict.kind === "resize" ? verdict.reason : null;
+    let note: string | null = floorNote ?? (verdict.kind === "resize" ? verdict.reason : null);
 
     if (verdict.kind === "resize") {
       const original = probe;
       let measured: Probe | null = null;
       try {
-        // Re-quote so the reported numbers belong to the size we will send,
-        // rather than being extrapolated from the oversized probe.
+        // Re-quote so the reported figures are for the size that will be sent.
         measured = await probeLeg(jupiter, order, usd, request);
       } catch {
         note = `${verdict.reason} (impact estimated)`;
@@ -186,10 +193,18 @@ export async function buildExecutionPlan(
         const improved = measured.impact < original.impact * SPREAD_FLOOR_RATIO;
 
         if (!improved && verdict.cause === "impact") {
-          // Cutting the size did not cut the rate, so this is a bid-ask spread
-          // floor, not a depth limit. Shrinking cannot make the trade cheaper
-          // per dollar and would only skew the basket, so keep the intended
-          // size and disclose the cost instead of hiding it in a tiny position.
+          // A smaller size did not lower the rate, so this is a spread floor, not a
+          // depth limit. Keep the intended size and disclose the cost, unless the
+          // floor itself is above the ceiling.
+          if (original.impact > ceiling) {
+            return {
+              deferred: {
+                symbol: order.symbol,
+                usd: order.usd,
+                reason: `costs ${(original.impact * 100).toFixed(2)}% in price impact at any size right now — more than the ${ceiling * 100}% we allow`,
+              },
+            };
+          }
           usd = order.usd;
           probe = original;
           measuredAtUsd = order.usd;
@@ -202,31 +217,37 @@ export async function buildExecutionPlan(
             limits,
           );
           if (recheck.kind === "defer") {
-            deferred.push({ symbol: order.symbol, usd: order.usd, reason: recheck.reason });
-            continue;
+            return { deferred: { symbol: order.symbol, usd: order.usd, reason: recheck.reason } };
           }
-          // A second resize is honoured only for a hard depth cap. For impact
-          // we stop: the number reported is one we measured, and a third quote
-          // costs more rate limit than it is worth.
+          // Only a depth cap resizes a second time. A second impact resize would
+          // need a third quote for the reported impact to stay measured.
           if (recheck.kind === "resize" && recheck.cause === "depth") usd = recheck.usd;
         }
       }
     }
 
-    legs.push({
-      order,
-      usd,
-      priceImpact: probe.impact,
-      // Always a measured figure. If the leg moved after its last quote, the
-      // quote was retaken above or the estimate was dropped entirely.
-      expectedOutUi: measuredAtUsd === usd ? probe.outUi : null,
-      effectivePriceUsd: probe.effectivePriceUsd,
-      referencePriceUsd: reference ?? null,
-      costVsReference: costVsReference(order.side, probe.effectivePriceUsd, reference),
-      transferFeeUsd: transferFeeCostUsd(usd, request.transferFeeBps),
-      note,
-    });
-  }
+    return {
+      leg: {
+        order,
+        usd,
+        priceImpact: probe.impact,
+        // Null when the size changed after the last quote, so it is always measured.
+        expectedOutUi: measuredAtUsd === usd ? probe.outUi : null,
+        effectivePriceUsd: probe.effectivePriceUsd,
+        referencePriceUsd: reference ?? null,
+        costVsReference: costVsReference(order.side, probe.effectivePriceUsd, reference),
+        transferFeeUsd: transferFeeCostUsd(usd, request.transferFeeBps),
+        note,
+      },
+    };
+  };
 
+  const outcomes = await Promise.all(request.orders.map(planOrder));
+  const legs: PlannedLeg[] = [];
+  const deferred: { symbol: string; usd: number; reason: string }[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.leg) legs.push(outcome.leg);
+    if (outcome.deferred) deferred.push(outcome.deferred);
+  }
   return summarize(legs, deferred);
 }
