@@ -17,6 +17,7 @@ import {
   MoversFigure,
   WeightsFigure,
 } from "./Figures.tsx";
+import { CustodySection } from "./Custody.tsx";
 import { HighlightsSection } from "./Highlights.tsx";
 import { PhoneHero } from "./PhoneHero.tsx";
 import { TradersSection } from "./Traders.tsx";
@@ -48,6 +49,7 @@ export function Landing() {
       <main className="wrap">
         <TradersSection />
         <HighlightsSection market={snapshot} />
+        <CustodySection market={snapshot} />
 
         <section className="prose">
           <p>
