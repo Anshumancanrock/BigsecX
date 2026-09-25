@@ -1,0 +1,3002 @@
+/*
+ * Desktop layout. Same palette, green and features as the phone, set the way
+ * desktop trading apps are: a neutral page, white surfaces on hairline
+ * borders, 6 to 12px radii, flat buttons, Switzer at medium weights, and
+ * colour only where it carries meaning (green for actions and gains, red for
+ * losses).
+ *
+ * Everything is scoped to .is-desk, which AppShell sets when the phone
+ * layout is not in use. This file loads last, so its rules win at equal
+ * specificity.
+ */
+
+/* ================================================================ tokens */
+
+.app.is-desk {
+  --font-sans: Switzer, "Switzer Variable", Satoshi, system-ui, -apple-system, sans-serif;
+
+  --page: 0 0% 98%;
+  --d-line: 0 0% 0% / 0.085;
+  --d-line-strong: 0 0% 0% / 0.15;
+  --d-hover: 0 0% 0% / 0.035;
+  --d-well: 0 0% 0% / 0.045;
+  --d-shadow: 0 1px 2px rgb(0 0 0 / 0.035);
+  --d-shadow-hover: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.16);
+  --d-shadow-pop: 0 1px 3px rgb(0 0 0 / 0.06), 0 16px 40px -12px rgb(0 0 0 / 0.2);
+  --d-mint-hover: 130 46% 50%;
+
+  /* The glass, turned to plain white. */
+  --gl-fill: hsl(0 0% 100%);
+  --gl-fill-solid: hsl(0 0% 100%);
+  --gl-edge: hsl(var(--d-line));
+  --gl-blur: none;
+  --gl-shadow: var(--d-shadow);
+  --gl-sheen: none;
+  --gl-dark: hsl(0 0% 9%);
+  --gl-dark-shadow: none;
+
+  --r-card: 12px;
+  --r-lg: 12px;
+  --r-md: 10px;
+  --r-xl: 14px;
+  --r-tile: 10px;
+
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: 60px minmax(0, 1fr);
+  background: hsl(var(--page));
+  font-feature-settings: "ss01" 0;
+}
+
+body:has(.app.is-desk) {
+  background: hsl(0 0% 98%);
+}
+
+.is-desk .app-glow {
+  display: none;
+}
+
+.is-desk .main {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.is-desk .content {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 36px 88px;
+}
+
+.is-desk .toasts {
+  bottom: 28px;
+}
+
+.is-desk .num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================================================================ header */
+
+.is-desk .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0;
+  height: 60px;
+  padding: 0 20px 0 0;
+  border-bottom: 1px solid hsl(var(--d-line));
+  background: hsl(0 0% 100%);
+}
+
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding-left: 22px;
+  color: hsl(var(--fg));
+}
+
+.topbar-brand b {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.topbar-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: hsl(0 0% 9%);
+  color: #fff;
+}
+
+.topbar-search {
+  display: flex;
+  padding: 0 36px;
+}
+
+.is-desk .search {
+  width: 100%;
+  max-width: 440px;
+  height: 38px;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: hsl(var(--d-well));
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: hsl(var(--fg-muted));
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.is-desk .search:hover {
+  background: hsl(0 0% 0% / 0.06);
+}
+
+.is-desk .search:focus-within {
+  border-color: hsl(var(--d-line-strong));
+  background: hsl(0 0% 100%);
+  box-shadow: 0 0 0 3px hsl(0 0% 0% / 0.04);
+}
+
+.is-desk .search input {
+  font-size: 14px;
+  color: hsl(var(--fg));
+}
+
+.is-desk .search-key {
+  right: 9px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 5px;
+  background: hsl(0 0% 100%);
+  font-size: 11px;
+  color: hsl(var(--fg-muted));
+}
+
+.is-desk .search-menu {
+  top: calc(100% + 6px);
+  padding: 6px;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 12px;
+  background: hsl(0 0% 100%);
+  box-shadow: var(--d-shadow-pop);
+}
+
+.is-desk .search-row {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+.is-desk .search-row.active {
+  background: hsl(var(--d-hover));
+}
+
+.is-desk .topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 0 8px 0 0;
+  line-height: 1.2;
+  color: hsl(var(--fg));
+}
+
+.topbar-total small {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: hsl(var(--fg-muted));
+}
+
+.topbar-total b {
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.topbar-total:hover b {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.is-desk .topbar-deposit {
+  height: 36px;
+  gap: 6px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+/* The wallet: its avatar and address in a quiet pill. */
+.is-desk .profile {
+  height: 36px;
+  gap: 8px;
+  padding: 0 14px 0 4px;
+  border: 1px solid hsl(var(--d-line-strong));
+  border-radius: 999px;
+  background: hsl(0 0% 100%);
+  transition: background 0.15s;
+}
+
+.is-desk .profile:hover {
+  background: hsl(var(--d-hover));
+}
+
+.is-desk .profile .avatar {
+  width: 26px !important;
+  height: 26px !important;
+  border: 0;
+  border-radius: 50%;
+  font-size: 10.5px;
+  box-shadow: none;
+}
+
+.is-desk .profile-text b {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.is-desk .profile-text small {
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.is-desk .topbar-right .btn-mint {
+  height: 36px;
+  padding: 0 16px;
+}
+
+.is-desk .wallet-menu,
+.is-desk .popover {
+  top: calc(100% + 6px);
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 12px;
+  background: hsl(0 0% 100%);
+  box-shadow: var(--d-shadow-pop);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-desk .wallet-row,
+.is-desk .menu-row {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+}
+
+.is-desk .wallet-row:hover,
+.is-desk .menu-row:hover {
+  background: hsl(var(--d-hover));
+}
+
+/* =============================================================== sidebar */
+
+.sidenav {
+  position: sticky;
+  top: 60px;
+  z-index: 20;
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  height: calc(100svh - 60px);
+  padding: 16px 12px 14px;
+  overflow-y: auto;
+  border-right: 1px solid hsl(var(--d-line));
+  background: hsl(0 0% 100%);
+  scrollbar-width: none;
+}
+
+.sidenav-groups,
+.sidenav-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidenav-foot {
+  gap: 12px;
+}
+
+.sidenav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidenav-label {
+  padding: 0 10px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: hsl(var(--fg-faint));
+}
+
+.sidenav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(0 0% 0% / 0.64);
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sidenav-item svg {
+  flex: none;
+  color: hsl(0 0% 0% / 0.48);
+  transition: color 0.12s;
+}
+
+.sidenav-item:hover {
+  background: hsl(var(--d-hover));
+  color: hsl(var(--fg));
+}
+
+.sidenav-item:hover svg {
+  color: hsl(var(--fg));
+}
+
+.sidenav-item[aria-current="page"] {
+  background: hsl(0 0% 0% / 0.055);
+  color: hsl(var(--fg));
+  font-weight: 600;
+}
+
+.sidenav-item[aria-current="page"] svg {
+  color: hsl(var(--up));
+}
+
+.sidenav-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 10px;
+  background: hsl(0 0% 0% / 0.015);
+}
+
+.sidenav-status i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(0 0% 0% / 0.25);
+}
+
+.sidenav-status.live i {
+  background: hsl(var(--mint));
+  box-shadow: 0 0 0 3px hsl(var(--mint) / 0.2);
+}
+
+.sidenav-status.slow i {
+  background: hsl(38 92% 52%);
+  box-shadow: 0 0 0 3px hsl(38 92% 52% / 0.2);
+}
+
+.sidenav-status.bad i {
+  background: hsl(var(--down));
+  box-shadow: 0 0 0 3px hsl(var(--down) / 0.18);
+}
+
+.sidenav-status > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.sidenav-status b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.sidenav-status small {
+  overflow: hidden;
+  font-size: 11.5px;
+  color: hsl(var(--fg-muted));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ======================================================= type and heads */
+
+.is-desk .page-head {
+  align-items: flex-end;
+  margin: 0 0 22px;
+}
+
+.is-desk .page-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.is-desk .page-back {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.is-desk .lede {
+  max-width: 72ch;
+  margin: -10px 0 22px;
+  font-size: 14.5px;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+.is-desk .section-head {
+  margin: 32px 0 12px;
+}
+
+.is-desk .section-head h2,
+.is-desk .section-title,
+.is-desk .sub-head,
+.is-desk .card > h2 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.is-desk .card > h2 {
+  margin-bottom: 12px;
+}
+
+.is-desk .card-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.is-desk .eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.is-desk .note {
+  font-size: 13px;
+}
+
+.is-desk .hero-figure > span:first-child,
+.is-desk .balance-figure,
+.is-desk .price-big,
+.is-desk .stats .num {
+  font-weight: 600 !important;
+  letter-spacing: -0.03em;
+}
+
+/* ============================================================== surfaces */
+
+.is-desk .card,
+.is-desk .stock-card,
+.is-desk .tile,
+.is-desk .card-company,
+.is-desk .stats > span,
+.is-desk .profile-value,
+.is-desk .list-card,
+.is-desk .holding-tile,
+.is-desk .people-caveats,
+.is-desk .inline-picker,
+.is-desk .top3-card,
+.is-desk .find-group .rows,
+.is-desk .profile-positions .rows {
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 12px;
+  background: hsl(0 0% 100%);
+  box-shadow: var(--d-shadow);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-desk .card {
+  padding: 20px;
+}
+
+.is-desk .empty:not(.value-chart) {
+  border: 1px dashed hsl(var(--d-line-strong));
+  border-radius: 12px;
+  background: hsl(0 0% 100%);
+  box-shadow: none;
+}
+
+.is-desk .banner {
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+}
+
+.is-desk .shimmer {
+  border-radius: 12px;
+}
+
+/* =============================================================== buttons */
+
+.is-desk .btn-mint,
+.is-desk .btn-ghost {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.is-desk .btn-mint,
+.is-desk .btn-go {
+  border: 0;
+  background: hsl(var(--mint));
+  color: hsl(140 60% 7%);
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.1);
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.is-desk .btn-mint:hover:not(:disabled),
+.is-desk .btn-go:hover:not(:disabled) {
+  background: hsl(var(--d-mint-hover));
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.1);
+}
+
+.is-desk .btn-mint:active,
+.is-desk .btn-ghost:active,
+.is-desk .btn-go:active {
+  transform: none;
+}
+
+.is-desk .btn-mint:disabled,
+.is-desk .btn-go:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.is-desk .btn-go {
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.is-desk .btn-mint.sm,
+.is-desk .btn-ghost.sm {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.is-desk .btn-ghost,
+.is-desk .pill-btn,
+.is-desk .btn-soft,
+.is-desk .follow-btn.on,
+.is-desk .trade-max,
+.is-desk .sheet-close,
+.is-desk .round-btn:not(.glass),
+.is-desk .icon-btn {
+  border: 1px solid hsl(var(--d-line-strong));
+  background: hsl(0 0% 100%);
+  color: hsl(var(--fg));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.is-desk .btn-ghost:hover:not(:disabled),
+.is-desk .pill-btn:hover:not(:disabled),
+.is-desk .btn-soft:hover:not(:disabled),
+.is-desk .follow-btn.on:hover,
+.is-desk .trade-max:hover,
+.is-desk .sheet-close:hover,
+.is-desk .round-btn:not(.glass):hover,
+.is-desk .icon-btn:hover {
+  border-color: hsl(0 0% 0% / 0.22);
+  background: hsl(0 0% 98%);
+  color: hsl(var(--fg));
+}
+
+.is-desk .btn-ghost[aria-pressed="true"] {
+  border-color: hsl(var(--mint));
+}
+
+.is-desk .pill-btn {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.is-desk .btn-soft {
+  height: 44px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.is-desk .round-btn,
+.is-desk .icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.is-desk .round-btn:active,
+.is-desk .icon-btn:active {
+  transform: none;
+}
+
+.is-desk .round-btn.glass {
+  border-radius: 8px;
+}
+
+.is-desk .icon-btn.sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.is-desk .sheet-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.is-desk .dark-pill {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.is-desk .follow-btn {
+  height: 34px;
+  min-width: 84px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: hsl(0 0% 9%);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-desk .follow-btn:not(.on):hover {
+  background: hsl(0 0% 22%);
+}
+
+.is-desk .follow-btn:active {
+  transform: none;
+}
+
+.is-desk .follow-btn.sm {
+  height: 30px;
+  min-width: 76px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+.is-desk .follow-btn.icon,
+.is-desk .follow-btn.icon.on {
+  width: 32px;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.is-desk .follow-btn.icon:not(.on) {
+  border: 1px solid hsl(var(--d-line-strong));
+  background: hsl(0 0% 100%);
+  color: hsl(var(--fg));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.is-desk .follow-btn.icon:not(.on):hover {
+  background: hsl(0 0% 97%);
+}
+
+.is-desk .follow-btn.icon.on {
+  border: 0;
+  background: hsl(0 0% 9%);
+  color: #fff;
+}
+
+/* ====================================================== controls, chips */
+
+/* Segmented controls: a grey track and a white thumb, as in the web apps
+   people already use every day. */
+.is-desk .seg,
+.is-desk .seg.pill-seg {
+  gap: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 8px;
+  background: hsl(var(--d-well));
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-desk .seg button,
+.is-desk .seg.pill-seg button {
+  min-width: 0;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 550;
+  color: hsl(var(--fg-muted));
+}
+
+.is-desk .seg button:hover {
+  color: hsl(var(--fg));
+}
+
+.is-desk .seg button[aria-pressed="true"],
+.is-desk .seg.pill-seg button[aria-pressed="true"] {
+  background: hsl(0 0% 100%);
+  color: hsl(var(--fg));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 1px rgb(0 0 0 / 0.04);
+}
+
+.is-desk .seg.has-thumb button[aria-pressed="true"],
+.is-desk .seg.pill-seg.has-thumb button[aria-pressed="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+.is-desk .seg-thumb,
+.is-desk .seg.pill-seg .seg-thumb {
+  top: 2px;
+  bottom: 2px;
+  border-radius: 6px;
+  background: hsl(0 0% 100%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 1px rgb(0 0 0 / 0.04);
+}
+
+.is-desk .seg.pill-seg.small button {
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+
+.is-desk .seg.pill-seg.wide {
+  display: inline-flex;
+  width: auto;
+}
+
+.is-desk .seg.pill-seg.wide button {
+  flex: none;
+  padding: 6px 16px;
+  font-size: 13.5px;
+}
+
+.is-desk .chip {
+  border-radius: 6px;
+}
+
+.is-desk .flip-back .chip {
+  border-radius: 6px;
+}
+
+.is-desk .stat-chip {
+  height: 28px;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 6px;
+  background: hsl(0 0% 100%);
+  box-shadow: none;
+  font-size: 12.5px;
+  font-weight: 550;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-desk .stat-chip.rank {
+  border-color: hsl(42 80% 50% / 0.35);
+  background: hsl(45 95% 55% / 0.12);
+  color: hsl(35 80% 28%);
+}
+
+.is-desk .you-tag {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.is-desk .follows-you {
+  border-radius: 5px;
+}
+
+/* Fields. */
+.is-desk .field {
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--d-line-strong));
+  border-radius: 8px;
+  background: hsl(0 0% 100%);
+  font-size: 14px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.03);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.is-desk .field:focus {
+  border-color: hsl(var(--mint)) !important;
+  box-shadow: 0 0 0 3px hsl(var(--mint) / 0.2);
+}
+
+.is-desk .amount-field .field {
+  height: 52px;
+  padding-left: 30px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Tables. */
+.is-desk .table th {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 550;
+  color: hsl(var(--fg-muted));
+}
+
+.is-desk .glass-table thead th {
+  border-top: 0;
+  border-bottom: 1px solid hsl(var(--d-line));
+  background: hsl(0 0% 0% / 0.02);
+}
+
+.is-desk .glass-table thead th:first-child,
+.is-desk .glass-table thead th:last-child {
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
+}
+
+.is-desk .table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid hsl(0 0% 0% / 0.06);
+  font-size: 14px;
+}
+
+.is-desk .table tbody tr:hover td {
+  background: hsl(0 0% 0% / 0.02);
+}
+
+.is-desk .card.table-scroll {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.is-desk .cell-name b {
+  font-weight: 600;
+}
+
+.is-desk .kv {
+  padding: 10px 0;
+  font-size: 13.5px;
+}
+
+/* Popups: a white dialog on a dim page, not a frosted sheet. */
+.is-desk .sheet-backdrop {
+  background: rgb(10 10 10 / 0.36);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-desk .sheet {
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 14px;
+  background: hsl(0 0% 100%);
+  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.3);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  padding: 22px;
+}
+
+.is-desk .sheet-head {
+  margin-bottom: 16px;
+}
+
+.is-desk .sheet-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* ================================================================ explore */
+
+.ex {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.ex-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.ex-title h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.ex-title p {
+  margin-top: 4px;
+  font-size: 14px;
+  color: hsl(var(--fg-muted));
+}
+
+.ex-facts {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+
+.ex-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ex-facts dt {
+  font-size: 12px;
+  color: hsl(var(--fg-muted));
+}
+
+.ex-facts dd {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The prices, in a row that scrolls sideways when it does not fit. */
+.ex-strip {
+  display: grid;
+  grid-auto-columns: minmax(176px, 1fr);
+  grid-auto-flow: column;
+  gap: 10px;
+  margin: -12px 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+}
+
+.ex-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.ex-strip.ghost {
+  height: 58px;
+  border-radius: 10px;
+  background: hsl(var(--d-well));
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.ex-tick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 10px;
+  background: hsl(0 0% 100%);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ex-tick:hover {
+  border-color: hsl(var(--d-line-strong));
+  box-shadow: var(--d-shadow-hover);
+}
+
+.ex-tick-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.ex-tick-body b {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-tick-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.ex-tick-line > .num:first-child {
+  color: hsl(var(--fg-muted));
+}
+
+.ex-tick-line > .num + .num {
+  font-weight: 600;
+}
+
+/* The banner: dark, quiet, with live figures beside the words. */
+.ex-banner {
+  --chart-up: 135 58% 58%;
+  --chart-down: 3 88% 66%;
+
+  position: relative;
+  height: 316px;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    radial-gradient(55% 90% at 85% 0%, hsl(140 55% 45% / 0.28), transparent 70%),
+    radial-gradient(40% 70% at 100% 100%, hsl(170 60% 40% / 0.16), transparent 70%),
+    linear-gradient(135deg, hsl(150 12% 9%), hsl(160 10% 6%));
+  color: #fff;
+}
+
+/* A fine grid, fading out from the right, for texture. */
+.ex-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(hsl(0 0% 100% / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(0 0% 100% / 0.045) 1px, transparent 1px);
+  background-size: 36px 36px;
+  -webkit-mask-image: radial-gradient(70% 110% at 80% 40%, #000, transparent 75%);
+  mask-image: radial-gradient(70% 110% at 80% 40%, #000, transparent 75%);
+  pointer-events: none;
+}
+
+.ex-banner .up {
+  color: hsl(135 58% 64%);
+}
+
+.ex-banner .down {
+  color: hsl(3 90% 70%);
+}
+
+.ex-slide {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  align-items: center;
+  gap: 48px;
+  padding: 0 48px 28px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  /* The old slide leaves before the new one arrives, so two headlines are
+     never on the banner at once. */
+  transition: opacity 0.3s ease-out, visibility 0s linear 0.3s;
+}
+
+.ex-slide.on {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.45s ease-out 0.25s, visibility 0s;
+}
+
+.ex-slide-text,
+.ex-panel {
+  transform: translateY(6px);
+  transition: transform 0.6s var(--ease-out, ease-out) 0.25s;
+}
+
+.ex-slide.on .ex-slide-text,
+.ex-slide.on .ex-panel {
+  transform: none;
+}
+
+.ex-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(135 55% 66%);
+}
+
+.ex-slide-text h2 {
+  max-width: 24ch;
+  margin-top: 12px;
+  font-size: clamp(26px, 2.4vw, 33px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+.ex-slide-body {
+  max-width: 46ch;
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: hsl(0 0% 100% / 0.68);
+}
+
+.ex-slide-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.ex-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ex-btn.light {
+  background: hsl(0 0% 100%);
+  color: hsl(0 0% 9%);
+}
+
+.ex-btn.light:hover {
+  background: hsl(0 0% 90%);
+}
+
+.ex-btn.ghost {
+  border: 1px solid hsl(0 0% 100% / 0.2);
+  background: hsl(0 0% 100% / 0.04);
+  color: #fff;
+}
+
+.ex-btn.ghost:hover {
+  border-color: hsl(0 0% 100% / 0.36);
+  background: hsl(0 0% 100% / 0.08);
+}
+
+.ex-btn.outline {
+  border: 1px solid hsl(var(--d-line-strong));
+  background: hsl(0 0% 100%);
+  color: hsl(var(--fg));
+}
+
+.ex-btn.outline:hover {
+  border-color: hsl(0 0% 0% / 0.24);
+  background: hsl(0 0% 97%);
+}
+
+.ex-btn.small {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+/* The figures beside the words. */
+.ex-panel {
+  justify-self: end;
+  width: 100%;
+  max-width: 360px;
+  padding: 16px 18px;
+  border: 1px solid hsl(0 0% 100% / 0.09);
+  border-radius: 12px;
+  background: hsl(0 0% 100% / 0.045);
+}
+
+.ex-panel-label {
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.5);
+}
+
+.ex-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 0;
+  border-top: 1px solid hsl(0 0% 100% / 0.07);
+}
+
+.ex-panel-label + .ex-panel-row {
+  border-top: 0;
+}
+
+.ex-panel-row > b {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ex-panel-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.ex-panel-name b {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-panel-name small {
+  font-size: 12px;
+  color: hsl(0 0% 100% / 0.52);
+}
+
+.ex-panel-rank {
+  width: 12px;
+  font-size: 12.5px;
+  color: hsl(0 0% 100% / 0.45);
+}
+
+.ex-panel-row .face {
+  box-shadow: none;
+}
+
+.ex-panel-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ex-panel-figure b {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.ex-panel-figure small {
+  font-size: 13px;
+  color: hsl(0 0% 100% / 0.6);
+}
+
+.ex-panel-line {
+  height: 72px;
+  margin: 10px -4px 0;
+}
+
+.ex-panel-line .sparkline {
+  width: 100%;
+}
+
+.ex-panel-weight {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 0;
+}
+
+.ex-panel-weight > b {
+  width: 36px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.ex-panel-bar {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: hsl(0 0% 100% / 0.09);
+}
+
+.ex-panel-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: hsl(var(--mint));
+}
+
+.ex-dots {
+  position: absolute;
+  bottom: 22px;
+  left: 48px;
+  display: flex;
+  gap: 6px;
+}
+
+.ex-dots button {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: hsl(0 0% 100% / 0.28);
+  transition: width 0.3s var(--ease-out, ease-out), background 0.2s;
+}
+
+.ex-dots button:hover {
+  background: hsl(0 0% 100% / 0.5);
+}
+
+.ex-dots button.on {
+  width: 20px;
+  background: hsl(0 0% 100%);
+}
+
+/* Sections. */
+.ex-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ex-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.ex-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.ex-head-note {
+  overflow: hidden;
+  font-size: 13px;
+  color: hsl(var(--fg-muted));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-head > a {
+  margin-left: auto;
+  font-size: 13.5px;
+  font-weight: 550;
+  color: hsl(var(--fg-muted));
+  white-space: nowrap;
+}
+
+.ex-head > a::after {
+  content: " →";
+}
+
+.ex-head > a:hover {
+  color: hsl(var(--fg));
+}
+
+.ex-head .ex-tabs {
+  align-self: center;
+}
+
+.ex-tabs {
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: hsl(var(--d-well));
+}
+
+.ex-tabs button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 550;
+  color: hsl(var(--fg-muted));
+}
+
+.ex-tabs button:hover {
+  color: hsl(var(--fg));
+}
+
+.ex-tabs button.on {
+  background: hsl(0 0% 100%);
+  color: hsl(var(--fg));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 0 0 1px rgb(0 0 0 / 0.04);
+}
+
+.ex-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ex-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 12px;
+  background: hsl(0 0% 100%);
+  box-shadow: var(--d-shadow);
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ex-card:hover {
+  border-color: hsl(var(--d-line-strong));
+  box-shadow: var(--d-shadow-hover);
+}
+
+.ex-card.ghost {
+  height: 190px;
+  border: 0;
+  background: hsl(var(--d-well));
+  box-shadow: none;
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+/* A trader. */
+.ex-trader-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ex-trader-top .face {
+  box-shadow: none;
+}
+
+.ex-trader-id {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.ex-trader-id b {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-trader-id small {
+  overflow: hidden;
+  font-size: 12px;
+  color: hsl(var(--fg-muted));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-rank {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: hsl(var(--d-well));
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--fg-muted));
+}
+
+.ex-trader-return {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.ex-trader-return b {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.ex-trader-return small {
+  margin-top: 2px;
+  font-size: 12px;
+  color: hsl(var(--fg-muted));
+}
+
+.ex-trader-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12.5px;
+  color: hsl(var(--fg-muted));
+}
+
+.ex-trader-meta b {
+  margin-left: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--fg));
+}
+
+.ex-trader-meta b.up {
+  color: hsl(var(--up));
+}
+
+.ex-trader-meta b.down {
+  color: hsl(var(--down));
+}
+
+.ex-trader-foot {
+  display: flex;
+  align-items: center;
+  min-height: 31px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid hsl(0 0% 0% / 0.06);
+  font-size: 12.5px;
+}
+
+/* A basket: its cover across the top, flush with the card's edges. */
+.ex-card.ex-basket {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ex-basket-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px 0;
+}
+
+.ex-basket-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.ex-basket p {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.5;
+  color: hsl(var(--fg-muted));
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ex-basket-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: auto 16px 0;
+  padding: 12px 0 14px;
+  border-top: 1px solid hsl(0 0% 0% / 0.06);
+}
+
+.ex-basket-foot b {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.ex-basket-foot small {
+  font-size: 12.5px;
+  color: hsl(var(--fg-muted));
+}
+
+.ex-basket-foot .ex-basket-count {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* The companies table. */
+.ex-table {
+  overflow: hidden;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 12px;
+  background: hsl(0 0% 100%);
+  box-shadow: var(--d-shadow);
+}
+
+.ex-table .rows {
+  padding: 6px 16px;
+}
+
+.ex-table .positions-empty {
+  padding: 28px 16px;
+  text-align: center;
+}
+
+.dh-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dh-table th {
+  padding: 10px 16px;
+  border-bottom: 1px solid hsl(var(--d-line));
+  background: hsl(0 0% 0% / 0.02);
+  font-size: 12px;
+  font-weight: 550;
+  text-align: left;
+  color: hsl(var(--fg-muted));
+  white-space: nowrap;
+}
+
+.dh-table td {
+  padding: 11px 16px;
+  border-bottom: 1px solid hsl(0 0% 0% / 0.06);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.dh-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.dh-table tr.clickable {
+  cursor: pointer;
+}
+
+.dh-table tbody tr:hover td {
+  background: hsl(0 0% 0% / 0.02);
+}
+
+.dh-table .num-col {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dh-table td.num-col {
+  font-weight: 550;
+}
+
+.dh-table .spark-col {
+  width: 140px;
+}
+
+.dh-table .spark-col .sparkline {
+  width: 124px;
+}
+
+.dh-table .action-col {
+  width: 84px;
+  text-align: right;
+}
+
+.dh-company {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+}
+
+.dh-company > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.dh-company b {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.dh-company small {
+  font-size: 12px;
+  color: hsl(var(--fg-muted));
+}
+
+/* ============================================================== companies */
+
+/* Every card already shows its price and move; a ticker above them says
+   it all twice. */
+.is-desk .tape {
+  display: none;
+}
+
+.is-desk .stock-grid {
+  gap: 14px;
+  margin-top: 0;
+}
+
+.is-desk .flip-inner {
+  height: 214px;
+}
+
+.is-desk .stock-card {
+  padding: 16px 16px 0;
+}
+
+.is-desk .flip-back.stock-card {
+  padding-bottom: 16px;
+}
+
+.is-desk .flip:not(.flipped) button.stock-card:hover {
+  border-color: hsl(var(--d-line-strong));
+  box-shadow: var(--d-shadow-hover);
+  transform: none;
+}
+
+.is-desk .stock-name b {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.is-desk .stock-name small {
+  font-size: 12px;
+}
+
+.is-desk .stock-price b {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.is-desk .stock-price small {
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+.is-desk .stock-line {
+  margin: auto -16px 0;
+}
+
+.is-desk .stock-cta {
+  min-height: 38px;
+}
+
+/* ========================================================== company page */
+
+.is-desk .asset-head {
+  gap: 16px;
+  margin: 2px 0 22px;
+}
+
+.is-desk .asset-title h1 {
+  gap: 8px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.is-desk .asset-title p {
+  margin-top: 4px;
+  font-size: 13.5px;
+}
+
+.is-desk .asset-price b {
+  font-size: 32px;
+  font-weight: 600 !important;
+  letter-spacing: -0.03em;
+}
+
+.is-desk .asset-price small {
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.is-desk .asset-grid {
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+}
+
+.is-desk .asset-holdings {
+  margin: 28px 0 8px;
+}
+
+.is-desk .holding-tiles {
+  gap: 14px;
+}
+
+.is-desk .holding-tile {
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.is-desk .holding-tile span {
+  font-size: 12.5px;
+}
+
+.is-desk .holding-tile b {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.is-desk .company-grid {
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* The order panel. */
+.is-desk .trade-panel {
+  gap: 12px;
+}
+
+.is-desk .trade-tabs {
+  display: flex;
+  align-self: stretch;
+}
+
+.is-desk .trade-tabs button {
+  flex: 1;
+  padding: 7px 12px;
+  font-size: 13.5px;
+}
+
+.is-desk .trade-amount {
+  margin-top: 10px;
+}
+
+.is-desk .trade-currency,
+.is-desk .trade-input input {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.is-desk .trade-unit {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.is-desk .trade-max {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.is-desk .trade-go {
+  min-height: 44px;
+  margin-top: 4px;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+/* A scheduled fee change is a notice, not an error. */
+.is-desk .trade-fee-change,
+.is-desk .learn .note.down {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid hsl(38 90% 45% / 0.28);
+  border-radius: 8px;
+  background: hsl(42 95% 55% / 0.1);
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.45;
+  text-align: left;
+  color: hsl(28 80% 30%);
+}
+
+/* ================================================================ baskets */
+
+.is-desk .grid {
+  gap: 14px;
+}
+
+.is-desk .tile {
+  gap: 16px;
+  padding: 18px;
+}
+
+.is-desk .tile:hover {
+  border-color: hsl(var(--d-line-strong));
+  box-shadow: var(--d-shadow-hover);
+  transform: none;
+}
+
+.is-desk .tile.basket-tile {
+  gap: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.is-desk .basket-body {
+  padding: 16px 18px 0;
+}
+
+.is-desk .basket-foot {
+  padding: 14px 18px 18px;
+}
+
+/* A basket's own page: the cover beside the description and the facts. */
+.is-desk .basket-hero {
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  align-items: center;
+  gap: 28px;
+  margin: -4px 0 24px;
+}
+
+.is-desk .basket-hero .basket-cover {
+  border-radius: 12px;
+  box-shadow: var(--d-shadow);
+}
+
+@media (max-width: 1023px) {
+  .is-desk .basket-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+.is-desk .tile-name {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.is-desk .tile-figure {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.is-desk .tile-cta {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.is-desk .stack {
+  height: 6px;
+}
+
+/* ================================================================== learn */
+
+.is-desk .learn-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.is-desk .learn-steps b,
+.is-desk .learn-risks b {
+  font-weight: 600;
+}
+
+.is-desk .faq summary {
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+/* ================================================================ traders */
+
+.is-desk .people-page {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 16px;
+  padding-top: 0;
+}
+
+.is-desk .people-page > * {
+  grid-column: 1 / -1;
+}
+
+.is-desk .people-page > .seg.wide {
+  grid-column: 1;
+}
+
+.is-desk .people-page > .people-controls {
+  grid-column: 2;
+  justify-self: end;
+  gap: 10px;
+  margin: 0;
+}
+
+.is-desk .people-head {
+  padding: 0 0 20px;
+}
+
+.is-desk .people-head h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.is-desk .people-head p {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+/* The top three, as three even cards: place, person, figure. */
+.is-desk .top3 {
+  gap: 14px;
+  margin: 18px 0 0;
+}
+
+.is-desk .top3-card {
+  position: relative;
+  flex-direction: row;
+  align-items: stretch;
+  padding: 16px;
+}
+
+.is-desk .top3-card.ghost {
+  height: 176px;
+  border: 0;
+  background: hsl(var(--d-well));
+  box-shadow: none;
+}
+
+.is-desk .top3-person {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-content: start;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding-right: 84px;
+  text-align: left;
+}
+
+.is-desk .top3-place {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin: 0 0 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: hsl(var(--d-well));
+  font-size: 11px;
+}
+
+.is-desk .top3-card.gold .top3-place {
+  background: hsl(45 95% 55% / 0.16);
+}
+
+.is-desk .top3-card.silver .top3-place {
+  background: hsl(220 10% 60% / 0.14);
+}
+
+.is-desk .top3-card.bronze .top3-place {
+  background: hsl(25 60% 50% / 0.14);
+}
+
+.is-desk .top3-face {
+  grid-column: 1;
+  grid-row: 2 / span 2;
+  margin: 0;
+  padding: 0;
+  box-shadow: none !important;
+}
+
+.is-desk .top3-face .face {
+  box-shadow: none;
+}
+
+.is-desk .top3-name {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.is-desk .top3-person .holding-logos {
+  grid-column: 2;
+  grid-row: 3;
+  justify-content: flex-start;
+}
+
+.is-desk .top3-main {
+  grid-column: 1 / -1;
+  grid-row: 4;
+  margin-top: 16px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.is-desk .top3-side {
+  grid-column: 1 / -1;
+  grid-row: 5;
+  font-size: 12.5px;
+}
+
+.is-desk .top3-card > .follow-btn,
+.is-desk .top3-card > .you-tag {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+.is-desk .top3-card .follow-btn.sm {
+  width: auto;
+  min-width: 76px;
+  max-width: none;
+}
+
+.is-desk .top3-card .follow-btn:not(.on) {
+  border: 0;
+  background: hsl(0 0% 9%);
+  color: #fff;
+  box-shadow: none;
+}
+
+.is-desk .top3-card .follow-btn:not(.on):hover {
+  background: hsl(0 0% 22%);
+}
+
+.is-desk .top3-card .follow-btn.on {
+  border: 1px solid hsl(var(--d-line-strong));
+  background: hsl(0 0% 100%);
+  color: hsl(var(--fg));
+}
+
+/* The rest, as a table. */
+.is-desk .list-card {
+  margin-top: 14px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.is-desk .list-card-head {
+  padding: 14px 16px 12px;
+}
+
+.is-desk .list-card-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.is-desk .list-card-head > span {
+  font-size: 12.5px;
+  color: hsl(var(--fg-muted));
+}
+
+.is-desk .list-cols {
+  gap: 11px;
+  padding: 9px 16px;
+  border-top: 1px solid hsl(var(--d-line));
+  border-bottom: 1px solid hsl(var(--d-line));
+  background: hsl(0 0% 0% / 0.02);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0;
+  text-transform: none;
+  color: hsl(var(--fg-muted));
+}
+
+.is-desk .list-card .rows {
+  padding: 0 16px;
+}
+
+.is-desk .list-card .row {
+  min-height: 62px;
+  border-bottom-color: hsl(0 0% 0% / 0.06);
+}
+
+.is-desk .list-card.empty-card {
+  padding: 32px 20px 28px;
+}
+
+.is-desk .person-link {
+  border-radius: 8px;
+}
+
+.is-desk .person-link:hover {
+  background: transparent;
+}
+
+.is-desk .row.person:hover {
+  background: hsl(0 0% 0% / 0.015);
+}
+
+.is-desk .people-caveats {
+  margin-top: 14px;
+  padding: 12px 16px;
+}
+
+.is-desk .row-main b {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.is-desk .row-main small {
+  font-size: 12.5px;
+}
+
+/* ================================================================ profile */
+
+.is-desk .profile-page {
+  margin: 0;
+}
+
+.is-desk .profile-top {
+  padding: 0 0 20px;
+}
+
+.is-desk .profile-top-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.is-desk .profile-top.over {
+  padding: 14px 14px 0;
+}
+
+.is-desk .cover {
+  height: 132px;
+  overflow: hidden;
+  border-radius: 12px 12px 0 0;
+}
+
+/* Who this is: the face on the left, the rest beside it. */
+.is-desk .profile-id {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 20px;
+  padding: 20px;
+  border: 1px solid hsl(var(--d-line));
+  border-radius: 12px;
+  background: hsl(0 0% 100%);
+  box-shadow: var(--d-shadow);
+}
+
+.is-desk .profile-id.under-cover {
+  margin-top: 0;
+  padding-left: 24px;
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+}
+
+.is-desk .profile-face-row {
+  display: contents;
+}
+
+.is-desk .profile-face {
+  grid-column: 1;
+  grid-row: 1 / span 6;
+}
+
+.is-desk .profile-id.under-cover .profile-face {
+  margin-top: -44px;
+}
+
+.is-desk .under-cover .profile-face .face {
+  box-shadow: 0 0 0 4px hsl(0 0% 100%);
+}
+
+.is-desk .face-edit {
+  width: 26px;
+  height: 26px;
+  box-shadow: 0 0 0 3px hsl(0 0% 100%);
+}
+
+.is-desk .profile-actions {
+  grid-column: 3;
+  grid-row: 1 / span 3;
+  align-self: start;
+  padding: 0;
+}
+
+.is-desk .profile-id > :not(.profile-face-row) {
+  grid-column: 2;
+}
+
+.is-desk .profile-name {
+  margin-top: 2px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.is-desk .profile-handle {
+  justify-self: start;
+  margin-top: 2px;
+  font-size: 13.5px;
+}
+
+.is-desk .profile-bio {
+  max-width: 64ch;
+  margin-top: 10px;
+  font-size: 14.5px;
+}
+
+.is-desk .add-bio {
+  justify-self: start;
+  margin-top: 8px;
+  font-size: 13.5px;
+}
+
+.is-desk .profile-follows {
+  gap: 4px 16px;
+  margin-top: 10px;
+  font-size: 13.5px;
+}
+
+.is-desk .profile-follows b {
+  font-weight: 600;
+}
+
+.is-desk .profile-stats {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.is-desk .following-strip {
+  margin: 0;
+  padding: 4px 0 12px;
+}
+
+/* Portfolio value. */
+.is-desk .profile-value {
+  margin: 16px 0 0;
+  padding: 20px;
+}
+
+.is-desk .value-figure {
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.is-desk .value-change {
+  margin: 4px 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.is-desk .profile-value .seg {
+  display: inline-flex;
+  width: auto;
+  margin-top: 14px;
+}
+
+.is-desk .profile-value .seg button {
+  flex: none;
+  padding: 5px 14px;
+}
+
+.is-desk .value-note {
+  font-size: 12px;
+}
+
+.is-desk .value-cash {
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.is-desk .value-cash span {
+  padding: 10px 12px;
+  border: 1px solid hsl(0 0% 0% / 0.06);
+  border-radius: 8px;
+  background: hsl(0 0% 0% / 0.02);
+  box-shadow: none;
+}
+
+.is-desk .value-cash small {
+  font-size: 12px;
+}
+
+.is-desk .value-cash b {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.is-desk .profile-warnings {
+  margin: 14px 0 0;
+}
+
+/* What it holds. */
+.is-desk .profile-positions {
+  margin: 16px 0 0;
+}
+
+.is-desk .positions-head {
+  min-height: 34px;
+  margin-bottom: 0;
+}
+
+.is-desk .positions-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.is-desk .profile-positions .rows {
+  margin-top: 10px;
+  padding: 0 16px;
+  border-radius: 12px;
+}
+
+.is-desk .profile-positions .row {
+  min-height: 60px;
+}
+
+.is-desk .profile-cta {
+  flex-direction: row;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.is-desk .profile-cta > * {
+  flex: 1;
+}
+
+.is-desk .profile-cta .btn-go,
+.is-desk .profile-cta .btn-soft {
+  height: 42px;
+  font-size: 14.5px;
+}
+
+.is-desk .signed-out {
+  padding-top: 72px;
+}
+
+.is-desk .signed-out .face.ghost {
+  width: 56px;
+  height: 56px;
+}
+
+.is-desk .signed-out h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.is-desk .signed-out p {
+  font-size: 14.5px;
+}
+
+.is-desk .text-link {
+  font-size: 14px;
+  font-weight: 550;
+}
+
+@media (min-width: 1024px) {
+  /* The value beside the positions. */
+  .is-desk .profile-page {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    column-gap: 16px;
+    align-items: start;
+  }
+
+  .is-desk .profile-page > .profile-top,
+  .is-desk .profile-page > .cover {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .is-desk .profile-page > .signed-out {
+    grid-column: 1 / -1;
+  }
+
+  .is-desk .profile-page > .profile-id {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .is-desk .profile-page > .profile-value {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .is-desk .profile-page > .profile-warnings {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .is-desk .profile-page > .profile-positions {
+    grid-column: 2;
+    grid-row: 3 / span 2;
+  }
+}
+
+/* ================================================================= search */
+
+.is-desk .find-page {
+  max-width: 820px;
+  padding-top: 0;
+}
+
+.is-desk .find-field {
+  height: 46px;
+  margin-bottom: 4px;
+  padding: 0 14px;
+  border: 1px solid hsl(var(--d-line-strong));
+  border-radius: 10px;
+  background: hsl(0 0% 100%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.is-desk .find-field:focus-within {
+  border-color: hsl(var(--mint));
+  box-shadow: 0 0 0 3px hsl(var(--mint) / 0.2);
+}
+
+.is-desk .find-field input {
+  font-size: 15px;
+}
+
+.is-desk .find-clear {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.is-desk .find-group {
+  margin-top: 22px;
+}
+
+.is-desk .find-group-head h2 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.is-desk .find-group-head a {
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.is-desk .find-group .rows {
+  padding: 0 16px;
+}
+
+/* ============================================================== narrower */
+
+@media (max-width: 1240px) {
+  .ex-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ex-slide {
+    padding: 0 40px 28px;
+    gap: 32px;
+  }
+
+  .ex-dots {
+    left: 40px;
+  }
+
+  .dh-table th:nth-child(6),
+  .dh-table td:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .app.is-desk {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .is-desk .topbar {
+    grid-template-columns: 220px minmax(0, 1fr) auto;
+  }
+
+  .topbar-total {
+    display: none;
+  }
+
+  .is-desk .profile-text {
+    display: none;
+  }
+
+  .is-desk .profile {
+    padding: 0 4px;
+  }
+
+  .is-desk .content {
+    padding: 24px 28px 80px;
+  }
+
+  .topbar-search {
+    padding: 0 28px;
+  }
+
+  .ex-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  /* The order panel goes under the chart rather than squeezing it. */
+  .is-desk .asset-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .is-desk .asset-grid > .trade-panel {
+    max-width: 560px;
+  }
+
+  .dh-table th:nth-child(7),
+  .dh-table td:nth-child(7) {
+    display: none;
+  }
+}
+
+/* A tablet: the sidebar keeps its icons and drops its words. */
+@media (max-width: 1023px) {
+  .app.is-desk {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .is-desk .topbar {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+  }
+
+  .topbar-brand {
+    justify-content: center;
+    padding-left: 0;
+  }
+
+  .topbar-brand b {
+    display: none;
+  }
+
+  .topbar-search {
+    padding: 0 20px;
+  }
+
+  .sidenav {
+    align-items: center;
+    padding: 14px 10px;
+  }
+
+  .sidenav-groups,
+  .sidenav-foot,
+  .sidenav-group {
+    align-items: center;
+  }
+
+  /* Each group's name becomes a short rule between the groups. */
+  .sidenav-label {
+    width: 24px;
+    height: 1px;
+    margin: 0 0 10px;
+    padding: 0;
+    overflow: hidden;
+    background: hsl(var(--d-line-strong));
+    font-size: 0;
+  }
+
+  .sidenav-item {
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+  }
+
+  .sidenav-item > span {
+    display: none;
+  }
+
+  .sidenav-status {
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .sidenav-status > span {
+    display: none;
+  }
+
+  .is-desk .content {
+    padding: 22px 24px 80px;
+  }
+
+  .ex-slide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ex-panel {
+    display: none;
+  }
+
+  .dh-table .spark-col {
+    display: none;
+  }
+
+  .is-desk .people-page > .seg.wide,
+  .is-desk .people-page > .people-controls {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .is-desk .people-page > .people-controls {
+    margin-top: 10px;
+  }
+
+  .is-desk .top3-person {
+    padding-right: 0;
+  }
+
+  .is-desk .top3-card > .follow-btn,
+  .is-desk .top3-card > .you-tag {
+    position: static;
+    align-self: flex-end;
+  }
+
+  .is-desk .top3-card {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 860px) {
+  .is-desk .top3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ex-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ex-slide,
+  .ex-slide.on,
+  .ex-slide-text,
+  .ex-panel {
+    transition: none;
+  }
+}
+
+/* =================================================================== mint */
+
+/*
+ * The landing page's mint in the app: the full mint field with faint rings
+ * for the banner, a trace of it on the page and header, and a pale mint for
+ * selected items. Cards stay white so figures read on a clean surface.
+ */
+.app.is-desk {
+  --page: 150 30% 97.5%;
+  --d-mint-soft: 149 70% 93%;
+  --d-mint-line: 149 45% 78%;
+  --d-mint-ink: 150 60% 24%;
+
+  background:
+    radial-gradient(70vw 40vw at 100% -10%, hsl(149 80% 88% / 0.45), transparent 70%),
+    hsl(var(--page));
+}
+
+body:has(.app.is-desk) {
+  background: hsl(150 30% 97.5%);
+}
+
+/* Solid white, not frosted: the header is sticky, and a backdrop blur
+   under it was recomputed on every frame of every scroll. */
+.is-desk .topbar {
+  border-bottom-color: hsl(var(--d-mint-line) / 0.6);
+  background: hsl(0 0% 100%);
+}
+
+.is-desk .sidenav {
+  border-right-color: hsl(var(--d-mint-line) / 0.6);
+  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(150 50% 98.5%));
+}
+
+/* The mark takes the hero's mint, the way the landing's nav does. */
+.topbar-mark {
+  background: linear-gradient(160deg, hsl(149 82% 80%), hsl(149 70% 66%));
+  color: hsl(150 60% 10%);
+  box-shadow: inset 0 0 0 1px hsl(150 50% 40% / 0.18);
+}
+
+.sidenav-item[aria-current="page"] {
+  background: hsl(var(--d-mint-soft));
+  color: hsl(var(--d-mint-ink));
+}
+
+.sidenav-item[aria-current="page"] svg {
+  color: hsl(var(--d-mint-ink));
+}
+
+.sidenav-status.live {
+  border-color: hsl(var(--d-mint-line) / 0.7);
+  background: hsl(var(--d-mint-soft) / 0.6);
+}
+
+.is-desk .search {
+  background: hsl(150 25% 94.5%);
+}
+
+.is-desk .search:hover {
+  background: hsl(150 25% 92.5%);
+}
+
+.is-desk .search:focus-within {
+  border-color: hsl(var(--d-mint-line));
+  box-shadow: 0 0 0 3px hsl(var(--mint) / 0.16);
+}
+
+/* Selected tabs keep the white thumb on a faintly mint track. */
+.is-desk .seg,
+.is-desk .seg.pill-seg,
+.ex-tabs {
+  background: hsl(150 25% 93%);
+}
+
+/* Table heads and the quiet fills, in the palest mint. */
+.dh-table th,
+.is-desk .list-cols,
+.is-desk .glass-table thead th {
+  background: hsl(150 40% 97%);
+}
+
+.is-desk .card:hover,
+.ex-card:hover,
+.ex-tick:hover,
+.is-desk .tile:hover,
+.is-desk .flip:not(.flipped) button.stock-card:hover {
+  border-color: hsl(var(--d-mint-line));
+}
+
+.ex-rank {
+  background: hsl(var(--d-mint-soft));
+  color: hsl(var(--d-mint-ink));
+}
+
+/* The banner: a mint field with faint rings and black type, like the landing hero. */
+.ex-banner {
+  --chart-up: 150 60% 28%;
+  --chart-down: 3 75% 45%;
+
+  background: linear-gradient(160deg, hsl(149 82% 87%) 0%, hsl(149 76% 81%) 55%, hsl(151 62% 86%) 100%);
+  color: hsl(150 30% 8%);
+  box-shadow: inset 0 0 0 1px hsl(150 50% 40% / 0.12);
+}
+
+.ex-banner::before {
+  inset: -30%;
+  background: repeating-radial-gradient(
+    circle at 78% 95%,
+    hsl(0 0% 100% / 0) 0 90px,
+    hsl(0 0% 100% / 0.16) 90px 190px
+  );
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.ex-banner .up {
+  color: hsl(150 65% 24%);
+}
+
+.ex-banner .down {
+  color: hsl(3 75% 42%);
+}
+
+.ex-eyebrow {
+  color: hsl(var(--d-mint-ink));
+}
+
+.ex-slide-body {
+  color: hsl(150 20% 12% / 0.72);
+}
+
+.ex-btn.light {
+  background: hsl(0 0% 4%);
+  color: #fff;
+}
+
+.ex-btn.light:hover {
+  background: hsl(0 0% 18%);
+}
+
+.ex-btn.ghost {
+  border-color: hsl(0 0% 0% / 0.1);
+  background: hsl(0 0% 100% / 0.7);
+  color: hsl(0 0% 7%);
+}
+
+.ex-btn.ghost:hover {
+  border-color: hsl(0 0% 0% / 0.18);
+  background: hsl(0 0% 100%);
+}
+
+/* A white wash rather than a backdrop blur: behind it is only a smooth
+   gradient, so the blur showed nothing, and it was redrawn through every
+   slide change. */
+.ex-panel {
+  border-color: hsl(0 0% 100% / 0.9);
+  background: hsl(0 0% 100% / 0.72);
+  box-shadow: 0 12px 32px -18px hsl(150 50% 25% / 0.45);
+}
+
+.ex-panel-label,
+.ex-panel-rank {
+  color: hsl(150 20% 20% / 0.55);
+}
+
+.ex-panel-row {
+  border-top-color: hsl(150 30% 30% / 0.1);
+}
+
+.ex-panel-name small,
+.ex-panel-figure small {
+  color: hsl(150 20% 20% / 0.6);
+}
+
+.ex-panel-bar {
+  background: hsl(150 40% 30% / 0.12);
+}
+
+.ex-panel-bar i {
+  background: hsl(150 60% 30%);
+}
+
+.ex-dots button {
+  background: hsl(150 40% 20% / 0.22);
+}
+
+.ex-dots button:hover {
+  background: hsl(150 40% 20% / 0.4);
+}
+
+.ex-dots button.on {
+  background: hsl(0 0% 6%);
+}
+
+/* The dashboard's profile card gets the field as a thin band on top. */
+.is-desk .profile-id:not(.under-cover) {
+  background:
+    linear-gradient(180deg, hsl(149 76% 90% / 0.55), hsl(0 0% 100% / 0) 90px),
+    hsl(0 0% 100%);
+}
+
+/* =============================================================== charts */
+
+/*
+ * No glow on desktop: hovering a chart redraws it for the crosshair, and the
+ * glow's wide blur over the whole line (and the tip's frosting) would rerun
+ * on every mouse move.
+ */
+.is-desk svg path.draw {
+  filter: none;
+}
+
+.is-desk .chart-tip {
+  border-color: hsl(var(--d-line));
+  border-radius: 10px;
+  background: hsl(0 0% 100%);
+  box-shadow: var(--d-shadow-pop);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
