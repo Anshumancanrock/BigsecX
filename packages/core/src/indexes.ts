@@ -1,15 +1,8 @@
 /**
- * Thematic indexes: portfolios whose weights a rule produces.
- *
- * Definitions are data, not code, so an index can be added without touching
- * the weighting engine and so the exact rule that produced a historical
- * allocation can be stored and replayed.
- *
- * On the choice of themes: the tradable universe is eight private companies,
- * which does not support every theme one might want. There is no nuclear name
- * here, and no amount of index design creates one -- a "nuclear index" over
- * this universe would be a label over unrelated holdings. The themes below are
- * the ones the universe actually supports.
+ * Thematic indexes: portfolios whose weights a rule produces. Definitions are
+ * data, so an index can be added without touching the weighting engine and the
+ * rule behind a historical allocation can be stored and replayed. Themes are
+ * limited to what the eight-company universe actually supports.
  */
 
 import { capWeights, normalizeWeights, type Portfolio, type Weight } from "./portfolio.ts";
@@ -22,8 +15,8 @@ export type WeightingScheme =
   /** Weighted by the issuer's implied company valuation. */
   | { readonly kind: "valuation"; readonly maxWeight: number }
   /**
-   * Weighted by quotable DEX depth. Unfashionable as an index rule, but it is
-   * the weighting a basket can actually be filled at in this market.
+   * Weighted by quotable DEX depth, the weighting a basket can actually be
+   * filled at in this market.
    */
   | { readonly kind: "liquidity"; readonly maxWeight: number }
   /**
@@ -57,12 +50,8 @@ export interface IndexInput {
   /** Market over mark, as a fraction. Null when no mark is published. */
   readonly basis: number | null;
   /**
-   * True when the issuer has halted transfers on this mint.
-   *
-   * A paused constituent is not merely illiquid, it is untradeable: every
-   * swap touching it fails. Including one produces a basket that cannot be
-   * bought, so these are excluded before weighting rather than weighted to
-   * zero afterwards.
+   * True when the issuer has halted transfers on this mint. Every swap
+   * touching it fails, so it is excluded before weighting.
    */
   readonly paused?: boolean;
 }
@@ -70,52 +59,52 @@ export interface IndexInput {
 export const INDEX_DEFINITIONS: readonly IndexDefinition[] = [
   {
     id: "pre8",
-    name: "PreStocks 8",
+    name: "Everything",
     description:
-      "The whole tradable pre-IPO universe, weighted by implied valuation and capped so no single company dominates.",
+      "A slice of every private company here, with the biggest ones weighted heaviest and no single one allowed to dominate.",
     scheme: { kind: "valuation", maxWeight: 0.25 },
   },
   {
     id: "frontier-ai",
-    name: "Frontier AI Labs",
-    description: "The companies training frontier models.",
+    name: "The AI labs",
+    description: "The labs building the frontier AI models — OpenAI and Anthropic among them.",
     sectors: ["ai-lab"],
     scheme: { kind: "valuation", maxWeight: 0.4 },
   },
   {
     id: "embodied",
-    name: "Embodied AI",
-    description: "Humanoid robotics and brain-computer interfaces: AI that acts on the physical world.",
+    name: "Robots and brains",
+    description: "AI that moves in the real world: humanoid robots and brain-computer interfaces.",
     sectors: ["robotics", "neurotech"],
     scheme: { kind: "equal" },
   },
   {
     id: "defense-space",
-    name: "Defense & Space",
-    description: "Launch capability and autonomous defense systems.",
+    name: "Space and defence",
+    description: "Rockets and autonomous defence — the companies building hardware that flies.",
     sectors: ["space", "defense"],
     scheme: { kind: "valuation", maxWeight: 0.6 },
   },
   {
     id: "prediction",
-    name: "Prediction Markets",
-    description: "The two venues turning real-world outcomes into tradable contracts.",
+    name: "Prediction markets",
+    description: "The two venues that turn real-world events into something you can trade.",
     sectors: ["prediction-market"],
     scheme: { kind: "equal" },
   },
   {
     id: "value",
-    name: "Below Mark",
+    name: "Looks cheap",
     description:
-      "Tilted toward companies whose tokens trade under the issuer's mark. There is no retail redemption path, so these gaps persist rather than arbitrage away.",
+      "Weighted toward whatever is currently trading below the price its issuer publishes.",
     scheme: { kind: "basis-tilt", maxWeight: 0.35, tilt: 1.5 },
     minLiquidityUsd: 50_000,
   },
   {
     id: "liquid",
-    name: "Deep Liquidity",
+    name: "Easiest to sell",
     description:
-      "Weighted by quotable depth. The basket that rebalances with the least price impact, which in a $2.6M market is a real constraint.",
+      "Weighted toward the companies with the busiest markets, so it is the easiest one to get out of.",
     scheme: { kind: "liquidity", maxWeight: 0.35 },
     minLiquidityUsd: 100_000,
   },
@@ -125,7 +114,6 @@ function selectConstituents(
   definition: IndexDefinition,
   inputs: readonly IndexInput[],
 ): readonly IndexInput[] {
-  // Paused mints are dropped first, ahead of any theme or liquidity rule.
   inputs = inputs.filter((i) => i.paused !== true);
 
   let selected = definition.symbols
@@ -136,8 +124,7 @@ function selectConstituents(
 
   if (definition.minLiquidityUsd !== undefined) {
     const liquid = selected.filter((i) => i.liquidityUsd >= (definition.minLiquidityUsd ?? 0));
-    // Never let a liquidity floor empty an index; report the unfiltered set
-    // instead so the caller can show why it looks different than expected.
+    // A liquidity floor never empties an index; the unfiltered set stays.
     if (liquid.length > 0) selected = liquid;
   }
   return selected;
@@ -168,9 +155,8 @@ function rawWeights(scheme: WeightingScheme, inputs: readonly IndexInput[]): Wei
 /**
  * Build an index's target weights from live market inputs.
  *
- * Returns null when the definition selects nothing tradable, which is a real
- * state -- a liquidity floor can empty a narrow theme -- and the caller should
- * show it rather than render an empty basket as a valid one.
+ * Null when nothing tradable with a positive weight is selected (for example
+ * every constituent is paused); callers should show that, not an empty basket.
  */
 export function buildIndex(
   definition: IndexDefinition,
