@@ -1,0 +1,280 @@
+/*
+ * Design tokens, in two scopes: `.landing` (light: a mint field, black type,
+ * borderless cream-grey cards) and `.app`. Both define the same token names,
+ * so components are written once and inherit their palette from the scope.
+ *
+ * Colours are bare HSL triplets so any token works at partial alpha,
+ * e.g. hsl(var(--fg) / 0.56), instead of a pile of near-duplicate greys.
+ * Type is Switzer, a freely licensed grotesque.
+ */
+
+/* ------------------------------------------------------------ shared base */
+
+:root {
+  --font-sans: Switzer, "Switzer Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Brand. One saturated mint; everything else is greyscale. */
+  --mint: 149 88% 68%;
+  --mint-pale: 149 100% 84%;
+  --mint-deep: 149 88% 59%;
+  --olive: 148 36% 43%;
+
+  /* Large radii: pills for controls, 14-20px for cards. */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 999px;
+
+  /* Page gutter and maximum content width. */
+  --gutter: 24px;
+  --maxw: 1240px;
+
+  /*
+   * The ink colour for lines, tints and quiet text, used at an alpha: white on
+   * the dark scope, black on the light one. Glass, borders and muted labels all
+   * use hsl(var(--ink) / a), so one token flips them all.
+   */
+  --ink: 0 0% 100%;
+  /* Menus, popovers, sheets and tooltips: the surface that floats. */
+  --raised: 160 12% 8%;
+  /* A sunken well, for an address or code. */
+  --well: 160 20% 3%;
+  /* Chart lines, a shade apart from the text colours. */
+  --chart-up: 149 88% 64%;
+  --chart-down: 3 90% 64%;
+  --chart-accent: 149 88% 70%;
+}
+
+/* ----------------------------------------------------- landing scope: light */
+
+.landing {
+  --page: 0 0% 100%;
+  --surface: 0 0% 100%;
+  --card: 240 5% 96%;
+  --chip: 240 11% 96.5%;
+
+  --fg: 0 0% 0%;
+  --fg-muted: 0 0% 63%;
+  --fg-faint: 0 0% 56%;
+
+  --line: 0 0% 0% / 0.08;
+  --hover: 0 0% 0% / 0.04;
+
+  --up: 145 63% 42%;
+  --down: 0 84% 60%;
+
+  color-scheme: light;
+  background: hsl(var(--page));
+  color: hsl(var(--fg));
+}
+
+/* --------------------------------------------------------- app scope: dark */
+
+/*
+ * The dark base of the app scope: frosted panels with hairline borders and
+ * square icon tiles on near-black, with one soft mint glow in the top corner.
+ * Surfaces are white at low alpha rather than fixed greys, so a panel over the
+ * glow is lighter than one over bare black.
+ */
+.app {
+  --font-sans: Outfit, system-ui, -apple-system, sans-serif;
+
+  --page: 160 20% 3.5%;
+  --surface: 160 12% 7%;
+  --card: 160 8% 9%;
+  --card-hover: 160 8% 12%;
+  --chip: 0 0% 100% / 0.06;
+
+  --fg: 0 0% 98%;
+  --fg-muted: 0 0% 100% / 0.6;
+  --fg-faint: 0 0% 100% / 0.4;
+
+  --line: 0 0% 100% / 0.08;
+  --line-strong: 0 0% 100% / 0.14;
+  --hover: 0 0% 100% / 0.05;
+  --glass: 0 0% 100% / 0.035;
+  --glass-strong: 0 0% 100% / 0.06;
+
+  --up: 149 84% 62%;
+  --down: 0 88% 70%;
+
+  --r-tile: 13px;
+  --r-card: 24px;
+
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  background: hsl(var(--page));
+  color: hsl(var(--fg));
+}
+
+/* ------------------------------------------------------ app scope: light */
+
+/*
+ * The app's light palette, used on phone and desktop: an off-white page,
+ * near-black type, frosted white cards on a hairline, one green for the
+ * primary action and black pills for the rest. It overrides the dark values
+ * above token for token, so every page, sheet and chart follows.
+ *
+ * Two greens: a bright one for button fills and a deeper one for figures,
+ * since the bright green is too faint as text on white.
+ */
+.app {
+  --font-sans: Satoshi, Outfit, system-ui, -apple-system, sans-serif;
+
+  --page: 60 23% 97.5%;
+  --surface: 0 0% 100%;
+  --card: 0 0% 100%;
+  --card-hover: 60 12% 95%;
+  --chip: 0 0% 0% / 0.05;
+
+  --fg: 0 0% 7%;
+  --fg-muted: 0 0% 0% / 0.55;
+  --fg-faint: 0 0% 0% / 0.4;
+
+  --line: 0 0% 0% / 0.08;
+  --line-strong: 0 0% 0% / 0.14;
+  --hover: 0 0% 0% / 0.04;
+  --glass: 0 0% 0% / 0.025;
+  --glass-strong: 0 0% 0% / 0.05;
+
+  --mint: 130 49% 56%;
+  --mint-deep: 130 52% 46%;
+  --up: 136 55% 34%;
+  --down: 3 82% 50%;
+
+  --ink: 0 0% 0%;
+  --raised: 0 0% 100%;
+  --well: 60 12% 94%;
+  --chart-up: 134 50% 44%;
+  --chart-down: 3 82% 55%;
+  --chart-accent: 134 50% 44%;
+
+  color-scheme: light;
+}
+
+/* ------------------------------------------------------------------ reset */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/*
+ * Display type: weight 400 at every size, line-height 0.9 so a two-line
+ * headline reads as one block, and -0.05em letter-spacing throughout.
+ */
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* --------------------------------------------------------------- utility */
+
+.wrap {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+/*
+ * Every figure uses lining tabular numerals, so price columns do not jitter
+ * as digits change on each poll.
+ */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.up {
+  color: hsl(var(--up));
+}
+.down {
+  color: hsl(var(--down));
+}
+.muted {
+  color: hsl(var(--fg-muted));
+}
+
+/* Keyboard focus stays visible; pointer focus does not draw a ring. */
+:focus-visible {
+  outline: 2px solid hsl(var(--mint));
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+::selection {
+  background: hsl(var(--mint) / 0.45);
+  color: #000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
