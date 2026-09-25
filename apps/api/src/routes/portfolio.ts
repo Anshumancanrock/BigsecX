@@ -1,17 +1,14 @@
 /**
- * Portfolio routes: what a wallet actually holds, right now, on chain.
- *
- * Balances are read from the associated token accounts rather than from
- * anything a caller supplies, because these numbers size trades. A holding a
- * user claims is a hint; a holding the chain reports is a fact, and only the
- * second one can be sold.
+ * Portfolio routes. Balances are read from the chain, never taken from the
+ * caller, because they size trades.
  */
 
 import { Hono } from "hono";
 import { UNIVERSE, bySymbol, driftExceeded, sectorExposure, type Weight } from "@ps/core";
-import { getSellableBalances, getSpendable } from "@ps/tx";
-import type { Services } from "./context.ts";
-import { requireBase58Address } from "./validate.ts";
+import { getSellableBalances, getSpendable, getStrandedBalances, type StrandedBalance } from "@ps/tx";
+import type { Services } from "../context.ts";
+import { publicStrategy } from "../lib/access.ts";
+import { requireBase58Address } from "../lib/validate.ts";
 import type { MarketSnapshot } from "@ps/market";
 
 export interface PortfolioPosition {
@@ -28,16 +25,44 @@ export interface PortfolioPosition {
   readonly paused: boolean;
 }
 
-/**
- * Build a portfolio view from chain balances and a market snapshot.
- *
- * Kept separate from the route so the copy-trading preview can reuse it
- * without going through HTTP.
+/*
+ * The stranded-balance scan costs eight indexed RPC calls and an open
+ * portfolio polls every thirty seconds, so each owner's result is kept for two
+ * minutes. Keyed by the RPC client so separate service instances never share it.
  */
+const STRANDED_TTL_MS = 120_000;
+const STRANDED_MAX_OWNERS = 1_000;
+const strandedCache = new WeakMap<object, Map<string, { at: number; value: Promise<Map<string, StrandedBalance>> }>>();
+
+function strandedFor(
+  services: Services,
+  owner: string,
+  scaleConfig: Parameters<typeof getStrandedBalances>[2],
+  atUnixSeconds: number,
+): Promise<Map<string, StrandedBalance>> {
+  let byOwner = strandedCache.get(services.rpc);
+  if (!byOwner) strandedCache.set(services.rpc, (byOwner = new Map()));
+  const now = Date.now();
+  const hit = byOwner.get(owner);
+  if (hit && now - hit.at < STRANDED_TTL_MS) return hit.value;
+  if (byOwner.size >= STRANDED_MAX_OWNERS) byOwner.delete(byOwner.keys().next().value!);
+  const value = getStrandedBalances(services.rpc, owner, scaleConfig, atUnixSeconds);
+  byOwner.delete(owner);
+  byOwner.set(owner, { at: now, value });
+  return value;
+}
+
+/** A wallet's positions, cash and weights, from chain balances and a market snapshot. */
 export async function readPortfolio(
   services: Services,
   owner: string,
   snapshot: MarketSnapshot,
+  /**
+   * Also scan for tokens held outside the associated accounts. Off by default
+   * because every build calls this, and the scan is slow for wallets with many
+   * token accounts.
+   */
+  options: { readonly includeStranded?: boolean } = {},
 ): Promise<{
   readonly owner: string;
   readonly positions: PortfolioPosition[];
@@ -46,6 +71,8 @@ export async function readPortfolio(
   readonly usdcUsd: number;
   readonly solLamports: number;
   readonly weights: Weight[];
+  /** Held outside the associated account, so not shown above and not sellable here. */
+  readonly elsewhere: { symbol: string; uiAmount: number; valueUsd: number | null; accounts: number }[];
 }> {
   const scaleConfig = new Map(
     snapshot.tokens.map((t) => [
@@ -58,9 +85,12 @@ export async function readPortfolio(
   );
   const pausedBySymbol = new Map(snapshot.tokens.map((t) => [t.token.symbol, t.paused]));
 
-  const [balances, spendable] = await Promise.all([
+  const [balances, spendable, stranded] = await Promise.all([
     getSellableBalances(services.rpc, owner, scaleConfig, snapshot.unixSeconds),
     getSpendable(services.rpc, owner),
+    options.includeStranded
+      ? strandedFor(services, owner, scaleConfig, snapshot.unixSeconds)
+      : Promise.resolve(new Map()),
   ]);
 
   const positions: PortfolioPosition[] = [];
@@ -69,8 +99,7 @@ export async function readPortfolio(
 
   for (const token of UNIVERSE) {
     const balance = balances.get(token.symbol);
-    // A zero balance is not a position; listing all eight would bury the
-    // ones that matter.
+    // A zero balance is not a position.
     if (!balance || balance.uiAmount <= 0) continue;
 
     const priceUsd = priceBySymbol.get(token.symbol) ?? null;
@@ -91,8 +120,7 @@ export async function readPortfolio(
     });
   }
 
-  // Weights are a share of priced value, so an unpriced position is left
-  // null rather than diluting everything else against a total it is not in.
+  // Weights are shares of priced value, so an unpriced position gets null.
   const withWeights = positions
     .map((p) => ({ ...p, weight: p.valueUsd === null || totalUsd <= 0 ? null : p.valueUsd / totalUsd }))
     .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
@@ -105,6 +133,17 @@ export async function readPortfolio(
     usdcUsd: spendable.usdc,
     solLamports: spendable.lamports,
     weights: withWeights.flatMap((p) => (p.weight === null ? [] : [{ symbol: p.symbol, weight: p.weight }])),
+    // Kept out of totalUsd and positions, which describe what a swap can
+    // spend: a sell sized against these balances would fail on chain.
+    elsewhere: [...stranded.values()].map((b) => {
+      const price = priceBySymbol.get(b.symbol) ?? null;
+      return {
+        symbol: b.symbol,
+        uiAmount: b.uiAmount,
+        valueUsd: price === null ? null : b.uiAmount * price,
+        accounts: b.accounts,
+      };
+    }),
   };
 }
 
@@ -113,21 +152,17 @@ export function registerPortfolioRoutes(
   services: Services,
   market: () => Promise<MarketSnapshot>,
 ): void {
-  /**
-   * A wallet's live position.
-   *
-   * `compare` measures it against a saved strategy, which is what turns the
-   * page from a balance list into "am I still holding what I meant to".
-   */
+  /** A wallet's live holdings, optionally measured against a published strategy (`?compare=<id>`). */
   app.get("/api/portfolio/:wallet", async (c) => {
     const owner = requireBase58Address(c.req.param("wallet"), "wallet");
     const snapshot = await market();
-    const portfolio = await readPortfolio(services, owner, snapshot);
+    const portfolio = await readPortfolio(services, owner, snapshot, { includeStranded: true });
 
     const compareId = c.req.query("compare");
     let comparison: unknown = null;
     if (compareId) {
-      const strategy = services.store.getStrategy(compareId);
+      // The response echoes {id, name, weights}, so a draft must not resolve here.
+      const strategy = publicStrategy(services.store, compareId);
       if (!strategy) return c.json({ error: `unknown strategy ${compareId}` }, 404);
       const drift = driftExceeded(portfolio.weights, strategy.weights, strategy.driftBps);
       comparison = {
@@ -145,8 +180,7 @@ export function registerPortfolioRoutes(
       cash: {
         usdcUsd: portfolio.usdcUsd,
         solLamports: portfolio.solLamports,
-        // Surfaced because a wallet with no lamports cannot submit anything,
-        // however much it holds.
+        // A wallet without lamports cannot submit anything, whatever it holds.
         canPayFees: portfolio.solLamports >= 3_000_000,
       },
       positions: portfolio.positions,
@@ -155,8 +189,16 @@ export function registerPortfolioRoutes(
       // every weight understate the portfolio.
       unpriced: portfolio.unpriced,
       frozen: portfolio.positions.filter((p) => p.frozen).map((p) => p.symbol),
+      elsewhere: portfolio.elsewhere,
       comparison,
     });
+  });
+
+  /** What a wallet can spend right now (USDC and SOL), checked before an amount is quoted. */
+  app.get("/api/cash/:wallet", async (c) => {
+    const owner = requireBase58Address(c.req.param("wallet"), "wallet");
+    const spendable = await getSpendable(services.rpc, owner);
+    return c.json({ owner, usdcUsd: spendable.usdc, solLamports: spendable.lamports });
   });
 
   /** Holdings for one symbol, for an asset page. */
@@ -166,7 +208,7 @@ export function registerPortfolioRoutes(
     if (!token) return c.json({ error: "unknown symbol" }, 404);
 
     const snapshot = await market();
-    const portfolio = await readPortfolio(services, owner, snapshot);
+    const portfolio = await readPortfolio(services, owner, snapshot, { includeStranded: true });
     const position = portfolio.positions.find((p) => p.symbol === token.symbol);
 
     return c.json({
