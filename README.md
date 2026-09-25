@@ -1,6 +1,6 @@
 # Bigsec
 
-Non-custodial trading for [PreStocks](https://prestocks.com) tokenized pre-IPO equity on Solana.
+A non-custodial trading app for [PreStocks](https://prestocks.com) tokenized pre-IPO equity on Solana, powered by jupiter.
 
 Buy a single company or a full basket with one signature, follow the traders who are right, copy their
 positions by weight, and see where you rank on a leaderboard built entirely from on-chain history. The
@@ -9,6 +9,9 @@ API only verifies and relays what you signed.
 
 Live prices, baskets, social trading and execution live in one app. No custody, no extra wallets to fund,
 and the issuer's powers over every token are shown where you trade.
+
+<img width="1834" height="904" alt="image" src="https://github.com/user-attachments/assets/9b654d19-f983-43d8-bea3-00515505e950" />
+
 
 ## Features
 
@@ -19,6 +22,9 @@ and the issuer's powers over every token are shown where you trade.
 - **On-chain leaderboard**: profit against the cost basis actually paid, never self-reported.
 - **Disclosure**: freeze, pause, permanent delegate and fee authority shown on every company.
 - **Responsive**: the same features on phone and desktop, each with its own layout.
+
+<img width="1834" height="904" alt="image" src="https://github.com/user-attachments/assets/96830509-57dd-47f7-a481-d549ae75b5ac" />
+
 
 ## How trading works
 
@@ -34,7 +40,22 @@ and the issuer's powers over every token are shown where you trade.
 5. **Confirm.** Statuses come back with the current block height, so a slow transaction is never mistaken
    for an expired one. Landed trades are recorded immediately.
 
-Transactions in a bundle settle independently, so partial fills are possible and reported per leg.
+Transactions in a bundle settle independently, so partial fills are possible and reported per leg
+
+**Trading Demo:**
+
+
+https://github.com/user-attachments/assets/3a42b041-ce06-48d0-a01e-7f5e8cc96d71
+
+
+.
+
+**Mobile Optimised**:
+
+<img width="466" height="797" alt="image" src="https://github.com/user-attachments/assets/79dd4c3c-e49d-4fed-ba7d-e8717a43d68c" /> <img width="466" height="797" alt="image" src="https://github.com/user-attachments/assets/79ea9a69-b7f4-40e0-9777-572952ecbf3e" />
+
+
+
 
 ## Architecture
 
