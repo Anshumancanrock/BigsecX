@@ -18,17 +18,14 @@ describe("judgeLeg", () => {
   });
 
   test("resizes a leg whose impact is too high", () => {
-    // From a real quote: $10k of SPACEX at 6.7% impact.
     const verdict = judgeLeg({ symbol: "SPACEX", usd: 10_000, priceImpact: 0.067, ...deep });
     expect(verdict.kind).toBe("resize");
     if (verdict.kind !== "resize") throw new Error("unreachable");
     expect(verdict.usd).toBeLessThan(10_000);
-    // sqrt(0.02 / 0.067) x 10000
     expect(verdict.usd).toBeCloseTo(10_000 * Math.sqrt(0.02 / 0.067), 6);
   });
 
   test("defers a leg no viable size can clear", () => {
-    // From a real quote: $50k of NEURALINK at 56.8% impact.
     const verdict = judgeLeg(
       { symbol: "NEURALINK", usd: 50_000, priceImpact: 0.568, ...deep },
       { ...DEFAULT_LIMITS, minTicketUsd: 20_000 },
@@ -37,7 +34,6 @@ describe("judgeLeg", () => {
   });
 
   test("caps a leg at a share of quotable depth", () => {
-    // KALSHI has under $100k of depth; a $50k leg is half the pool.
     const verdict = judgeLeg({
       symbol: "KALSHI",
       usd: 50_000,
@@ -142,7 +138,6 @@ describe("capWeights invariants", () => {
         symbol: `T${i}`,
         weight: next() ** 3 + 1e-6, // skewed, to produce dominant names
       }));
-      // Only caps that are actually satisfiable.
       const cap = Math.max(1 / n, next());
 
       const out = capWeights(weights, cap);
@@ -165,14 +160,11 @@ describe("slippageBpsFor", () => {
   });
 
   test("a thin pool gets room proportional to what it cost", () => {
-    // Impacts from real quotes: NEURALINK 4.41%.
     expect(slippageBpsFor(0.0441)).toBe(812);
-    // FIGUREAI 3.06%.
     expect(slippageBpsFor(0.0306)).toBe(609);
   });
 
   test("a favourable route needs no extra room", () => {
-    // Negative impact means the route beat the reference price.
     expect(slippageBpsFor(-0.02)).toBe(150);
   });
 
@@ -183,8 +175,6 @@ describe("slippageBpsFor", () => {
   });
 
   test("the caller's tolerance is a floor, never a ceiling", () => {
-    // A higher floor is honoured; a lower one still leaves enough room for the
-    // pool, avoiding a revert after signing.
     expect(slippageBpsFor(0.0441, { floorBps: 500 })).toBeGreaterThanOrEqual(500);
     expect(slippageBpsFor(0.0441, { floorBps: 10 })).toBeGreaterThan(600);
   });

@@ -12,8 +12,6 @@ await mock.module("@ps/market", () => {
   return {
     ...actual,
     fetchSwapInstructions: async () => {
-      // SetComputeUnitPrice is discriminator 0x03 followed by a
-      // little-endian u64; the packer reads the fee straight out of it.
       const price = Buffer.alloc(9);
       price[0] = 0x03;
       price.writeBigUInt64LE(50_000n, 1);
@@ -119,7 +117,6 @@ describe("the smallest buy at a spread floor", () => {
   });
 
   test("is bought in a thin pool too, since no smaller order is possible", async () => {
-    // 0.6% impact per dollar: $5 moves the price 3%, under the 5% ceiling.
     const { app: a } = app({ usdcRaw: 1_000_000_000n, priceUsd: { SPACEX: 100 }, impactPerUsd: { SPACEX: 0.006 } });
     const res = await build(a, { weights: [{ symbol: "SPACEX", weight: 1 }], deployUsd: 5 });
     expect(res.status).toBe(200);
@@ -136,7 +133,6 @@ describe("the smallest buy at a spread floor", () => {
   });
 
   test("a larger order whose cost will not come down is refused past the ceiling too", async () => {
-    // 8% at every size: a spread no order can get under.
     const { app: a } = app({ usdcRaw: 1_000_000_000n, priceUsd: { SPACEX: 100 }, priceImpact: { SPACEX: 0.08 } });
     const res = await build(a, { weights: [{ symbol: "SPACEX", weight: 1 }], deployUsd: 200 });
     expect(res.status).toBe(409);
@@ -164,7 +160,6 @@ describe("buying adds to a wallet and never rebalances it", () => {
     expect(body.legs.every((l) => l.side === "buy")).toBe(true);
     expect(body.legs.map((l) => l.symbol)).toEqual(["POLYMARKET"]);
     expect(body.legs[0]!.usd).toBeCloseTo(100, 6);
-    // The OpenAI the wallet already holds is not mentioned at all.
     expect(body.deferred.map((d) => d.symbol)).not.toContain("OPENAI");
   });
 
@@ -181,8 +176,6 @@ describe("buying adds to a wallet and never rebalances it", () => {
       deployUsd: 100,
       mode: "rebalance",
     });
-    // Rebalancing the whole wallet into POLYMARKET means selling the OPENAI to
-    // fund it, which is refused as not atomic; it happens only on request.
     expect(res.status).toBe(409);
     const body = (await res.json()) as Built;
     expect((body.problems ?? []).map((p) => p.kind)).toContain("not-atomic");
@@ -257,8 +250,6 @@ describe("the transfer fee", () => {
     const res = await build(a, { weights: [{ symbol: "ANTHROPIC", weight: 1 }], deployUsd: 100 });
     expect(res.status).toBe(200);
     const leg = ((await res.json()) as { legs: Leg[] }).legs[0]!;
-    // 0.1% impact with 1.5x headroom over the 150 bps floor is 165 bps; the
-    // 0.5% fee in force goes on top.
     expect(leg.feeAllowanceBps).toBe(50);
     expect(leg.slippageBps).toBe(165 + 50);
   });
@@ -276,8 +267,6 @@ describe("the transfer fee", () => {
     const { app: a } = app({ usdcRaw: 1_000_000_000n, priceUsd: { ANTHROPIC: 100 } });
     const res = await build(a, { weights: [{ symbol: "ANTHROPIC", weight: 1 }], deployUsd: 100 });
     const leg = ((await res.json()) as { legs: Leg[] }).legs[0]!;
-    // $100 at $100 less 0.1% impact is 0.999 shares from the pool, and the
-    // 0.5% fee leaves 0.994005 of them.
     expect(leg.expectedShares).toBeCloseTo(0.999 * 0.995, 6);
   });
 
@@ -293,8 +282,6 @@ describe("the transfer fee", () => {
     expect(leg.side).toBe("sell");
     expect(leg.feeAllowanceBps).toBe(50);
     expect(leg.slippageBps).toBe(165 + 50);
-    // Two shares at $150 less 0.1% impact is $299.70 from the pool, and the
-    // fee on the shares going in leaves $298.20.
     expect(leg.expectedUsd).toBeCloseTo(300 * 0.999 * 0.995, 4);
   });
 });

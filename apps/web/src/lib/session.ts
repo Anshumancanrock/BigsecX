@@ -17,7 +17,6 @@ interface Stored {
   readonly expiresAt: string;
 }
 
-/** Kept for the page when storage refuses. */
 const memory = new Map<string, Stored>();
 
 function read(wallet: string): Stored | null {
@@ -42,7 +41,6 @@ function write(wallet: string, value: Stored | null): void {
   window.dispatchEvent(new Event(CHANGED));
 }
 
-/** A live token for this wallet, or null. One about to lapse counts as lapsed. */
 export function sessionToken(wallet: string): string | null {
   const stored = read(wallet);
   if (!stored || typeof stored.token !== "string") return null;
@@ -50,7 +48,6 @@ export function sessionToken(wallet: string): string | null {
   return stored.token;
 }
 
-/** Sign in with one wallet signature. */
 export async function signIn(connection: Connection): Promise<string> {
   const session = await signedRequest(
     connection,
@@ -62,10 +59,6 @@ export async function signIn(connection: Connection): Promise<string> {
   return session.token;
 }
 
-/**
- * Runs a write that needs a session: with the stored token, or after signing
- * in, and once more if the server reports the token has expired.
- */
 export async function withSession<T>(connection: Connection, run: (token: string) => Promise<T>): Promise<T> {
   const held = sessionToken(connection.address);
   if (held) {
@@ -79,14 +72,12 @@ export async function withSession<T>(connection: Connection, run: (token: string
   return run(await signIn(connection));
 }
 
-/** Forget the token here and end it on the server. */
 export async function signOut(wallet: string): Promise<void> {
   const token = sessionToken(wallet);
   write(wallet, null);
   if (token) await api.signOut(token).catch(() => undefined);
 }
 
-/** Whether this wallet is signed in, kept current as that changes. */
 export function useSignedIn(wallet: string | null): boolean {
   const [signed, setSigned] = useState(() => (wallet ? sessionToken(wallet) !== null : false));
   useEffect(() => {
@@ -102,7 +93,6 @@ export function useSignedIn(wallet: string | null): boolean {
   return signed;
 }
 
-/** What went wrong with a sign-in or a write, in words. */
 export function signInError(error: unknown, verb: string): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/reject|denied|cancel/i.test(message)) return `Not signed, so nothing changed.`;

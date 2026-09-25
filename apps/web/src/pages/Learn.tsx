@@ -1,8 +1,3 @@
-/**
- * How it works, what it costs, and the risks. Fees and issuer powers are read
- * live; questions only the issuer can answer link to the issuer.
- */
-
 import type { Market } from "../lib/api.ts";
 import { list } from "../lib/format.ts";
 import { feeChangeWords, feeWords } from "../lib/words.ts";

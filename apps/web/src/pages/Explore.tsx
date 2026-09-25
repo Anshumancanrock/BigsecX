@@ -1,8 +1,3 @@
-/**
- * Desktop home: a price strip, a rotating banner with live figures, then top
- * traders, baskets and the full company table.
- */
-
 import { useEffect, useMemo, useState } from "react";
 import {
   api,
@@ -44,7 +39,6 @@ export function Explore({ market }: { market: Market | null }) {
   const indexes = useAsync<IndexList>((signal) => api.indexes(signal), []);
   const intradayFetched = useAsync<Intraday>((signal) => api.intraday(168, signal), [], { pollMs: 5 * 60_000 });
   const historyFetched = useAsync<History>((signal) => api.history(365, signal), []);
-  // Lines and figures end on the live price between fetches (lib/live.ts).
   const intraday = { data: useLivePrices(intradayFetched.data, market) };
   const history = { data: useLivePrices(historyFetched.data, market) };
 
@@ -185,10 +179,6 @@ export function Explore({ market }: { market: Market | null }) {
   );
 }
 
-/* ---------------------------------------------------------- the prices */
-
-/** Every company's price, in a strip that scrolls sideways. */
-/** Every company's price, looping right to left; the second copy fills the seam. */
 function PriceStrip({ tokens }: { tokens: readonly MarketToken[] }) {
   if (tokens.length === 0) return <div className="ex-strip ghost" />;
   const row = (copy: number) =>
@@ -230,8 +220,6 @@ function PriceStrip({ tokens }: { tokens: readonly MarketToken[] }) {
   );
 }
 
-/* ------------------------------------------------------------ the banner */
-
 interface Slide {
   readonly key: string;
   readonly eyebrow: string;
@@ -263,8 +251,6 @@ function Banner({
     .sort((a, b) => Math.abs(b.change24hPct!) - Math.abs(a.change24hPct!))
     .slice(0, 3);
 
-  // What $1,000 in the Everything basket did over the last 90 days, from
-  // the first day every company in it had a price.
   const line = useMemo(() => {
     if (!history || everything.length === 0) return null;
     const from = Math.max(0, history.days.length - 91);
@@ -443,8 +429,6 @@ function Banner({
     </section>
   );
 }
-
-/* --------------------------------------------------------- the companies */
 
 function Companies({ market, intraday }: { market: Market | null; intraday: Intraday | null }) {
   const [tab, setTab] = useState<Tab>("all");

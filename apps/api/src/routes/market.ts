@@ -21,11 +21,6 @@ export function registerMarketRoutes(app: Hono, services: Services, market: Snap
     return c.json(toMarketDto(snapshot, change24h(services, snapshot), meta));
   });
 
-  /**
-   * Each token against every price reference available for it. The issuer's
-   * mark values its own SPV; Pyth, where it has coverage, is an independent
-   * source, and a spread between the two is itself worth showing.
-   */
   app.get("/api/price-truth", async (c) => {
     const snapshot = await market();
     const oracle = await services.pyth.prices(snapshot.tokens.map((t) => t.token.symbol));
@@ -68,7 +63,6 @@ export function registerMarketRoutes(app: Hono, services: Services, market: Snap
         name: definition.name,
         description: definition.description,
         scheme: definition.scheme.kind,
-        // Null, not an empty basket: a liquidity floor can legitimately select nothing.
         weights: portfolio?.weights ?? null,
         level: history.at(-1)?.level ?? null,
       };

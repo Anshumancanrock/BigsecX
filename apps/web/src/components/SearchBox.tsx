@@ -1,8 +1,3 @@
-/**
- * Header search over companies, baskets, wallet addresses and a few pages.
- * Results come from data already loaded, so typing costs no requests.
- */
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type IndexList, type StrategyDto } from "../lib/api.ts";
 import { navigate } from "../lib/router.ts";
@@ -46,7 +41,6 @@ export function SearchBox() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Basket names are fetched once, the first time the box is used.
   useEffect(() => {
     if (!open || baskets) return;
     let live = true;
@@ -70,8 +64,6 @@ export function SearchBox() {
   const results = useMemo<Result[]>(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    // Prefix match on any word, or a substring match from three characters on:
-    // "an" finds Anthropic and Anduril, not "balance".
     const hit = (text: string) =>
       text
         .toLowerCase()

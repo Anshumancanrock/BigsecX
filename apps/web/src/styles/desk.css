@@ -10,8 +10,6 @@
  * specificity.
  */
 
-/* ================================================================ tokens */
-
 .app.is-desk {
   --font-sans: Switzer, "Switzer Variable", Satoshi, system-ui, -apple-system, sans-serif;
 
@@ -25,7 +23,6 @@
   --d-shadow-pop: 0 1px 3px rgb(0 0 0 / 0.06), 0 16px 40px -12px rgb(0 0 0 / 0.2);
   --d-mint-hover: 130 46% 50%;
 
-  /* The glass, turned to plain white. */
   --gl-fill: hsl(0 0% 100%);
   --gl-fill-solid: hsl(0 0% 100%);
   --gl-edge: hsl(var(--d-line));
@@ -74,8 +71,6 @@ body:has(.app.is-desk) {
 .is-desk .num {
   font-variant-numeric: tabular-nums;
 }
-
-/* ================================================================ header */
 
 .is-desk .topbar {
   position: sticky;
@@ -224,7 +219,6 @@ body:has(.app.is-desk) {
   font-size: 14px;
 }
 
-/* The wallet: its avatar and address in a quiet pill. */
 .is-desk .profile {
   height: 36px;
   gap: 8px;
@@ -286,8 +280,6 @@ body:has(.app.is-desk) {
 .is-desk .menu-row:hover {
   background: hsl(var(--d-hover));
 }
-
-/* =============================================================== sidebar */
 
 .sidenav {
   position: sticky;
@@ -372,8 +364,6 @@ body:has(.app.is-desk) {
   color: hsl(var(--up));
 }
 
-/* ======================================================= type and heads */
-
 .is-desk .page-head {
   align-items: flex-end;
   margin: 0 0 22px;
@@ -441,8 +431,6 @@ body:has(.app.is-desk) {
   letter-spacing: -0.03em;
 }
 
-/* ============================================================== surfaces */
-
 .is-desk .card,
 .is-desk .stock-card,
 .is-desk .tile,
@@ -484,8 +472,6 @@ body:has(.app.is-desk) {
 .is-desk .shimmer {
   border-radius: 12px;
 }
-
-/* =============================================================== buttons */
 
 .is-desk .btn-mint,
 .is-desk .btn-ghost {
@@ -680,10 +666,6 @@ body:has(.app.is-desk) {
   color: #fff;
 }
 
-/* ====================================================== controls, chips */
-
-/* Segmented controls: a grey track and a white thumb, as in the web apps
-   people already use every day. */
 .is-desk .seg,
 .is-desk .seg.pill-seg {
   gap: 0;
@@ -787,7 +769,6 @@ body:has(.app.is-desk) {
   border-radius: 5px;
 }
 
-/* Fields. */
 .is-desk .field {
   padding: 10px 12px;
   border: 1px solid hsl(var(--d-line-strong));
@@ -810,7 +791,6 @@ body:has(.app.is-desk) {
   font-weight: 600;
 }
 
-/* Tables. */
 .is-desk .table th {
   padding: 10px 16px;
   font-size: 12px;
@@ -855,7 +835,6 @@ body:has(.app.is-desk) {
   font-size: 13.5px;
 }
 
-/* Popups: a white dialog on a dim page, not a frosted sheet. */
 .is-desk .sheet-backdrop {
   background: rgb(10 10 10 / 0.36);
   -webkit-backdrop-filter: none;
@@ -881,8 +860,6 @@ body:has(.app.is-desk) {
   font-weight: 600;
   letter-spacing: -0.015em;
 }
-
-/* ================================================================ explore */
 
 .ex {
   display: flex;
@@ -934,7 +911,6 @@ body:has(.app.is-desk) {
   white-space: nowrap;
 }
 
-/* The prices loop right to left, fading out at both edges; hovering holds them. */
 .ex-strip {
   margin: -16px 0 -4px;
   padding: 4px 0;
@@ -1039,7 +1015,6 @@ body:has(.app.is-desk) {
   font-weight: 600;
 }
 
-/* The banner: dark, quiet, with live figures beside the words. */
 .ex-banner {
   --chart-up: 135 58% 58%;
   --chart-down: 3 88% 66%;
@@ -1055,7 +1030,6 @@ body:has(.app.is-desk) {
   color: #fff;
 }
 
-/* A fine grid, fading out from the right, for texture. */
 .ex-banner::before {
   content: "";
   position: absolute;
@@ -1193,7 +1167,6 @@ body:has(.app.is-desk) {
   font-size: 13px;
 }
 
-/* The figures beside the words. */
 .ex-panel {
   justify-self: end;
   width: 100%;
@@ -1342,7 +1315,6 @@ body:has(.app.is-desk) {
   background: hsl(0 0% 100%);
 }
 
-/* Sections. */
 .ex-section {
   display: flex;
   flex-direction: column;
@@ -1447,7 +1419,6 @@ body:has(.app.is-desk) {
   animation: ghost-pulse 1.4s ease-in-out infinite;
 }
 
-/* A trader. */
 .ex-trader-top {
   display: flex;
   align-items: center;
@@ -1543,7 +1514,6 @@ body:has(.app.is-desk) {
   font-size: 12.5px;
 }
 
-/* A basket: its cover across the top, flush with the card's edges. */
 .ex-card.ex-basket {
   gap: 0;
   padding: 0;
@@ -1598,7 +1568,6 @@ body:has(.app.is-desk) {
   white-space: nowrap;
 }
 
-/* The companies table. */
 .ex-table {
   overflow: hidden;
   border: 1px solid hsl(var(--d-line));
@@ -1697,10 +1666,6 @@ body:has(.app.is-desk) {
   color: hsl(var(--fg-muted));
 }
 
-/* ============================================================== companies */
-
-/* Every card already shows its price and move; a ticker above them says
-   it all twice. */
 .is-desk .tape {
   display: none;
 }
@@ -1756,8 +1721,6 @@ body:has(.app.is-desk) {
 .is-desk .stock-cta {
   min-height: 38px;
 }
-
-/* ========================================================== company page */
 
 .is-desk .asset-head {
   gap: 16px;
@@ -1820,7 +1783,6 @@ body:has(.app.is-desk) {
   margin-top: 16px;
 }
 
-/* The order panel. */
 .is-desk .trade-panel {
   gap: 12px;
 }
@@ -1865,7 +1827,6 @@ body:has(.app.is-desk) {
   font-size: 15px;
 }
 
-/* A scheduled fee change is a notice, not an error. */
 .is-desk .trade-fee-change,
 .is-desk .learn .note.down {
   margin-top: 10px;
@@ -1879,8 +1840,6 @@ body:has(.app.is-desk) {
   text-align: left;
   color: hsl(28 80% 30%);
 }
-
-/* ================================================================ baskets */
 
 .is-desk .grid {
   gap: 14px;
@@ -1911,7 +1870,6 @@ body:has(.app.is-desk) {
   padding: 14px 18px 18px;
 }
 
-/* A basket's own page: the cover beside the description and the facts. */
 .is-desk .basket-hero {
   grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
   align-items: center;
@@ -1951,8 +1909,6 @@ body:has(.app.is-desk) {
   height: 6px;
 }
 
-/* ================================================================== learn */
-
 .is-desk .learn-num {
   width: 28px;
   height: 28px;
@@ -1969,8 +1925,6 @@ body:has(.app.is-desk) {
   font-size: 14.5px;
   font-weight: 500;
 }
-
-/* ================================================================ traders */
 
 .is-desk .people-page {
   display: grid;
@@ -2011,7 +1965,6 @@ body:has(.app.is-desk) {
   font-size: 14px;
 }
 
-/* The top three, as three even cards: place, person, figure. */
 .is-desk .top3 {
   gap: 14px;
   margin: 18px 0 0;
@@ -2134,7 +2087,6 @@ body:has(.app.is-desk) {
   color: hsl(var(--fg));
 }
 
-/* The rest, as a table. */
 .is-desk .list-card {
   margin-top: 14px;
   padding: 0;
@@ -2208,8 +2160,6 @@ body:has(.app.is-desk) {
   font-size: 12.5px;
 }
 
-/* ================================================================ profile */
-
 .is-desk .profile-page {
   margin: 0;
 }
@@ -2235,7 +2185,6 @@ body:has(.app.is-desk) {
   border-radius: 12px 12px 0 0;
 }
 
-/* Who this is: the face on the left, the rest beside it. */
 .is-desk .profile-id {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -2337,7 +2286,6 @@ body:has(.app.is-desk) {
   padding: 4px 0 12px;
 }
 
-/* Portfolio value. */
 .is-desk .profile-value {
   margin: 16px 0 0;
   padding: 20px;
@@ -2396,7 +2344,6 @@ body:has(.app.is-desk) {
   margin: 14px 0 0;
 }
 
-/* What it holds. */
 .is-desk .profile-positions {
   margin: 16px 0 0;
 }
@@ -2463,7 +2410,6 @@ body:has(.app.is-desk) {
 }
 
 @media (min-width: 1024px) {
-  /* The value beside the positions. */
   .is-desk .profile-page {
     display: grid;
     grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
@@ -2501,8 +2447,6 @@ body:has(.app.is-desk) {
     grid-row: 3 / span 2;
   }
 }
-
-/* ================================================================= search */
 
 .is-desk .find-page {
   max-width: 820px;
@@ -2555,8 +2499,6 @@ body:has(.app.is-desk) {
 .is-desk .find-group .rows {
   padding: 0 16px;
 }
-
-/* ============================================================== narrower */
 
 @media (max-width: 1240px) {
   .ex-grid {
@@ -2628,7 +2570,6 @@ body:has(.app.is-desk) {
   }
 }
 
-/* A tablet: the sidebar keeps its icons and drops its words. */
 @media (max-width: 1023px) {
   .app.is-desk {
     grid-template-columns: 64px minmax(0, 1fr);
@@ -2662,7 +2603,6 @@ body:has(.app.is-desk) {
     align-items: center;
   }
 
-  /* Each group's name becomes a short rule between the groups. */
   .sidenav-label {
     width: 24px;
     height: 1px;
@@ -2745,13 +2685,6 @@ body:has(.app.is-desk) {
   }
 }
 
-/* =================================================================== mint */
-
-/*
- * The landing page's mint in the app: the full mint field with faint rings
- * for the banner, a trace of it on the page and header, and a pale mint for
- * selected items. Cards stay white so figures read on a clean surface.
- */
 .app.is-desk {
   --page: 150 30% 97.5%;
   --d-mint-soft: 149 70% 93%;
@@ -2767,8 +2700,6 @@ body:has(.app.is-desk) {
   background: hsl(150 30% 97.5%);
 }
 
-/* Solid white, not frosted: the header is sticky, and a backdrop blur
-   under it was recomputed on every frame of every scroll. */
 .is-desk .topbar {
   border-bottom-color: hsl(var(--d-mint-line) / 0.6);
   background: hsl(0 0% 100%);
@@ -2779,7 +2710,6 @@ body:has(.app.is-desk) {
   background: linear-gradient(180deg, hsl(0 0% 100%), hsl(150 50% 98.5%));
 }
 
-/* The mark takes the hero's mint, the way the landing's nav does. */
 .topbar-mark {
   background: linear-gradient(160deg, hsl(149 82% 80%), hsl(149 70% 66%));
   color: hsl(150 60% 10%);
@@ -2808,14 +2738,12 @@ body:has(.app.is-desk) {
   box-shadow: 0 0 0 3px hsl(var(--mint) / 0.16);
 }
 
-/* Selected tabs keep the white thumb on a faintly mint track. */
 .is-desk .seg,
 .is-desk .seg.pill-seg,
 .ex-tabs {
   background: hsl(150 25% 93%);
 }
 
-/* Table heads and the quiet fills, in the palest mint. */
 .dh-table th,
 .is-desk .list-cols,
 .is-desk .glass-table thead th {
@@ -2835,7 +2763,6 @@ body:has(.app.is-desk) {
   color: hsl(var(--d-mint-ink));
 }
 
-/* The banner: a mint field with faint rings and black type, like the landing hero. */
 .ex-banner {
   --chart-up: 150 60% 28%;
   --chart-down: 3 75% 45%;
@@ -2935,14 +2862,11 @@ body:has(.app.is-desk) {
   background: hsl(0 0% 6%);
 }
 
-/* The dashboard's profile card gets the field as a thin band on top. */
 .is-desk .profile-id:not(.under-cover) {
   background:
     linear-gradient(180deg, hsl(149 76% 90% / 0.55), hsl(0 0% 100% / 0) 90px),
     hsl(0 0% 100%);
 }
-
-/* =============================================================== charts */
 
 /*
  * No glow on desktop: hovering a chart redraws it for the crosshair, and the

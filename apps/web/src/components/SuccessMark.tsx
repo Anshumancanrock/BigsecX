@@ -1,10 +1,6 @@
 import { useState } from "react";
 import { reducedMotion } from "../lib/motion.ts";
 
-/**
- * A tick that draws itself inside a ring, with a small burst of light, for
- * the moment a trade has landed. Shown once, in the trade's own dialog.
- */
 export function SuccessMark({ title, detail }: { title: string; detail?: string }) {
   const [calm] = useState(reducedMotion);
   return (

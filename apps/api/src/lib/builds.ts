@@ -1,8 +1,3 @@
-/**
- * Refusal checks and transaction building shared by every route that returns
- * a signable bundle. Every applicable problem is reported, not just the first.
- */
-
 import {
   landingFeeBps,
   planRebalance,
@@ -47,7 +42,6 @@ export type BuildOutcome =
       readonly kind: "built";
       readonly bundle: Awaited<ReturnType<typeof buildMirrorBundle>>;
       readonly orders: readonly { readonly symbol: string; readonly side: string; readonly usd: number }[];
-      /** The priced plan the bundle was built from. */
       readonly plan: ExecutionPlan;
     };
 
@@ -80,7 +74,6 @@ export async function landingFees(
   return (symbol) => landingFeeBps(inForce.get(symbol) ?? highest, pending, clock);
 }
 
-/** Plans the orders that move `holdings` toward `target`, then builds them. */
 export async function buildForTarget(
   services: Services,
   request: BuildRequest,
@@ -109,8 +102,6 @@ export async function buildForTarget(
   });
   if (outcome.kind !== "built") return outcome;
 
-  // Companies the planner dropped as below the minimum ticket are reported in
-  // `deferred`. "Within tolerance" is not: that position is already the right size.
   const tooSmall = rebalance.skipped
     .filter((s) => s.reason === "below minimum ticket")
     .map((s) => ({
@@ -122,21 +113,18 @@ export async function buildForTarget(
   return { ...outcome, plan: { ...outcome.plan, deferred: [...outcome.plan.deferred, ...tooSmall] } };
 }
 
-/** The smallest single-company buy worth its fees; quoted back to the user when it drops one. */
 const MIN_TICKET_USD = 5;
 
 function formatUsd(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
-/** Validates the orders, prices them against live depth and builds the transactions. Shared by buys and sells. */
 export async function buildFromOrders(
   services: Services,
   request: {
     readonly owner: string;
     readonly orders: readonly RebalanceOrder[];
     readonly unpricedHoldings: readonly string[];
-    /** New capital for buys. Zero for a pure sell, which has no buys for the not-atomic guard to refuse. */
     readonly deployUsd: number;
     readonly slippageBps: number;
     readonly snapshot: MarketSnapshot;
@@ -177,7 +165,6 @@ export async function buildFromOrders(
   const buys = rebalance.orders.filter((o) => o.side === "buy");
   const buyNotional = buys.reduce((sum, o) => sum + o.usd, 0);
 
-  // One read serves the sell-coverage check and the count of accounts the buys open.
   const balances = await getSellableBalances(
     services.rpc,
     request.owner,
@@ -294,8 +281,6 @@ export async function buildFromOrders(
       // The fee's share of the tolerance, so the review can show how far the
       // price itself may move.
       feeAllowanceBps: feeBps,
-      // What the review can promise from this leg's quote: shares for a buy,
-      // dollars for a sell. Omitted when the quote did not measure it.
       ...(l.order.side === "buy" && l.expectedOutUi !== null ? { expectedShares: l.expectedOutUi } : {}),
       ...(l.order.side === "sell" && l.effectivePriceUsd !== null && mark
         ? { expectedUsd: (l.usd / mark) * l.effectivePriceUsd }

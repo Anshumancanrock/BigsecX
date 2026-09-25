@@ -27,7 +27,6 @@ describe("forwardFill", () => {
 
 describe("basketSeries", () => {
   test("values a starting amount through the basket's prices", () => {
-    // $1,000 all in A at 100 is 10 units: 1,100 then 1,100 (gap filled) then 1,200.
     expect(basketSeries(table, [{ symbol: "A", weight: 1 }], 1_000)).toEqual([1_000, 1_100, 1_100, 1_200]);
   });
 
@@ -40,7 +39,6 @@ describe("basketSeries", () => {
     const series = basketSeries(table, [{ symbol: "A", weight: 0.5 }, { symbol: "B", weight: 0.5 }], 1_000, 1);
     expect(series[0]).toBeNull();
     expect(series[1]).toBeCloseTo(1_000, 9);
-    // A: 500/110 units at 120, B: 500/50 units at 60.
     expect(series[3]).toBeCloseTo((500 / 110) * 120 + 10 * 60, 9);
   });
 });
@@ -70,7 +68,6 @@ describe("niceTicks", () => {
     expect(ticks[0]).toBeGreaterThan(0);
     expect(ticks[0]).toBeLessThanOrEqual(400_000);
     expect(ticks[ticks.length - 1]).toBeGreaterThanOrEqual(470_000);
-    // A series that swings widely stays zero-based.
     expect(niceTicks(3_000, 4, 900)[0]).toBe(0);
   });
 });
@@ -92,8 +89,6 @@ describe("smoothPath", () => {
       { x: 10, y: 10 },
       { x: 20, y: 50 },
     ]);
-    // Every y in the path's control points stays within the data's range.
-    // Numbers alternate x, y through M and every C segment.
     const numbers = [...d.matchAll(/-?[\d.]+/g)].map((m) => Number(m[0]));
     const ys = numbers.filter((_, i) => i % 2 === 1);
     expect(Math.min(...ys)).toBeGreaterThanOrEqual(10);

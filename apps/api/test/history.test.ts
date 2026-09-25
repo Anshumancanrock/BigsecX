@@ -9,7 +9,7 @@ import { makeServices } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
 const DAY = 86_400;
-const T0 = Date.UTC(2026, 8, 1) / 1000; // 2026-09-01
+const T0 = Date.UTC(2026, 8, 1) / 1000;
 
 const candle = (dayIndex: number, close: number, volumeUsd = 100) => ({ time: T0 + dayIndex * DAY, close, volumeUsd });
 
@@ -23,8 +23,6 @@ describe("mergeDaily", () => {
   });
 
   test("drops a close far from the week around it", () => {
-    // A new pool's first print can be far off: this one opened at a fifth of
-    // the price it traded at for the rest of the week.
     const closes = [100, 101, 99, 20, 102, 100, 98].map((c, i) => candle(i, c));
     const merged = mergeDaily([closes]);
     expect(merged.has("2026-09-04")).toBe(false);
@@ -55,7 +53,6 @@ describe("historyTable", () => {
     );
     expect(table.days).toEqual(["2026-09-01", "2026-09-02", "2026-09-03"]);
     expect(table.prices["SPACEX"]).toEqual([110, 112, 112]);
-    // A company with no candles still gets a row, null until today.
     expect(table.prices["OPENAI"]).toEqual([null, null, 1_200]);
   });
 
@@ -79,7 +76,6 @@ describe("PriceHistory", () => {
     expect(Object.keys(history.closes()).length).toBe(8);
     const written = JSON.parse(readFileSync(path, "utf8")) as { bySymbol: Record<string, unknown> };
     expect(Object.keys(written.bySymbol).length).toBe(8);
-    // A new instance serves the cache immediately, with no fetch at all.
     const restarted = new PriceHistory(
       source({
         pools: async () => {
@@ -130,7 +126,6 @@ describe("geckoTerminal", () => {
       Response.json({
         data: [
           {
-            // Deep but idle: a side pair holding a lot and trading nothing.
             attributes: { address: "deep", reserve_in_usd: "118000", volume_usd: { h24: "36" } },
             relationships: { base_token: { data: { id: "solana_other" } } },
           },
@@ -212,7 +207,6 @@ describe("GET /api/trades/recent", () => {
     open.push(services.store);
     services.store.writeTrades([
       { signature: "a", owner: "w1", symbol: "OPENAI", slot: 10, blockTime: 1, deltaRaw: 1n, uiAmount: 0.1, valueUsd: 101 },
-      // Paid $92 to receive half a dollar of OpenAI: another leg's money.
       { signature: "b", owner: "w2", symbol: "OPENAI", slot: 20, blockTime: 2, deltaRaw: 1n, uiAmount: 0.0004, valueUsd: -92 },
       { signature: "c", owner: "w3", symbol: "SPACEX", slot: 30, blockTime: 3, deltaRaw: -1n, uiAmount: -2, valueUsd: -190 },
     ]);

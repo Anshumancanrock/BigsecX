@@ -1,8 +1,3 @@
-/**
- * One basket: its current holdings and what $1,000 in it became, from the
- * same daily price history as every other chart.
- */
-
 import { TokenLogo } from "../components/TokenLogo.tsx";
 import { Ticking } from "../components/Ticker.tsx";
 import { ApiError, api, type IndexDetail as Detail, type IndexList, type Market } from "../lib/api.ts";
@@ -15,11 +10,6 @@ import { PerformanceCard } from "../features/baskets/PerformanceCard.tsx";
 import { BasketCover } from "../features/baskets/BasketCover.tsx";
 import { schemeWords } from "../lib/words.ts";
 
-/**
- * A system index or a published basket. Both are target weights behind
- * different endpoints: the index is tried first, then the strategy on a 404,
- * and the result decides whether a buy sends `indexId` or `strategyId`.
- */
 type Resolved = { readonly kind: "index"; readonly value: Detail } | {
   readonly kind: "strategy";
   readonly value: Detail;
@@ -40,13 +30,11 @@ export function BasketDetail({ id, market }: { id: string; market: Market | null
           description: strategy.description ?? `Made by ${shortAddress(strategy.creator, 4, 4)}.`,
           scheme: strategy.rebalance,
           weights: strategy.weights,
-          // Strategies carry no level history; the chart is simply absent.
           history: [],
         },
       };
     }
   }, [id]);
-  // The whole market, for the dotted line a basket is measured against.
   const indexes = useAsync<IndexList>((signal) => api.indexes(signal), []);
   const everything = list(list(indexes.data?.indexes).find((i) => i.id === "pre8")?.weights);
 

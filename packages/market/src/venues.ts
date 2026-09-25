@@ -35,17 +35,14 @@ export async function discoverVenues(
             outputMint: token.mint,
             amount: BigInt(Math.round(usd * 10 ** USDC_DECIMALS)),
           },
-          // The venue set changes far more slowly than price.
           10 * 60_000,
         );
         for (const step of quote.routePlan) {
-          // Skip intermediate hops (via SOL and others) that do not touch this token.
           const { ammKey, label, inputMint, outputMint } = step.swapInfo;
           if (inputMint !== token.mint && outputMint !== token.mint) continue;
           if (!byKey.has(ammKey)) byKey.set(ammKey, { ammKey, label, symbol: token.symbol });
         }
       } catch {
-        // An unquotable token contributes no venues; the others still do.
         continue;
       }
     }

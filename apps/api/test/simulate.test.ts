@@ -18,7 +18,6 @@ function app(options: FakeOptions = {}) {
 const post = (a: ReturnType<typeof createApp>, body: unknown) =>
   a.request("/api/simulate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
-/** The shape the builder emits: a v0 transaction with an empty signature slot. */
 function unsigned() {
   const payer = Keypair.generate();
   const message = new TransactionMessage({

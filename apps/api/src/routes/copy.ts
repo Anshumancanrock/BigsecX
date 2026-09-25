@@ -18,7 +18,6 @@ import { buildForTarget } from "../lib/builds.ts";
 import { BadRequest, readJson, requireBase58Address, requireFiniteUsd, requireInt, toNumber } from "../lib/validate.ts";
 import { readPortfolio } from "./portfolio.ts";
 
-/** Matches the ceiling the copy domain enforces, against ~$2.6M of depth. */
 const MAX_COPY_CAPITAL_USD = 1_000_000;
 
 function parseLimits(body: Record<string, unknown>): CopyLimits {
@@ -61,7 +60,6 @@ function parseLimits(body: Record<string, unknown>): CopyLimits {
   return limits;
 }
 
-/** The leader's live allocation, which is what a follower is copying. */
 async function leaderWeights(
   services: Services,
   leader: string,
@@ -69,9 +67,6 @@ async function leaderWeights(
 ): Promise<{ readonly weights: Weight[]; readonly totalUsd: number; readonly unpriced: string[] }> {
   const portfolio = await readPortfolio(services, leader, snapshot, { includeStranded: true });
 
-  // The leader's whole book, including tokens outside the associated accounts:
-  // a follower buys fresh with USDC, so what matters is how the leader is
-  // allocated, not what a swap could spend.
   const usdBySymbol = new Map<string, number>();
   for (const p of portfolio.positions) {
     if (p.valueUsd !== null) usdBySymbol.set(p.symbol, (usdBySymbol.get(p.symbol) ?? 0) + p.valueUsd);
@@ -152,7 +147,6 @@ export function registerCopyRoutes(
     });
   });
 
-  /** Unsigned transactions that buy the leader's allocation, with the same refusals as every other build. */
   app.post("/api/copy/build", async (c) => {
     const body = await readJson(c);
     const leader = requireBase58Address(body["leader"], "leader");
@@ -214,7 +208,6 @@ export function registerCopyRoutes(
       leader,
       follower,
       preview: { positions: preview.positions, excluded: preview.excluded, notes: preview.notes },
-      // What the transactions actually do, after depth and impact limits.
       legs: outcome.orders,
       deferred: outcome.plan.deferred,
       totalUsd: outcome.plan.totalUsd,

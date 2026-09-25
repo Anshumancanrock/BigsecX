@@ -6,26 +6,20 @@
  */
 
 const MAX_FEE_BASIS_POINTS = 10_000n;
-/** Sentinel used by PreStocks mints to mean "no cap". */
-export const UNCAPPED_FEE = 18_446_744_073_709_551_615n; // u64::MAX
+export const UNCAPPED_FEE = 18_446_744_073_709_551_615n;
 
-/** One of the two fee schedules on a mint. */
 export interface TransferFee {
   /** First epoch in which this schedule applies. */
   readonly epoch: number;
-  /** Fee rate in basis points. */
   readonly transferFeeBasisPoints: number;
-  /** Absolute cap on the fee, in raw base units. */
   readonly maximumFee: bigint;
 }
 
-/** On-chain TransferFeeConfig extension state. */
 export interface TransferFeeConfig {
   readonly olderTransferFee: TransferFee;
   readonly newerTransferFee: TransferFee;
 }
 
-/** `ceil(numerator / denominator)` over bigints. */
 function ceilDiv(numerator: bigint, denominator: bigint): bigint {
   return (numerator + denominator - 1n) / denominator;
 }
@@ -41,11 +35,6 @@ export function epochFee(config: TransferFeeConfig, epoch: number): TransferFee 
     : config.olderTransferFee;
 }
 
-/**
- * Fee withheld from a transfer of `preFeeAmount` raw units.
- *
- * Mirrors `TransferFee::calculate_fee`.
- */
 export function calculateFee(fee: TransferFee, preFeeAmount: bigint): bigint {
   const bps = BigInt(fee.transferFeeBasisPoints);
   if (bps === 0n || preFeeAmount === 0n) return 0n;
@@ -53,12 +42,6 @@ export function calculateFee(fee: TransferFee, preFeeAmount: bigint): bigint {
   return raw < fee.maximumFee ? raw : fee.maximumFee;
 }
 
-/**
- * Amount that actually lands in the recipient account.
- *
- * Mirrors `calculate_post_fee_amount`. This is the number a UI should show as
- * "you receive", not the pool output.
- */
 export function postFeeAmount(fee: TransferFee, preFeeAmount: bigint): bigint {
   return preFeeAmount - calculateFee(fee, preFeeAmount);
 }
@@ -89,10 +72,6 @@ export function calculateEpochFee(
   return calculateFee(epochFee(config, epoch), preFeeAmount_);
 }
 
-/**
- * Describe a scheduled fee change that is not yet live. Null when the newer
- * schedule is already live or charges the same rate as the older one.
- */
 export function pendingFeeChange(
   config: TransferFeeConfig,
   currentEpoch: number,

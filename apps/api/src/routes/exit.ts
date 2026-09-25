@@ -1,9 +1,3 @@
-/**
- * Selling. Orders are sized from what the wallet holds on chain, then built by
- * the same pipeline as a purchase: depth resizing, refusal guards, per-leg
- * slippage and packing.
- */
-
 import type { Hono } from "hono";
 import type { RebalanceOrder } from "@ps/core";
 import type { MarketSnapshot } from "@ps/market";
@@ -115,7 +109,6 @@ async function planExit(
   };
 }
 
-/** The 400 body when a wallet has nothing this request can sell. */
 function nothingToSell(plan: ExitPlan) {
   return {
     error:
@@ -161,7 +154,6 @@ export function registerExitRoutes(
     });
   });
 
-  /** Unsigned transactions that sell, with USDC coming back to the wallet. */
   app.post("/api/exit/build", async (c) => {
     const body = await readJson(c);
     const owner = requireBase58Address(body["owner"], "owner");

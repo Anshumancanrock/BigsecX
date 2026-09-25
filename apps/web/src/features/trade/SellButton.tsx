@@ -26,7 +26,6 @@ export function SellButton({
   label,
   onSettled,
 }: {
-  /** Omitted sells every position in the wallet. */
   symbol?: string;
   name: string;
   className?: string;
@@ -35,7 +34,6 @@ export function SellButton({
 }) {
   const wallet = useWallet();
   const market = useMarket();
-  // The fee as the token charges it now, not a number fixed in the copy.
   const feeBps = (symbol ? market?.tokens.find((t) => t.symbol === symbol) : market?.tokens[0])?.transferFeeBps ?? 100;
   const [asking, setAsking] = useState(false);
   const [request, setRequest] = useState<BuildRequest | null>(null);
@@ -63,8 +61,6 @@ export function SellButton({
       .then((plan) => setPreview({ kind: "ok", proceeds: plan.proceedsUsd, count: plan.sells.length }))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        // The refusal body names the specific position and reason; the
-        // top-level message is only the generic summary.
         const body = (error as ApiError)?.body;
         const skipped = Array.isArray(body?.["skipped"]) ? (body["skipped"] as { reason?: string }[]) : [];
         const blocked = Array.isArray(body?.["blocked"]) ? (body["blocked"] as { reason?: string }[]) : [];
@@ -80,7 +76,6 @@ export function SellButton({
 
   const ready = preview.kind === "ok";
 
-  /** Reopening starts from "all of it", the overwhelmingly common intent. */
   const open = () => {
     setFraction(1);
     setAsking(true);

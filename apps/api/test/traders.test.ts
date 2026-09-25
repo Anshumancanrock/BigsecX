@@ -29,7 +29,6 @@ const trade = (symbol: string, uiAmount: number, valueUsd: number | null, slot: 
 describe("trader profile", () => {
   test("marks an open position against its observed cost", async () => {
     const { app: a, store } = app({ OPENAI: 120 });
-    // Bought 10 shares for $1,000; they now mark at $1,200.
     store.writeTrades([trade("OPENAI", 10, 1_000, 10)]);
 
     const body = (await (await a.request(`/api/traders/${W}`)).json()) as {
@@ -91,7 +90,6 @@ describe("trader profile", () => {
 
   test("flags a record whose cost basis is incomplete", async () => {
     const { app: a, store } = app();
-    // A SOL-routed swap with no price.
     store.writeTrades([trade("OPENAI", 5, null, 10)]);
     const body = (await (await a.request(`/api/traders/${W}`)).json()) as {
       coverageComplete: boolean;
@@ -112,7 +110,6 @@ describe("trader profile", () => {
 
   test("the window excludes older activity", async () => {
     const { app: a, store } = app();
-    // One recent trade and one roughly 100 hours older.
     store.writeTrades([trade("OPENAI", 1, 100, 1_000_000), trade("OPENAI", 1, 100, 100_000)]);
     const narrow = (await (await a.request(`/api/traders/${W}?hours=1`)).json()) as { trades: number };
     const wide = (await (await a.request(`/api/traders/${W}?hours=1000`)).json()) as { trades: number };
@@ -134,7 +131,6 @@ describe("trade history", () => {
       trades: { side: string; uiAmount: number; valueUsd: number; at: string }[];
     };
     expect(body.trades).toHaveLength(2);
-    // Newest first.
     expect(body.trades[0]?.side).toBe("sell");
     expect(body.trades[0]?.uiAmount).toBe(4);
     expect(body.trades[0]?.valueUsd).toBe(500);

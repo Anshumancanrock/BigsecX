@@ -42,16 +42,13 @@ interface TransactionResponse {
   };
 }
 
-/** A wallet's net position change in one transaction. */
 export interface Trade {
   readonly signature: string;
   readonly slot: number;
   readonly blockTime: number | null;
   readonly owner: string;
   readonly mint: string;
-  /** Positive when the wallet gained tokens. */
   readonly deltaRaw: bigint;
-  /** Matching USDC change, negative when the wallet spent. Null if absent. */
   readonly usdcDeltaRaw: bigint | null;
   /**
    * Matching wrapped-SOL change, negative when the wallet spent. Most routes
@@ -69,17 +66,10 @@ export interface Trade {
   readonly lamportDeltaRaw: bigint | null;
 }
 
-/** True for an owner that did not sign, such as a pool or program account. */
 function isCounterparty(owner: string, signers: ReadonlySet<string>): boolean {
   return !signers.has(owner);
 }
 
-/**
- * One page of signatures touching an address, newest first.
- *
- * `until` bounds the scan: the node returns signatures newer than it.
- * `before` pages backward from a signature already seen.
- */
 export async function getSignatures(
   rpc: Rpc,
   address: string,
@@ -134,7 +124,6 @@ export async function getSignaturesSince(
     }
     signatures.push(...batch);
 
-    // A short page means the node had nothing older left above `until`.
     if (batch.length < pageSize) return { signatures, complete: true };
     before = batch[batch.length - 1]?.signature;
     if (!before) return { signatures, complete: true };
@@ -142,7 +131,6 @@ export async function getSignaturesSince(
   return { signatures, complete: false };
 }
 
-/** Net token-balance change per owner in one transaction. */
 function extractTrades(
   signature: string,
   response: TransactionResponse,
@@ -156,8 +144,6 @@ function extractTrades(
   const accountKeys = response.transaction?.message?.accountKeys;
   if (!Array.isArray(accountKeys)) return [];
 
-  // The fee payer is the first account key. Its native balance is the only
-  // place a SOL-routed swap is visible.
   const feePayer = accountKeys[0]?.pubkey ?? null;
   const preLamports = meta.preBalances?.[0];
   const postLamports = meta.postBalances?.[0];
@@ -191,7 +177,6 @@ function extractTrades(
   apply(meta.preTokenBalances, -1n);
   apply(meta.postTokenBalances, 1n);
 
-  // Roll account-level deltas up to owner and mint.
   const byOwnerMint = new Map<string, bigint>();
   for (const entry of deltas.values()) {
     const key = `${entry.owner}\u0000${entry.mint}`;
@@ -232,34 +217,23 @@ function extractTrades(
   return trades;
 }
 
-/**
- * Fetch and parse transactions in small sequential batches; public endpoints
- * tolerate getTransaction but not a burst of it.
- */
 export async function fetchTrades(
   rpc: Rpc,
   signatures: readonly string[],
   watchedMints: ReadonlySet<string>,
   options: {
     readonly batchSize?: number;
-    /**
-     * "confirmed" reads a transaction seconds after it lands; the node's
-     * default, "finalized", answers null for it for the first thirteen or so.
-     */
     readonly commitment?: "confirmed" | "finalized";
   } = {},
 ): Promise<{
   readonly trades: Trade[];
   readonly missed: number;
-  /** Signatures the node returned a transaction for; the rest it does not have (yet). */
   readonly seen: readonly string[];
 }> {
   const batchSize = options.batchSize ?? 10;
   const trades: Trade[] = [];
   const seen: string[] = [];
   let missed = 0;
-  // Version 1 transactions are live on mainnet; requesting only version 0
-  // makes the node refuse them outright.
   const paramsFor = (signature: string) => [
     signature,
     {
@@ -304,8 +278,6 @@ export async function fetchTrades(
 
     slice.forEach((signature, j) => {
       const response = responses![j];
-      // A null response means the node has no record of it; nothing to index,
-      // and nothing lost.
       if (response) {
         seen.push(signature);
         trades.push(...extractTrades(signature, response, watchedMints));

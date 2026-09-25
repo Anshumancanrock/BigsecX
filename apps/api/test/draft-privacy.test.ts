@@ -73,7 +73,6 @@ describe("draft privacy", () => {
     const signed = await stranger.sign("list-drafts", "mine", body);
     const res = await json(a, "/api/strategies/mine", { ...body, ...signed });
     expect(res.status).toBe(200);
-    // A valid signature proves identity, not read access.
     expect(await res.text()).not.toContain("Secret Basket");
   });
 

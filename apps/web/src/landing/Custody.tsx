@@ -1,11 +1,8 @@
-/** Self-custody: how a trade settles to the buyer's own wallet, beside a live example ticket. */
-
 import { TokenLogo } from "../components/TokenLogo.tsx";
 import type { Market } from "../lib/api.ts";
 import { list, price } from "../lib/format.ts";
 import { MarketContext } from "../lib/market.ts";
 
-/** The example order on the ticket. */
 const EXAMPLE_USD = 250;
 const EXAMPLE_SYMBOL = "ANTHROPIC";
 

@@ -19,7 +19,6 @@ const PAYER = new PublicKey("GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL");
 const BLOCKHASH = "9C62FZuEUbpZmFrqPQbNfBiPr5U1JcTBhCfKqGgSEg4m";
 const PROGRAM = new PublicKey("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4");
 
-/** An instruction touching `accountCount` distinct accounts. */
 function instruction(accountCount: number, dataBytes = 52): TransactionInstruction {
   return new TransactionInstruction({
     programId: PROGRAM,
@@ -92,7 +91,6 @@ describe("packGroups", () => {
     });
     expect(oversized).toHaveLength(0);
     expect(packed.length).toBeGreaterThan(1);
-    // Every group is placed exactly once, in order.
     expect(packed.flatMap((p) => p.groupIndices)).toEqual([0, 1, 2, 3]);
   });
 
@@ -113,7 +111,6 @@ describe("packGroups", () => {
     });
     expect(oversized.map((o) => o.index)).toEqual([1]);
     expect(oversized[0]?.bytes).toBeGreaterThan(PACKET_DATA_SIZE);
-    // The viable groups still ship.
     expect(packed.flatMap((p) => p.groupIndices).sort()).toEqual([0, 2]);
   });
 
@@ -205,7 +202,6 @@ describe("setup instructions across a multi-transaction bundle", () => {
   const SETUP_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
   const DESTINATION = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
-  /** The shared idempotent account creation every sell leg emits. */
   function sharedSetup(): TransactionInstruction {
     return new TransactionInstruction({
       programId: SETUP_PROGRAM,
@@ -244,7 +240,6 @@ describe("setup instructions across a multi-transaction bundle", () => {
 
     const kept = dedupeWithinTransaction(packed[0]!.instructions);
     expect(kept.filter(isSetup)).toHaveLength(1);
-    // The three swaps survive; only the repeated setup is collapsed.
     expect(kept.filter((i) => !isSetup(i))).toHaveLength(3);
   });
 
@@ -275,7 +270,6 @@ describe("sell coverage", () => {
   });
 
   test("refuses a frozen account however much it reports", () => {
-    // A frozen account still reports its full balance.
     const legs = [{ symbol: "OPENAI", side: "sell" as const, usd: 100 }];
     const result = findUncoveredSells(legs, balance(100, true), prices);
     expect(result).toHaveLength(1);
@@ -307,7 +301,6 @@ describe("compute budget encoding", () => {
   });
 
   test("a priority fee is decoded from its little-endian u64", () => {
-    // Fees recommended for three real legs, an order of magnitude apart.
     for (const microLamports of [94_706, 911_344, 532_844]) {
       const data = Buffer.from(
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports }).data,

@@ -1,13 +1,6 @@
-/**
- * SQLite schema and migrations. SQLite fits a few hundred rows per snapshot
- * and a handful of readers; the SQL stays portable so moving engines is a
- * connection change. Migrations run forward only, tracked by `user_version`.
- */
-
 import type { Database } from "bun:sqlite";
 
 const MIGRATIONS: readonly string[] = [
-  // 1: market snapshots, prices, holder positions, index levels
   `
   CREATE TABLE market_snapshot (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +41,6 @@ const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (index_id, snapshot_id)
   );
   `,
-  // 2: reconstructed trades and per-mint indexing cursors
   `
   CREATE TABLE trade (
     signature   TEXT    NOT NULL,
@@ -74,7 +66,6 @@ const MIGRATIONS: readonly string[] = [
     updated_at      INTEGER NOT NULL
   );
   `,
-  // 3: drop holder_position, which nothing writes; trades replace it.
   `
   DROP TABLE IF EXISTS holder_position;
   `,
@@ -82,7 +73,6 @@ const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE index_cursor RENAME COLUMN mint TO address;
   `,
-  // 5: strategies, with constituents in their own table to query by holding.
   `
   CREATE TABLE strategy (
     id                TEXT    PRIMARY KEY,
@@ -111,11 +101,9 @@ const MIGRATIONS: readonly string[] = [
   );
   CREATE INDEX idx_constituent_symbol ON strategy_constituent (symbol);
   `,
-  // 6: snapshot timestamps in ms, so snapshots in one second stay distinct.
   `
   UPDATE market_snapshot SET taken_at = taken_at * 1000;
   `,
-  // 7: profiles, follows, sessions (ms); sessions keep only a token hash.
   `
   CREATE TABLE profile (
     wallet     TEXT    PRIMARY KEY,
@@ -151,7 +139,6 @@ const MIGRATIONS: readonly string[] = [
   CREATE UNIQUE INDEX idx_session_proof ON session (proof);
   CREATE INDEX idx_session_expires ON session (expires_at);
   `,
-  // 9: avatars, a preset or a small upload; no row means the default picture.
   `
   CREATE TABLE avatar (
     wallet     TEXT    PRIMARY KEY,

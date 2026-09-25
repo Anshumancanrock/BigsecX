@@ -36,7 +36,6 @@ describe("PythClient", () => {
 
 describe("priceTruth", () => {
   test("judges against the oracle when one exists", () => {
-    // Market 1200 against oracle 1000 is rich, although the mark (1190) is close.
     const truth = priceTruth({
       symbol: "OPENAI",
       marketUsd: 1_200,

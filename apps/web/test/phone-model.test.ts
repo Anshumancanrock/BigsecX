@@ -21,7 +21,6 @@ describe("popDigits", () => {
     const first = popDigits(null, "$12,847", 0);
     expect(first.digits.every((d) => d.stagger !== null)).toBe(true);
     const next = popDigits(first.digits, "$12,851", first.nextKey);
-    // "$12,8" is unchanged and keeps its keys; "5" and "1" are new.
     expect(next.digits.slice(0, 5).map((d) => d.key)).toEqual(first.digits.slice(0, 5).map((d) => d.key));
     expect(next.digits.slice(0, 5).every((d) => d.stagger === null)).toBe(true);
     expect(next.digits.slice(5).map((d) => d.stagger)).toEqual([0, 1]);
@@ -93,7 +92,6 @@ describe("frames", () => {
     expect(framesFromHistory({ days: days.slice(0, 3), prices: {} }, [{ symbol: "A", weight: 1 }])).toBeNull();
     const fallback = fallbackFrames();
     expect(fallback.get("6M")!.points.length).toBe(CURVE_POINTS);
-    // Seeded: the same line every visit.
     expect(fallbackFrames().get("1M")!.points).toEqual(fallback.get("1M")!.points);
   });
 });

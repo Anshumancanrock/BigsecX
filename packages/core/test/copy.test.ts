@@ -39,7 +39,6 @@ describe("previewCopy", () => {
     });
     expect(preview.deployUsd).toBe(250);
     expect(preview.reserveUsd).toBe(750);
-    // Same exposure, smaller: the allocation is unchanged.
     expect(preview.targetWeights.find((w) => w.symbol === "OPENAI")?.weight).toBeCloseTo(0.5, 9);
     expect(preview.notes.join(" ")).toContain("stablecoin");
   });
@@ -203,7 +202,6 @@ describe("validateCopyLimits", () => {
 
 describe("stopLossTriggered", () => {
   test("measures drawdown from the peak, not from entry", () => {
-    // Doubled then halved: flat on entry, but down 50% from the peak.
     const result = stopLossTriggered({
       peakValueUsd: 2_000,
       currentValueUsd: 1_000,
@@ -289,8 +287,6 @@ describe("a copy preview is exactly what a rebalance will do", () => {
   });
 
   test("unrelated holdings would break it, which is why none are passed", () => {
-    // With the follower's other position included, the same target sells it
-    // and plans six times the notional.
     const preview = previewCopy({ leader: LEADER, leaderWeights, limits: limits() });
     const wrong = planRebalance({
       target: preview.targetWeights,

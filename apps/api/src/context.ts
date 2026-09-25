@@ -1,5 +1,3 @@
-/** Service handles, built once at startup so client caches and rate limits persist across requests. */
-
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PUBLIC_RPC_URLS, Rpc } from "@ps/chain";
@@ -16,11 +14,9 @@ export interface Services {
   readonly store: Store;
   /** Daily prices for the dashboard chart. Absent in tests unless supplied. */
   readonly history?: PriceHistory;
-  /** Logos, holders and volume from the token directory. Tests supply a fake. */
   readonly tokenMeta?: () => Promise<Map<string, TokenMeta>>;
 }
 
-/** Next to the database, so one data directory holds everything cached. */
 function historyCachePath(): string {
   const database = process.env["DATABASE_PATH"];
   if (database) return join(dirname(database), "price-history.json");

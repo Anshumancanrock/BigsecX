@@ -92,7 +92,6 @@ export class Cache {
 
     const existing = this.#inFlight.get(key) as Promise<T> | undefined;
     if (options.revalidateInBackground && entry && now < entry.staleUntil) {
-      // Nobody awaits this reload; on failure the old value stays for the next caller.
       if (!existing) this.#load(key, ttlMs, staleMs, loader, entry).catch(() => undefined);
       return entry.value;
     }
@@ -129,7 +128,6 @@ export class Cache {
     return promise;
   }
 
-  /** Number of retained entries. Exposed for tests and diagnostics. */
   get size(): number {
     return this.#entries.size;
   }
@@ -167,7 +165,6 @@ export async function getJson<T>(
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
-      // Upstream 429s here are sustained, not bursty, so back off generously.
       await new Promise((resolve) => setTimeout(resolve, 600 * 2 ** (attempt - 1)));
     }
     await options.limiter?.acquire();
@@ -186,7 +183,6 @@ export async function getJson<T>(
         throw new UpstreamError(options.upstream, response.status, `HTTP ${response.status}`);
       }
     } catch (error) {
-      // A deliberate refusal is final; a transport failure is worth retrying.
       if (error instanceof UpstreamError) throw error;
       lastError = error as Error;
     }

@@ -1,9 +1,3 @@
-/**
- * Profiles and follows. Writes are attributed to a wallet, so they need a
- * session: one signed sign-in message buys a random token good for thirty
- * days, stored only as a hash. A token can edit a profile and follows, nothing else.
- */
-
 import { Hono } from "hono";
 import { averageHoldSeconds } from "@ps/core";
 import { decodeBase58 } from "@ps/chain";
@@ -21,11 +15,9 @@ import {
   sanitizeDisplayText,
 } from "../lib/validate.ts";
 
-/** How long a sign-in lasts. */
 export const SESSION_MS = 30 * 24 * 60 * 60_000;
 const MAX_NAME = 32;
 const MAX_BIO = 160;
-/** Far more than a person follows; a bound on what one token can write. */
 export const MAX_FOLLOWING = 2_000;
 
 /** Handles that would read as the product speaking, or as a word the app uses in its links. */
@@ -71,11 +63,8 @@ const RESERVED_PARTS = ["bigsec", "prestocks", "official", "support", "admin", "
 
 const HANDLE = /^[a-z0-9_]{3,20}$/;
 
-/** How many drawn characters there are to pick from; the web app has the pictures. */
 export const AVATAR_PRESETS = 9;
-/** The largest picture accepted. The app sends a 256-pixel square, 10-40KB. */
 export const MAX_AVATAR_BYTES = 256 * 1024;
-/** Smallest and largest side, in pixels. */
 const AVATAR_MIN_SIDE = 32;
 const AVATAR_MAX_SIDE = 1024;
 
@@ -206,7 +195,6 @@ export function registerSocialRoutes(app: Hono, services: Services): void {
     return wallet;
   }
 
-  /** Exchange a sign-in signature for a session token. Each signature is accepted once, within its window. */
   app.post("/api/session", async (c) => {
     const body = await readJson(c);
     const wallet = requireBase58Address(body["wallet"], "wallet");
@@ -220,18 +208,12 @@ export function registerSocialRoutes(app: Hono, services: Services): void {
     return c.json({ token, wallet, expiresAt: new Date(expiresAt).toISOString() }, 201);
   });
 
-  /** Sign out: the token stops working everywhere at once. */
   app.post("/api/session/end", async (c) => {
     const body = await readJson(c);
     if (typeof body["token"] === "string") store.endSession(await sessionKey(body["token"]));
     return c.json({ ok: true });
   });
 
-  /**
-   * One wallet's profile, follow counts and indexed trading activity. The
-   * optional `viewer` (follows are public) adds whether the viewer follows this
-   * wallet and how many of the viewer's follows do too.
-   */
   app.get("/api/profiles/:wallet", (c) => {
     const wallet = requireBase58Address(c.req.param("wallet"), "wallet");
     const viewerRaw = c.req.query("viewer");
@@ -257,14 +239,12 @@ export function registerSocialRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /** Names and handles for a list of wallets, for rows that show people. */
   app.get("/api/profiles", (c) => {
     const raw = (c.req.query("wallets") ?? "").split(",").map((w) => w.trim()).filter(Boolean);
     if (raw.length > 100) throw new BadRequest("at most 100 wallets at a time");
     const wallets = raw.map((w) => requireBase58Address(w, "wallets"));
     const rows = store.profiles(wallets);
     const avatars = store.avatars(wallets);
-    // A wallet that set a picture but no name is still someone to show.
     const known = [...new Set([...rows.keys(), ...avatars.keys()])];
     return c.json({
       profiles: Object.fromEntries(
@@ -276,7 +256,6 @@ export function registerSocialRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /** Who owns a handle, for links written as a username. */
   app.get("/api/handles/:handle", (c) => {
     const handle = parseHandle(c.req.param("handle"));
     const row = handle ? store.profileByHandle(handle) : null;
@@ -298,7 +277,6 @@ export function registerSocialRoutes(app: Hono, services: Services): void {
     return c.json(profileDto(wallet, store.profile(wallet), store.avatar(wallet)));
   });
 
-  /** Set the signed-in wallet's picture: a drawn preset, an upload, or cleared back to the address default. */
   app.post("/api/profile/avatar", async (c) => {
     const body = await readJson(c);
     const wallet = await signedIn(body);
@@ -340,12 +318,10 @@ export function registerSocialRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /** Follow or unfollow, answering with the new state and count. */
   app.post("/api/follows", async (c) => {
     const body = await readJson(c);
     const follower = await signedIn(body);
     const followee = requireBase58Address(body["followee"], "followee");
-    // The address pattern admits strings that are not public keys.
     if (!isPublicKey(followee)) throw new BadRequest("followee is not a valid Solana address");
     if (typeof body["follow"] !== "boolean") throw new BadRequest("follow must be true or false");
     if (followee === follower) throw new BadRequest("you cannot follow yourself");
@@ -364,7 +340,6 @@ export function registerSocialRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /** A follow list, with each wallet's name where it has one. */
   for (const side of ["followers", "following"] as const) {
     app.get(`/api/profiles/:wallet/${side}`, (c) => {
       const wallet = requireBase58Address(c.req.param("wallet"), "wallet");

@@ -1,9 +1,3 @@
-/**
- * The app behind the landing page: providers, the frame (tab bar on phones,
- * header and sidebar on desktop) and the routed page. The market snapshot is
- * polled once here and shared through MarketContext.
- */
-
 import { useEffect, useRef } from "react";
 import { ToastProvider, useToast } from "../components/Toast.tsx";
 import { OwnAvatar } from "../features/people/Face.tsx";
@@ -21,7 +15,6 @@ import "../styles/covers.css";
 import "../styles/people.css";
 import "../styles/desk.css";
 
-/** The API keeps the snapshot a few seconds fresh while anyone polls it. */
 const MARKET_POLL_MS = 5_000;
 
 export function AppShell({ path }: { path: string }) {
@@ -62,7 +55,6 @@ export function AppShell({ path }: { path: string }) {
   );
 }
 
-/** Wallet popups connect out of sight, so say when a wallet connects or disconnects. */
 function WalletToasts() {
   const wallet = useWallet();
   const toast = useToast();
@@ -71,7 +63,6 @@ function WalletToasts() {
   useEffect(() => {
     const before = last.current;
     last.current = wallet.address;
-    // The silent reconnect right after load is not worth announcing.
     if (before === wallet.address || Date.now() - opened.current < 2500) return;
     if (wallet.address) {
       toast(`Connected ${wallet.walletName ?? "wallet"} · ${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}`, "good");

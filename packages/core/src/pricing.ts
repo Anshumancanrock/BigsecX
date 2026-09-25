@@ -11,9 +11,7 @@ export interface PriceSnapshot {
   readonly symbol: string;
   /** DEX price per UI share, in USD, already corrected for the multiplier. */
   readonly marketUsd: number;
-  /** Issuer mark price per UI share, in USD. Null when the API omits it. */
   readonly markUsd: number | null;
-  /** Quotable DEX liquidity in USD, as reported by the aggregator. */
   readonly liquidityUsd: number;
   readonly change24hPct: number;
   readonly asOf: Date;
@@ -64,7 +62,6 @@ export function quoteToUiPrice(args: {
   return args.inUsd / outUi;
 }
 
-/** Total portfolio value in USD. */
 export function portfolioValueUsd(
   holdings: readonly { readonly symbol: string; readonly uiAmount: number }[],
   priceBySymbol: ReadonlyMap<string, number>,

@@ -18,7 +18,6 @@ export const MULTIPLIERS: Readonly<Record<string, number>> = {
 
 export const FAKE_EPOCH = 1038;
 
-/** Symbols the current fake marks as paused. Set by makeServices. */
 const PAUSED = new Set<string>();
 
 function mintAccount(token: PreStock) {
@@ -69,31 +68,21 @@ function mintAccount(token: PreStock) {
 export interface FakeOptions {
   /** Raw ATA balances by symbol, for the sell-coverage check. */
   readonly balances?: Readonly<Record<string, bigint>>;
-  /** Raw USDC balance in the owner's associated account. */
   readonly usdcRaw?: bigint;
   /** Lamport balance, for the fee check. */
   readonly lamports?: number;
-  /** Symbols the issuer has paused. */
   readonly paused?: readonly string[];
-  /** Symbols whose associated account the issuer has frozen. */
   readonly frozen?: readonly string[];
-  /** Set to exercise the oracle-available branch. */
   readonly pythApiKey?: string;
-  /** Make the issuer statistics endpoint fail. */
   readonly statsThrow?: boolean;
-  /** Make the price feed fail, to exercise degraded paths. */
   readonly pricesThrow?: boolean;
   readonly priceUsd?: Readonly<Record<string, number>>;
-  /** Indices of transactions whose sendTransaction call should fail. */
   readonly sendFailsAt?: readonly number[];
-  /** What getSignatureStatuses reports, keyed by signature. */
   readonly statuses?: Readonly<
     Record<string, { slot: number; confirmationStatus: string | null; err: unknown } | null>
   >;
   readonly blockHeight?: number;
-  /** Indices whose simulateTransaction should report a program error. */
   readonly simFailsAt?: readonly number[];
-  /** Per-symbol price impact the fake router reports, as a fraction. */
   readonly priceImpact?: Readonly<Record<string, number>>;
   /**
    * Per-symbol impact that grows with size, as a fraction per dollar: a thin
@@ -101,12 +90,10 @@ export interface FakeOptions {
    * same at every size, which models a spread floor.
    */
   readonly impactPerUsd?: Readonly<Record<string, number>>;
-  /** Balances held OUTSIDE the associated account, per symbol, in raw units. */
   readonly stray?: Readonly<Record<string, readonly bigint[]>>;
   readonly quoteThrows?: boolean;
   /** How many slots the current epoch has left; the fake mints change fee at the next one. */
   readonly slotsLeftInEpoch?: number;
-  /** What getTransaction returns, by signature; absent is null, as for a node that has none. */
   readonly transactions?: Readonly<Record<string, unknown>>;
   /** Signatures answered null for this many asks first, as a node a moment behind would. */
   readonly lateTransactions?: Readonly<Record<string, number>>;
@@ -130,8 +117,6 @@ export function fakeRpc(options: FakeOptions = {}) {
       }
 
       if (method === "getBalance") {
-        // Default to a funded wallet so fee checks do not dominate every
-        // unrelated assertion.
         return { value: options.lamports ?? 50_000_000 } as T;
       }
 
@@ -156,10 +141,8 @@ export function fakeRpc(options: FakeOptions = {}) {
             }),
           } as T;
         }
-        // A single address is the USDC associated account; the spendable
-        // check asks for it on its own.
         if (addresses.length === 1) {
-          const raw = options.usdcRaw ?? 100_000_000_000n; // 100k USDC
+          const raw = options.usdcRaw ?? 100_000_000_000n;
           return {
             value: [
               {
@@ -171,8 +154,6 @@ export function fakeRpc(options: FakeOptions = {}) {
           } as T;
         }
 
-        // Balances are returned in universe order, matching how the caller
-        // derived the addresses.
         return {
           value: UNIVERSE.map((token) => {
             const raw = options.balances?.[token.symbol];
@@ -305,7 +286,6 @@ export function fakeJupiter(options: FakeOptions = {}) {
       const perUsd = options.impactPerUsd?.[token.symbol];
       const impact = perUsd !== undefined ? perUsd * sizeUsd : (options.priceImpact?.[token.symbol] ?? 0.001);
 
-      // A buy spends USDC and receives raw token; a sell does the reverse.
       const outAmount = buying
         ? BigInt(
             Math.round(
@@ -334,17 +314,12 @@ export function fakeJupiter(options: FakeOptions = {}) {
 
 let dbCounter = 0;
 
-/**
- * Issuer statistics, shaped as the real endpoint returns them: cumulative
- * volume by day, holder counts by week.
- */
 export function fakeIssuer(options: FakeOptions = {}) {
   return {
     tokens: async () => [],
     stats: async () => {
       if (options.statsThrow) throw new Error("prestocks: HTTP 429");
       const symbols = UNIVERSE.map((t) => t.symbol);
-      // Three days of cumulative volume rising by 100 per day per symbol.
       const volume = [0, 1, 2, 3].map((day) => ({
         date: `2026-09-1${day}`,
         ...Object.fromEntries(symbols.map((s) => [s, day * 100])),
@@ -378,7 +353,6 @@ export function makeServices(options: FakeOptions = {}): Services & { store: Sto
     // routes fall back to the issuer mark.
     pyth: new PythClient(options.pythApiKey),
     store,
-    // The token directory is a network call; tests get an empty one.
     tokenMeta: async () => new Map(),
   };
 }

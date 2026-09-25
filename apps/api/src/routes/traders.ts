@@ -17,20 +17,13 @@ import type { Services } from "../context.ts";
 import { BadRequest, readJson, requireBase58Address, requireInt } from "../lib/validate.ts";
 import { tradeRows, type MarketSnapshot } from "@ps/market";
 
-/** More than any bundle this app builds, and small enough not to be a relay. */
 const MAX_RECORD = 20;
-/**
- * How many times to look for a transaction the node does not have yet: the app
- * reports a trade once one node confirms it, and this node can lag by a second or two.
- */
 const RECORD_ATTEMPTS = 3;
 const RECORD_RETRY_MS = 1_500;
 const SIGNATURE = /^[1-9A-HJ-NP-Za-km-z]{64,96}$/;
 
-/** How many of a wallet's newest trades the per-company books are drawn from. */
 const BOOK_TRADES = 2_000;
 
-/** Solana produces roughly one slot every 400ms. */
 const SLOTS_PER_HOUR = 3_600 / 0.4;
 
 function priceMap(snapshot: MarketSnapshot): Map<string, number> {
@@ -46,10 +39,6 @@ export function registerTraderRoutes(
   services: Services,
   market: () => Promise<MarketSnapshot>,
 ): void {
-  /**
-   * A trader's record. Positions are reconstructed from indexed trades rather
-   * than read from chain, so profit is only attached to shares with a known cost.
-   */
   app.get("/api/traders/:wallet", async (c) => {
     const owner = requireBase58Address(c.req.param("wallet"), "wallet");
     const hours = requireInt(c.req.query("hours"), "hours", {
@@ -61,7 +50,6 @@ export function registerTraderRoutes(
     const latestSlot = services.store.latestTradeSlot();
     const sinceSlot = latestSlot === null ? 0 : Math.max(0, latestSlot - Math.round(hours * SLOTS_PER_HOUR));
 
-    // Everything seen, for the per-company books; the window, for the record.
     const everything = services.store.tradesFor(owner, BOOK_TRADES);
     // Past the cap the oldest trades are missing, so no book is complete.
     const capped = everything.length >= BOOK_TRADES;
@@ -78,8 +66,6 @@ export function registerTraderRoutes(
     }));
     const pnl = computeTraderPnl(owner, records, prices);
 
-    // Allocation weights over long positions only: a short is an artefact of
-    // incomplete cost basis, not an allocation.
     const longs = pnl.positions.filter((p) => p.uiAmount > 0);
     const valued = longs.map((p) => ({ ...p, usd: p.uiAmount * (prices.get(p.symbol) ?? 0) }));
     const totalUsd = valued.reduce((sum, p) => sum + p.usd, 0);
@@ -97,7 +83,6 @@ export function registerTraderRoutes(
       markValueUsd: pnl.markValueUsd,
       pnlUsd: pnl.pnlUsd,
       returnFraction: pnl.returnFraction,
-      /** False when the record is incomplete and the profit figure is unreliable. */
       coverageComplete: pnl.coverageComplete,
       positions: pnl.positions,
       weights,
@@ -124,13 +109,8 @@ export function registerTraderRoutes(
     });
   });
 
-  /**
-   * The newest trades across every wallet, for the live feed. Trades whose
-   * recorded cost is implausible for their size (another leg's stablecoin) are dropped.
-   */
   app.get("/api/trades/recent", async (c) => {
     const limit = requireInt(c.req.query("limit"), "limit", { min: 1, max: 50, fallback: 12 });
-    // Lets the dashboard leave out dust fills.
     const minUsd = requireInt(c.req.query("minUsd"), "minUsd", { min: 0, max: 1_000_000, fallback: 0 });
     const snapshot = await market();
     const prices = priceMap(snapshot);
@@ -211,8 +191,6 @@ export function registerTraderRoutes(
     let recorded = 0;
     if (trades.length > 0) {
       const mintStates = await getMintStates(services.rpc, ALL_MINTS);
-      // SOL is priced only for a trade that has no stablecoin leg; the app's
-      // own trades always have one.
       const needsSol = trades.some((t) => t.usdcDeltaRaw === null || t.usdcDeltaRaw === 0n);
       const solUsd = needsSol
         ? await services.jupiter
@@ -225,7 +203,6 @@ export function registerTraderRoutes(
     return c.json({ recorded, trades: trades.length, notFound: pending.length });
   });
 
-  /** Raw trade history, newest first. */
   app.get("/api/traders/:wallet/trades", (c) => {
     const owner = requireBase58Address(c.req.param("wallet"), "wallet");
     const limit = requireInt(c.req.query("limit"), "limit", { min: 1, max: 500, fallback: 100 });
@@ -246,10 +223,6 @@ export function registerTraderRoutes(
   });
 }
 
-/**
- * Win rate over closed round trips: a symbol's position closes when its running
- * quantity returns to zero, and wins if more cash came out than went in.
- */
 function countWins(
   trades: readonly { symbol: string; uiAmount: number; valueUsd: number | null; slot: number }[],
 ): { readonly closed: number; readonly rate: number | null } {
@@ -262,10 +235,8 @@ function countWins(
     state.quantity += trade.uiAmount;
     state.cash += trade.valueUsd ?? 0;
 
-    // Back to flat, within a nanoshare of rounding.
     if (Math.abs(state.quantity) < 1e-9) {
       closed++;
-      // Positive cash means more was spent than recovered: a loss.
       if (state.cash < 0) won++;
       open.delete(trade.symbol);
     } else {

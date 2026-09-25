@@ -6,10 +6,6 @@ import { go } from "../lib/router.ts";
 import { TokenLogo } from "./TokenLogo.tsx";
 import { reducedMotion } from "../lib/motion.ts";
 
-/**
- * A live figure: changed digits roll in and the figure flashes green or red
- * briefly; unchanged digits stay still.
- */
 export function Ticking({
   value,
   format = price,
@@ -25,7 +21,6 @@ export function Ticking({
   const last = useRef<number | null>(value);
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
 
-  // The first render keeps every digit still: a page opening is not a print.
   const first = digits.current === null;
   const { digits: now, nextKey: key } = popDigits(digits.current, text, nextKey.current);
   digits.current = now;
@@ -55,7 +50,6 @@ export function Ticking({
   );
 }
 
-/** Every company's price and day, gliding past; hovering holds it still. */
 export function TickerTape({ tokens }: { tokens: readonly MarketToken[] }) {
   if (tokens.length === 0) return null;
   const row = (copy: number) =>

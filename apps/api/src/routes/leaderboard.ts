@@ -8,7 +8,6 @@ import type { SnapshotReader } from "../lib/market-cache.ts";
 import { priceMaps } from "../lib/snapshot.ts";
 import { requireInt } from "../lib/validate.ts";
 
-/** Mainnet produces a slot roughly every 0.4 s. */
 const SECONDS_PER_SLOT = 0.4;
 const HELD_TTL_MS = 3 * 60_000;
 /**
@@ -17,7 +16,6 @@ const HELD_TTL_MS = 3 * 60_000;
  * read corrects it; without this a cold board waits on a hundred chain reads.
  */
 const HELD_STALE_MS = 6 * 60 * 60_000;
-/** A wallet still holds a position when it keeps at least this share of it. */
 const STILL_HELD_FRACTION = 0.1;
 
 /**

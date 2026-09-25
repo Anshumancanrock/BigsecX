@@ -21,12 +21,10 @@ const CONFIRM_TIMEOUT_MS = 120_000;
 
 const POLL_MS = 2_000;
 
-/** How long a settled trade waits for its history to be written. */
 const RECORD_WAIT_MS = 3_000;
 
 export type LegState = "pending" | "landed" | "failed" | "expired" | "not-sent";
 
-/** What happened to one transaction, named by the legs it carried. */
 export interface TransactionOutcome {
   readonly index: number;
   readonly symbols: readonly string[];
@@ -72,7 +70,6 @@ export type BuildRequest =
       readonly owner: string;
       readonly indexId?: string;
       readonly strategyId?: string;
-      /** Inline allocation. A single company is a one-name basket. */
       readonly weights?: readonly { readonly symbol: string; readonly weight: number }[];
       readonly deployUsd: number;
       readonly slippageBps?: number;
@@ -81,9 +78,7 @@ export type BuildRequest =
   | {
       readonly kind: "exit";
       readonly owner: string;
-      /** Omitted sells everything the wallet holds. */
       readonly symbols?: readonly string[];
-      /** 0 < fraction <= 1. Defaults to selling all of the named positions. */
       readonly fraction?: number;
       readonly slippageBps?: number;
     };
@@ -124,7 +119,6 @@ function runBuild(request: BuildRequest, signal?: AbortSignal): Promise<BuildRes
   );
 }
 
-/** Turn any thrown value into the refusal shape the UI renders. */
 export function toFailure(error: unknown): Pick<TradeState, "phase" | "error" | "problems"> {
   if (error instanceof ApiError) {
     const problems = Array.isArray(error.body?.["problems"])
@@ -164,7 +158,6 @@ export async function executeBundle(options: {
   const { request, connection, onState, signal } = options;
   let build = options.build;
 
-  // ---- 1. refresh a cold build ------------------------------------------
   if (Date.now() - options.builtAt > STALE_MS) {
     onState({ phase: "refreshing" });
     try {
@@ -177,7 +170,6 @@ export async function executeBundle(options: {
     }
   }
 
-  // ---- 2. sign -----------------------------------------------------------
   /*
    * The bundle was built for one address, but the wallet signs with whatever
    * account is active now. If the user switched accounts in between, the fee
@@ -219,10 +211,6 @@ export async function executeBundle(options: {
     return { ...IDLE, ...failure, build };
   }
 
-  // ---- 3. submit ---------------------------------------------------------
-  // From here funds may be moving. The submit call does not take the abort
-  // signal: aborting cannot recall a transaction already on the wire, and it
-  // would lose the signatures needed to track it.
   onState({ phase: "submitting", committed: true });
   let results: readonly SubmitResult[];
   try {
@@ -265,9 +253,6 @@ export async function executeBundle(options: {
        */
       const seen = status !== undefined && status.status !== "unknown";
       if (!result.submitted && !seen && expired) {
-        // Prefer the node's decoded error over its generic message: the
-        // message is "Transaction simulation failed" and the decoded error
-        // is "AccountNotFound" or a slippage code.
         const cause = result.err !== undefined ? describeChainError(result.err) : result.error;
         return {
           index: result.index,
@@ -304,7 +289,6 @@ export async function executeBundle(options: {
 
   onState({ phase: "confirming", outcomes: outcomesOf([], false) });
 
-  // ---- 4. confirm --------------------------------------------------------
   const signatures = results.map((r) => r.signature);
   const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
   let statuses: readonly ConfirmStatus[] = [];
@@ -338,7 +322,6 @@ export async function executeBundle(options: {
   // records it later if this does not.
   const landed = outcomes.filter((o) => o.state === "landed" && o.signature).map((o) => o.signature!);
   if (landed.length > 0) {
-    // Inside an async function, so even a throw on the way out is caught.
     const recording = (async () => {
       await api.recordTrades({ signatures: landed });
     })().catch(() => undefined);
@@ -357,17 +340,9 @@ export async function executeBundle(options: {
   return final;
 }
 
-/**
- * Make a cluster error legible.
- *
- * The raw shape is `{InstructionError:[2,{Custom:6001}]}`. The custom code is
- * the only part that says anything, and 6001 from a Jupiter route is almost
- * always slippage, which is the one cause a user can act on.
- */
 export function describeChainError(err: unknown): string {
   if (!err) return "";
   if (typeof err === "string") {
-    // The handful of cluster errors a user can actually do something about.
     if (err === "AccountNotFound") return "your wallet has no SOL to pay the network fee";
     if (err === "InsufficientFundsForRent") return "your wallet needs a little more SOL for the account deposit";
     if (err === "BlockhashNotFound") return "it took too long to approve, so it expired; try again";

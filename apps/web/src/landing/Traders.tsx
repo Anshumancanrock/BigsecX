@@ -16,18 +16,14 @@ interface Pod {
   readonly mark: string;
   readonly size: string;
   readonly change: string;
-  /** In front of the headline, and so not blurred. */
   readonly sharp: boolean;
-  /** The orbit: radius in px, period and phase in seconds, direction. */
   readonly r: number;
   readonly dur: number;
   readonly delay: number;
   readonly reverse: boolean;
-  /** The card's own tilt, in degrees. */
   readonly tilt: number;
 }
 
-// Order matters: each card's position is keyed to its index in the CSS.
 const PODS: readonly Pod[] = [
   { handle: "@anya.sol", ago: "2h", note: "Launch cadence keeps climbing", side: "buy", symbol: "SPACEX", mark: "X", size: "$420", change: "+41.2%", sharp: false, r: 37, dur: 16, delay: -3, reverse: false, tilt: -2 },
   { handle: "@dkessler", ago: "5h", note: "Defence budgets only go one way", side: "buy", symbol: "ANDURIL", mark: "A", size: "$180", change: "+12.8%", sharp: false, r: 35, dur: 19, delay: -9, reverse: true, tilt: 2.5 },
@@ -40,7 +36,6 @@ const PODS: readonly Pod[] = [
   { handle: "@lucasbrt", ago: "30m", note: "Robots on the line, finally", side: "buy", symbol: "FIGUREAI", mark: "F", size: "$300", change: "+22.4%", sharp: true, r: 30, dur: 14.5, delay: -10, reverse: false, tilt: 1 },
 ];
 
-/** Soft backgrounds for the avatars, picked by handle so each keeps its own. */
 const AVATAR = ["#f6d7c3", "#cfe3f7", "#d9f0d3", "#efd9f3", "#f7ecc4", "#d6ecec"];
 
 function avatarFor(handle: string): string {
@@ -50,8 +45,6 @@ function avatarFor(handle: string): string {
 }
 
 export function TradersSection() {
-  // The heading row and the panel rise 16px into place the first time the
-  // section scrolls into view, the panel a beat behind.
   const root = useRef<HTMLElement>(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -69,7 +62,6 @@ export function TradersSection() {
     return () => seen.disconnect();
   }, []);
 
-  // The cards drift only while the section is on screen.
   const [live, setLive] = useState(false);
   useEffect(() => {
     const el = root.current;

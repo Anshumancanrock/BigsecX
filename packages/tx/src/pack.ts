@@ -12,17 +12,14 @@ import {
   type TransactionInstruction,
 } from "@solana/web3.js";
 
-/** Hard wire limit for a Solana transaction packet. */
 export const PACKET_DATA_SIZE = 1232;
 
-/** Signature bytes the wallet adds: 64 per required signer plus a one-byte length prefix. */
 function signatureOverhead(transaction: VersionedTransaction): number {
   return 1 + 64 * transaction.message.header.numRequiredSignatures;
 }
 
 export interface PackedTransaction {
   readonly transaction: VersionedTransaction;
-  /** Indices of the input groups in this transaction. */
   readonly groupIndices: readonly number[];
   readonly byteLength: number;
   /**
@@ -42,10 +39,6 @@ export interface InstructionGroup {
   readonly lookupTables: readonly AddressLookupTableAccount[];
 }
 
-/**
- * Compiles a message and returns its exact wire size, or null if it does not
- * compile. Used to test whether a route fits before committing to it.
- */
 export function compileAndMeasure(args: {
   readonly payer: PublicKey;
   readonly blockhash: string;
@@ -86,28 +79,27 @@ function shortVecSize(length: number): number {
  * web3.js `serialize()` writes into a fixed 1232-byte buffer and throws past it.
  */
 function messageSize(message: VersionedTransaction["message"]): number {
-  let size = 1; // version prefix byte
-  size += 3; // header
+  let size = 1;
+  size += 3;
   size += shortVecSize(message.staticAccountKeys.length) + 32 * message.staticAccountKeys.length;
   size += 32; // recent blockhash
 
   size += shortVecSize(message.compiledInstructions.length);
   for (const instruction of message.compiledInstructions) {
-    size += 1; // program id index
+    size += 1;
     size += shortVecSize(instruction.accountKeyIndexes.length) + instruction.accountKeyIndexes.length;
     size += shortVecSize(instruction.data.length) + instruction.data.length;
   }
 
   size += shortVecSize(message.addressTableLookups.length);
   for (const lookup of message.addressTableLookups) {
-    size += 32; // table address
+    size += 32;
     size += shortVecSize(lookup.writableIndexes.length) + lookup.writableIndexes.length;
     size += shortVecSize(lookup.readonlyIndexes.length) + lookup.readonlyIndexes.length;
   }
   return size;
 }
 
-/** Serialized size including the signature slots the wallet will fill. */
 function measure(transaction: VersionedTransaction): number {
   return messageSize(transaction.message) + signatureOverhead(transaction);
 }
@@ -118,7 +110,6 @@ function measure(transaction: VersionedTransaction): number {
  */
 export interface PackResult {
   readonly packed: readonly PackedTransaction[];
-  /** Groups too large to execute, with the size they needed. */
   readonly oversized: readonly { readonly index: number; readonly bytes: number; readonly reason: string }[];
 }
 
@@ -172,7 +163,6 @@ export function packGroups(args: {
       ]);
       bytes = measure(built);
     } catch {
-      // Compilation throws past the account-index limits; that also means it does not fit.
       built = null;
     }
 
@@ -185,8 +175,6 @@ export function packGroups(args: {
       continue;
     }
 
-    // Does not fit alongside what is already staged. Close this transaction
-    // and retry the group on its own.
     flush();
 
     const soloTables = new Map<string, AddressLookupTableAccount>();

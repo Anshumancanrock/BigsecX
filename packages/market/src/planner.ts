@@ -24,9 +24,7 @@ import { priceImpact } from "./jupiter.ts";
 
 export interface PlanRequest {
   readonly orders: readonly RebalanceOrder[];
-  /** Quotable depth per symbol, from the price feed. */
   readonly liquidityUsdBySymbol: ReadonlyMap<string, number>;
-  /** Reference price per UI share. Realized cost is measured against this. */
   readonly priceUsdBySymbol: ReadonlyMap<string, number>;
   /**
    * Active ScaledUiAmount multiplier per symbol, for converting between UI
@@ -45,13 +43,11 @@ export interface PlanRequest {
 
 interface Probe {
   readonly impact: number;
-  /** Price per UI share the quote implies, all-in. */
   readonly effectivePriceUsd: number;
   /** Shares received, less the transfer fee. Buys only; null for sells. */
   readonly outUi: number | null;
 }
 
-/** Quote one leg at one size and derive its realized price. */
 async function probeLeg(
   jupiter: JupiterClient,
   order: RebalanceOrder,
@@ -79,7 +75,6 @@ async function probeLeg(
       amount: BigInt(Math.round(usd * 10 ** USDC_DECIMALS)),
       ...(request.maxAccounts !== undefined ? { maxAccounts: request.maxAccounts } : {}),
     });
-    // outAmount is raw; scale it to UI shares, less the fee, before pricing.
     outUi = (Number(quote.outAmount) / 10 ** token.decimals) * multiplier * afterFee;
     if (outUi <= 0) throw new Error(`planner: ${order.symbol} quote returned nothing`);
     effectivePriceUsd = usd / outUi;
@@ -126,8 +121,6 @@ export async function buildExecutionPlan(
 ): Promise<ExecutionPlan> {
   const limits = request.limits ?? DEFAULT_LIMITS;
 
-  // Orders are planned concurrently: each is judged on its own quote alone, and
-  // results are collected in input order.
   const planOrder = async (
     order: RebalanceOrder,
   ): Promise<{ leg?: PlannedLeg; deferred?: { symbol: string; usd: number; reason: string } }> => {
@@ -174,8 +167,6 @@ export async function buildExecutionPlan(
     }
 
     let usd = verdict.kind === "defer" ? order.usd : verdict.usd;
-    // Size the surviving probe was quoted at. A depth recheck can shrink `usd`
-    // after the last quote, and then the probe's share count no longer applies.
     let measuredAtUsd = order.usd;
     let note: string | null = floorNote ?? (verdict.kind === "resize" ? verdict.reason : null);
 

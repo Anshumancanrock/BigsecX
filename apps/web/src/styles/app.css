@@ -1,11 +1,3 @@
-/*
- * Base styles for the app: glass surfaces (white at a few percent alpha over
- * a near-black page, with a hairline border and a top highlight), one soft
- * mint light from the top-left corner, rounded square tiles for every icon
- * with the current page filled in the accent, and light type (titles at 400,
- * large figures at 300). phone.css and desk.css layer on top of this file.
- */
-
 body:has(.app) {
   background: hsl(160 20% 3.5%);
 }
@@ -18,8 +10,6 @@ body:has(.app) {
   isolation: isolate;
 }
 
-/* The light. Two soft sources: a bright one in the top-left corner behind
-   the rail and search, and a wide faint wash across the top. */
 .app-glow {
   position: fixed;
   inset: 0;
@@ -30,8 +20,6 @@ body:has(.app) {
     radial-gradient(60vw 26vw at 45% -12%, hsl(var(--mint) / 0.07), transparent 70%),
     radial-gradient(30vw 30vw at 100% 110%, hsl(var(--mint) / 0.04), transparent 70%);
 }
-
-/* ------------------------------------------------------------------ rail */
 
 .rail {
   position: sticky;
@@ -80,7 +68,6 @@ body:has(.app) {
   background: linear-gradient(180deg, hsl(var(--ink) / 0.1), hsl(var(--ink) / 0.04));
 }
 
-/* The current page, filled in the accent. */
 .rail-item[aria-current="page"] {
   color: #03140b;
   border-color: hsl(var(--mint) / 0.9);
@@ -90,8 +77,6 @@ body:has(.app) {
     0 10px 30px hsl(var(--mint) / 0.28);
 }
 
-/* On desktop the section name is a tooltip; on a phone it becomes the tab
-   label (see the mobile block). */
 .rail-item span {
   position: absolute;
   left: calc(100% + 12px);
@@ -151,8 +136,6 @@ body:has(.app) {
 .status-dot.wait {
   background: hsl(var(--ink) / 0.3);
 }
-
-/* ---------------------------------------------------------------- topbar */
 
 .main {
   min-width: 0;
@@ -264,7 +247,6 @@ body:has(.app) {
   color: hsl(var(--fg-muted));
 }
 
-/* The account: avatar and wallet name. */
 .profile {
   display: flex;
   align-items: center;
@@ -405,8 +387,6 @@ body:has(.app) {
   color: hsl(var(--down));
 }
 
-/* --------------------------------------------------------------- content */
-
 .content {
   position: relative;
   z-index: 1;
@@ -482,8 +462,6 @@ body:has(.app) {
   color: hsl(var(--fg));
 }
 
-/* ----------------------------------------------------------------- cards */
-
 .card {
   position: relative;
   border-radius: var(--r-card);
@@ -531,8 +509,6 @@ body:has(.app) {
   padding: 16px;
 }
 
-/* The big chart's panel is the lit one: lighter glass, the glow pooling in
-   its lower-left corner. */
 .hero-card {
   background:
     radial-gradient(110% 90% at 0% 100%, hsl(var(--mint) / 0.26), transparent 58%),
@@ -589,8 +565,6 @@ body:has(.app) {
 .dot.dotted {
   border-top: 2px dotted hsl(var(--ink) / 0.8);
 }
-
-/* ------------------------------------------------------------- dashboard */
 
 .dash {
   display: grid;
@@ -895,12 +869,9 @@ body:has(.app) {
   margin-top: auto;
 }
 
-/* The not-connected card keeps its button at the foot of the card too. */
 .balance-card > .btn-mint {
   margin-top: auto;
 }
-
-/* ---------------------------------------------------------------- charts */
 
 .area-chart {
   position: relative;
@@ -949,8 +920,6 @@ body:has(.app) {
   font-size: 13.5px;
   color: hsl(var(--fg-muted));
 }
-
-/* --------------------------------------------------------------- buttons */
 
 .btn-mint,
 .btn-ghost {
@@ -1025,8 +994,6 @@ body:has(.app) {
   flex: none;
 }
 
-/* ------------------------------------------------------------ card grids */
-
 .grid {
   display: grid;
   gap: 16px;
@@ -1061,7 +1028,6 @@ body:has(.app) {
   transform: translateY(-2px);
 }
 
-/* A little of the light in each card's lower corner. */
 .tile::after {
   content: "";
   position: absolute;
@@ -1107,8 +1073,6 @@ body:has(.app) {
   font-size: 13.5px;
   color: hsl(var(--mint));
 }
-
-/* -------------------------------------------------------- company cards */
 
 .card-company {
   display: flex;
@@ -1189,8 +1153,6 @@ body:has(.app) {
   margin-top: 0;
 }
 
-/* ---------------------------------------------------------------- tables */
-
 .table {
   width: 100%;
   border-collapse: separate;
@@ -1207,7 +1169,6 @@ body:has(.app) {
   white-space: nowrap;
 }
 
-/* The header row sits in its own bordered strip. */
 .glass-table thead th {
   background: hsl(var(--ink) / 0.035);
   border-top: 1px solid hsl(var(--ink) / 0.09);
@@ -1279,10 +1240,6 @@ body:has(.app) {
   font-weight: 400;
 }
 
-/* ----------------------------------------------------------- misc pieces */
-
-/* A lettermark stands in for a token logo where the issuer publishes none,
-   in a rounded-square tile. */
 .glyph {
   display: grid;
   place-items: center;
@@ -1548,8 +1505,6 @@ body:has(.app) {
   border-color: hsl(var(--mint) / 0.6) !important;
 }
 
-/* ------------------------------------------------------------- overlays */
-
 .sheet-backdrop {
   position: fixed;
   inset: 0;
@@ -1617,8 +1572,6 @@ body:has(.app) {
   margin-top: 22px;
   flex-wrap: wrap;
 }
-
-/* ------------------------------------------------ newcomer affordances */
 
 .inline-picker {
   border: 1px solid hsl(var(--ink) / 0.09);
@@ -1749,7 +1702,6 @@ body:has(.app) {
   margin: 0 0 20px;
 }
 
-/* Each figure on What I own sits in its own small glass tile. */
 .stats > span {
   padding: 14px 18px;
   border-radius: 18px;
@@ -1851,8 +1803,6 @@ body:has(.app) {
   margin-top: 8px;
 }
 
-/* --------------------------------------------------------------- tablet */
-
 @media (max-width: 1180px) {
   .dash {
     grid-template-columns: minmax(0, 1fr);
@@ -1868,12 +1818,6 @@ body:has(.app) {
   }
 }
 
-/* ---------------------------------------------------------------- phone */
-
-/*
- * On a phone the rail becomes a bottom tab bar, where a thumb already is,
- * with room under each tile for the word; the search box takes the top row.
- */
 @media (max-width: 720px) {
   .app {
     grid-template-columns: minmax(0, 1fr);
@@ -2027,8 +1971,6 @@ body:has(.app) {
     gap: 14px;
   }
 
-  /* On a phone the most personal figure comes first: the balance, then
-     the chart, then the list. */
   .dash-main {
     display: flex;
     flex-direction: column;
@@ -2059,8 +2001,6 @@ body:has(.app) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* A horizontally scrolling table is unusable on a phone. Each row
-     becomes a stacked block with its column name beside the value. */
   .table-scroll table.stacks {
     display: block;
   }
@@ -2072,10 +2012,6 @@ body:has(.app) {
     display: block;
     width: 100%;
   }
-  /* Each row becomes a small card: the name across the top, the figures
-     two to a line with their labels above them, and any action across the
-     bottom. One figure per line made a trader's row 245px tall and the
-     leaderboard a long scroll. */
   .table-scroll table.stacks tr {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2113,7 +2049,6 @@ body:has(.app) {
   .table-scroll table.stacks td:not([data-label]):not(:first-child) {
     align-items: stretch;
   }
-  /* Figures that matter at a desk but not at a glance on a phone. */
   .table-scroll table.stacks td.hide-sm {
     display: none;
   }
@@ -2156,8 +2091,6 @@ body:has(.app) {
   }
 }
 
-/* ------------------------------------------------ performance card */
-
 .perf-card {
   margin-top: 18px;
 }
@@ -2175,7 +2108,6 @@ body:has(.app) {
   margin: 0;
 }
 
-/* A small segmented control: one choice of a few, pressed state in mint. */
 .seg {
   display: inline-flex;
   gap: 2px;
@@ -2204,7 +2136,6 @@ body:has(.app) {
   color: hsl(160 30% 6%);
 }
 
-/* A basket's return under its name, on the baskets page. */
 .tile-growth {
   display: block;
   min-height: 18px;
@@ -2216,8 +2147,6 @@ body:has(.app) {
 .tile-growth b {
   font-weight: 600;
 }
-
-/* ------------------------------------------------------------ token logo */
 
 .token-logo {
   position: relative;
@@ -2244,7 +2173,6 @@ body:has(.app) {
   color: hsl(var(--fg));
 }
 
-/* The chain badge sits on the logo's lower right, like a wallet shows it. */
 .solana-badge {
   position: absolute;
   right: -3px;
@@ -2252,8 +2180,6 @@ body:has(.app) {
   border-radius: 50%;
   box-shadow: 0 0 0 2px hsl(var(--raised));
 }
-
-/* ------------------------------------------------------ company cards */
 
 .stock-grid {
   display: grid;
@@ -2275,7 +2201,6 @@ body:has(.app) {
   }
 }
 
-/* A card that turns over: both faces share one box, the back pre-turned. */
 .flip {
   perspective: 1400px;
 }
@@ -2395,7 +2320,6 @@ button.stock-card:focus-visible {
   color: hsl(var(--fg-muted));
 }
 
-/* The line runs to the card's edges, under the head. */
 .stock-line {
   display: block;
   margin: auto -18px 0;
@@ -2454,8 +2378,6 @@ button.stock-card:focus-visible {
   min-height: 42px;
   margin-top: auto;
 }
-
-/* ------------------------------------------------------------ asset page */
 
 .asset-head {
   display: flex;
@@ -2736,8 +2658,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* After the card rules above, so these win on a phone: the card is taller
-   there, and the back's facts stack one to a line. */
 @media (max-width: 720px) {
   .flip-inner {
     height: 290px;
@@ -2748,14 +2668,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* ================================================================ motion */
-
-/*
- * Motion: one ease-out curve for arrivals and one with slight overshoot for
- * things that snap into place, animating only transform and opacity so
- * nothing triggers layout. All of it stops under prefers-reduced-motion
- * (see the block at the end).
- */
 :root {
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
@@ -2811,7 +2723,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* Pressed state: tiles and icon buttons give slightly under a finger. */
 .rail-mark,
 .rail-item,
 .icon-btn {
@@ -2832,7 +2743,6 @@ button.stock-card:focus-visible {
   box-shadow: inset 0 1px 0 hsl(var(--ink) / 0.08), 0 26px 50px rgb(0 0 0 / 0.34);
 }
 
-/* The segmented control's lit pill slides to the choice. */
 .seg {
   position: relative;
 }
@@ -2857,7 +2767,6 @@ button.stock-card:focus-visible {
   background: transparent;
 }
 
-/* Lines draw themselves in; the fill under them follows. */
 .draw {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
@@ -2893,8 +2802,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* A live figure: changed digits roll in, and the figure glows for a moment
-   in the direction it moved. */
 .ticking {
   display: inline-block;
   margin: -1px -4px;
@@ -2941,7 +2848,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* Toasts, at the foot of the screen; above the tab bar on a phone. */
 .toasts {
   position: fixed;
   left: 50%;
@@ -2967,8 +2873,6 @@ button.stock-card:focus-visible {
   background: hsl(160 14% 8% / 0.92);
   backdrop-filter: blur(18px);
   box-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
-  /* Explicit, not the app's tokens: the toasts sit outside the app's
-     colour scope, and inherited text came out dim. */
   color: hsl(0 0% 96%);
   font-size: 14px;
   pointer-events: auto;
@@ -3021,7 +2925,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* The moment a trade lands: a tick drawn inside a ring, with a burst. */
 .success {
   display: flex;
   flex-direction: column;
@@ -3115,7 +3018,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* The ticker tape: every company's price, gliding past; a hover holds it. */
 .tape {
   position: relative;
   overflow: hidden;
@@ -3163,15 +3065,12 @@ button.stock-card:focus-visible {
   color: hsl(var(--down));
 }
 
-/* Two copies of the row, so moving by one copy and a gap loops seamlessly. */
 @keyframes tape {
   to {
     transform: translateX(calc(-50% - 14px));
   }
 }
 
-/* Sheets ease in: up and into place on a computer, up from the bottom on a
-   phone, over a backdrop that fades. */
 .sheet-backdrop {
   animation: fade-in 0.22s ease-out both;
 }
@@ -3234,7 +3133,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* The leaderboard's two pickers, side by side, wrapping on a phone. */
 .board-controls {
   display: flex;
   flex-wrap: wrap;
@@ -3249,7 +3147,6 @@ button.stock-card:focus-visible {
   font-size: 13px;
 }
 
-/* The live list's company, as its logo in the row's first tile. */
 .tile-logo {
   display: grid;
   place-items: center;
@@ -3257,7 +3154,6 @@ button.stock-card:focus-visible {
   min-height: 52px;
 }
 
-/* The search box's shortcut, shown where there is a keyboard to press it. */
 .search {
   position: relative;
 }
@@ -3286,7 +3182,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* An empty wallet's first step: every company, a tap away. */
 .pick-row {
   display: grid;
   grid-template-columns: repeat(8, 66px);
@@ -3360,7 +3255,6 @@ button.stock-card:focus-visible {
   }
 }
 
-/* A review's legs arrive in turn, each a beat after the last. */
 .sheet .leg {
   animation: rise-in 0.4s var(--ease-out) both;
 }
@@ -3373,7 +3267,6 @@ button.stock-card:focus-visible {
 .sheet .leg:nth-child(7) { animation-delay: 240ms; }
 .sheet .leg:nth-child(n + 8) { animation-delay: 280ms; }
 
-/* Live data, marked as live. */
 .live-dot {
   display: inline-block;
   width: 8px;

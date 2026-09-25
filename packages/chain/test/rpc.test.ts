@@ -35,7 +35,6 @@ test("rate limiting is still retried", async () => {
   expect(hits).toBe(3);
 });
 
-/** A node that answers every call with `result`, counting what it serves. */
 function answering(result: unknown) {
   const node = {
     served: 0,
@@ -51,7 +50,6 @@ function answering(result: unknown) {
   return node;
 }
 
-/** A node that refuses every call the way publicnode refuses indexed ones. */
 function refusing() {
   const node = {
     asked: 0,
@@ -70,7 +68,6 @@ function refusing() {
 }
 
 test("an unreachable endpoint is passed over at once for the next", async () => {
-  // A port that was just freed: connecting to it is refused.
   const gone = Bun.serve({ port: 0, fetch: () => new Response("") });
   const goneUrl = `http://localhost:${gone.port}`;
   gone.stop(true);
@@ -79,9 +76,7 @@ test("an unreachable endpoint is passed over at once for the next", async () => 
     const rpc = new Rpc({ url: [goneUrl, `http://localhost:${live.server.port}`] });
     const started = performance.now();
     expect(await rpc.call<number>("getSlot")).toBe(7);
-    // No backoff: the second endpoint was asked straight away.
     expect(performance.now() - started).toBeLessThan(300);
-    // The next call starts with the endpoint that answered.
     const again = performance.now();
     expect(await rpc.call<number>("getSlot")).toBe(7);
     expect(performance.now() - again).toBeLessThan(100);
@@ -95,7 +90,6 @@ test("a method one endpoint refuses is asked of the next, and the refusal is rem
   const picky = refusing();
   const full = answering("accounts");
   try {
-    // Named in one comma-separated string, as SOLANA_RPC_URL may name them.
     const rpc = new Rpc({ url: `http://localhost:${picky.server.port}, http://localhost:${full.server.port}` });
     expect(await rpc.call<string>("getTokenAccountsByOwner")).toBe("accounts");
     expect(await rpc.call<string>("getTokenAccountsByOwner")).toBe("accounts");

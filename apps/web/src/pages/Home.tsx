@@ -1,8 +1,3 @@
-/**
- * Phone home screen: portfolio value or an introduction, the next step
- * (connect, fund or buy), the week's top traders and the market list.
- */
-
 import { useMemo, useState } from "react";
 import {
   api,
@@ -221,8 +216,6 @@ export function Home({ market }: { market: Market | null }) {
   );
 }
 
-/* ------------------------------------------------------------ traders */
-
 export function TradersCard({ board, error }: { board: Board | null; error: string | null }) {
   const entries = list(board?.entries).slice(0, 3);
   return (
@@ -287,8 +280,6 @@ export function TradersCard({ board, error }: { board: Board | null; error: stri
   );
 }
 
-/* ------------------------------------------------------------ markets */
-
 function CompanyRows({ market, tab }: { market: Market | null; tab: Exclude<Tab, "baskets"> }) {
   if (!market) {
     return (
@@ -334,7 +325,6 @@ function BasketRows({ indexes, market }: { indexes: IndexList | null; market: Ma
     <div className="rows">
       {baskets.map((b) => {
         const weights = list(b.weights);
-        // The day's move of the basket is its companies' moves, by weight.
         const covered = weights.filter((w) => change.get(w.symbol) != null);
         const total = covered.reduce((sum, w) => sum + w.weight, 0);
         const move = total > 0 ? covered.reduce((sum, w) => sum + w.weight * change.get(w.symbol)!, 0) / total : null;
@@ -373,7 +363,6 @@ function BasketRows({ indexes, market }: { indexes: IndexList | null; market: Ma
   );
 }
 
-/** Pick what to trade; its page has the chart and the buy and sell panel. */
 export function TradeSheet({ market, onClose }: { market: Market | null; onClose: () => void }) {
   return (
     <Sheet title="Trade" onClose={onClose}>
@@ -407,8 +396,6 @@ export function TradeSheet({ market, onClose }: { market: Market | null; onClose
     </Sheet>
   );
 }
-
-/* -------------------------------------------------------------- words */
 
 function signedUsd(value: number): string {
   if (Math.abs(value) < 0.005) return usd(0);

@@ -22,7 +22,6 @@ export interface TokenDto {
   readonly multiplier: number;
   readonly transferFeeBps: number;
   readonly paused: boolean;
-  /** What the issuer can do to a holder's tokens. */
   readonly issuerControl: {
     readonly permanentDelegate: string | null;
     readonly freezeAuthority: string | null;
@@ -50,16 +49,9 @@ export function toTokenDto(view: TokenView): TokenDto {
   };
 }
 
-/**
- * The /api/market response.
- *
- * @param change24h 24-hour change per symbol in percent, from recorded prices.
- *   Replaces the aggregator's figure, which swings widely on markets this thin.
- */
 export function toMarketDto(
   snapshot: MarketSnapshot,
   change24h: ReadonlyMap<string, number> = new Map(),
-  /** Logo, holders and the day's volume per symbol; absent fields are null. */
   meta: ReadonlyMap<string, TokenMeta> = new Map(),
 ) {
   return {
@@ -83,7 +75,6 @@ export function toMarketDto(
     pendingFeeChange: snapshot.pendingFeeChange,
     degraded: snapshot.degraded,
     priceFeedError: snapshot.priceFeedError,
-    // Issuer powers every holder is exposed to, stated on every market response.
     disclosures: [
       "Each mint has a permanent delegate that can transfer holders' tokens without consent.",
       "Each mint has a freeze authority that can immobilise any account.",

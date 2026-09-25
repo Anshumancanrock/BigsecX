@@ -1,5 +1,3 @@
-/** Common questions, answered with the live fee and company list where they apply. */
-
 import type { Market } from "../lib/api.ts";
 import { list, usd } from "../lib/format.ts";
 import { MIN_BASKET_USD, MIN_BUY_USD } from "../lib/limits.ts";

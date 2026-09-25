@@ -2,10 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { BuildResponse, ConfirmResponse, SubmitResponse } from "../src/lib/api.ts";
 import type { Connection } from "../src/lib/wallet.ts";
 
-/* ------------------------------------------------------------- test doubles */
-
 interface Script {
-  /** How many transactions the default submit/confirm doubles answer for. */
   txCount: number;
   build: () => Promise<BuildResponse>;
   submit: () => Promise<SubmitResponse>;
@@ -13,7 +10,6 @@ interface Script {
   builds: number;
   submits: number;
   confirms: number;
-  /** The signatures each record call was given. */
   recorded: string[][];
   record: () => Promise<unknown>;
 }
@@ -146,8 +142,6 @@ afterEach(() => {
   mock.restore();
 });
 
-/* ------------------------------------------------------------------- tests */
-
 describe("failure mapping", () => {
   test("a 409 is a refusal we can explain, and keeps every problem", () => {
     const problems = [
@@ -156,7 +150,6 @@ describe("failure mapping", () => {
     ];
     const failure = toFailure(new FakeApiError(409, "not enough USDC", { problems }));
     expect(failure.phase).toBe("refused");
-    // Both, not just the first: the user needs to fix both before retrying.
     expect(failure.problems).toHaveLength(2);
   });
 
@@ -320,8 +313,6 @@ describe("executeBundle", () => {
   });
 
   test("a failed send is still waited on while its blockhash lives", async () => {
-    // The first poll answers "unknown" for the failed one, as the confirm
-    // route does for any signature it has not seen. That is not "not sent".
     script.submit = async () => ({
       results: [
         { index: 0, signature: "sig0", submitted: true },
@@ -348,7 +339,6 @@ describe("executeBundle", () => {
         if (leg) seen.push(leg.state);
       },
     });
-    // Waiting first, and "not sent" only once nothing could land it.
     expect(seen[0]).toBe("pending");
     expect(seen).not.toContain("expired");
     expect(state.outcomes[1]!.state).toBe("not-sent");

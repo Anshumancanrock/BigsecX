@@ -7,7 +7,6 @@
 import { Cache, RateLimiter, getJson } from "./http.ts";
 
 const LITE = "https://lite-api.jup.ag";
-/** Keyed tier. Same paths, far higher limits. */
 const PRO = "https://api.jup.ag";
 
 /**
@@ -22,7 +21,6 @@ export function jupiterTransport(): { base: string; headers: Record<string, stri
     : { base: LITE, headers: {} };
 }
 
-/** One venue hop inside a route. */
 export interface RouteStep {
   readonly swapInfo: {
     readonly ammKey: string;
@@ -38,7 +36,6 @@ export interface RouteStep {
 export interface Quote {
   readonly inputMint: string;
   readonly outputMint: string;
-  /** Raw base units. */
   readonly inAmount: string;
   /**
    * Raw base units, not multiplier-adjusted. Net of the Token-2022 transfer fee
@@ -54,14 +51,12 @@ export interface Quote {
   readonly swapUsdValue?: string;
 }
 
-/** Price v3 entry. */
 export interface PriceEntry {
   readonly usdPrice: number;
   readonly decimals: number;
   readonly blockId: number;
   readonly priceChange24h: number;
   readonly liquidity: number;
-  /** Issuer mark data, echoed by Jupiter for tokenized-stock mints. */
   readonly stockData?: {
     readonly id: string;
     readonly price: number;
@@ -83,22 +78,15 @@ export interface PriceEntry {
 export interface QuoteRequest {
   readonly inputMint: string;
   readonly outputMint: string;
-  /** Raw base units of the input mint. */
   readonly amount: bigint;
   readonly slippageBps?: number;
   readonly swapMode?: "ExactIn" | "ExactOut";
-  /** Restricting to direct routes lowers the account count in the built tx. */
   readonly onlyDirectRoutes?: boolean;
   /**
    * Caps the accounts a route may touch. A multi-hop PreStocks route can need
    * 1335 bytes against the 1232-byte transaction limit.
    */
   readonly maxAccounts?: number;
-  /**
-   * Venue labels to route around, as in `routePlan[].swapInfo.label`. Used to
-   * retry a leg whose venue failed simulation on a size or state the quote did
-   * not predict.
-   */
   readonly excludeDexes?: readonly string[];
 }
 
@@ -171,10 +159,6 @@ export interface SwapInstructionsOptions {
   readonly useSharedAccounts?: boolean;
 }
 
-/**
- * Budget for instruction fetches, separate from quoting. A burst of 12 covers
- * an eight-leg basket plus legs that fall back to a narrower route.
- */
 const SWAP_LIMITER = new RateLimiter(12, 4);
 
 export class JupiterSwapError extends Error {
@@ -230,7 +214,6 @@ export async function fetchSwapInstructions<T>(
 
       const text = await response.text();
       if (response.status !== 429 && response.status < 500) {
-        // A rejected route is final; retrying it wastes the budget.
         throw new JupiterSwapError(
           `swap-instructions failed: HTTP ${response.status} ${text}`,
           response.status,
@@ -250,12 +233,10 @@ export async function fetchSwapInstructions<T>(
   );
 }
 
-/** Venue labels in a quote's route plan. */
 export function venues(quote: Quote): readonly string[] {
   return quote.routePlan.map((step) => step.swapInfo.label);
 }
 
-/** Price impact as a fraction. Jupiter returns it as a decimal string. */
 export function priceImpact(quote: Quote): number {
   return Number(quote.priceImpactPct);
 }

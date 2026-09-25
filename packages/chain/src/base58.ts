@@ -7,7 +7,6 @@
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
-/** Index by character code, so decoding does not do a linear scan per digit. */
 const VALUES = (() => {
   const table = new Int8Array(128).fill(-1);
   for (let i = 0; i < ALPHABET.length; i++) table[ALPHABET.charCodeAt(i)] = i;
@@ -57,7 +56,6 @@ export function decodeBase58(value: string): Uint8Array {
   return Uint8Array.from(bytes);
 }
 
-/** True when `value` decodes to exactly 32 bytes, the size of an address. */
 export function isBase58Address(value: string): boolean {
   if (value.length < 32 || value.length > 44) return false;
   try {

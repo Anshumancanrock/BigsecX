@@ -1,15 +1,7 @@
-/**
- * The Portfolio primitive: a set of target weights over the universe. Indexes,
- * traders and a user's own allocation are all portfolios, so mirroring any of
- * them is one operation. Pure; quotes and depth limits live in `execution.ts`,
- * which consumes the orders produced here.
- */
-
 export type PortfolioKind = "index" | "trader" | "user";
 
 export interface Weight {
   readonly symbol: string;
-  /** Fraction of the portfolio, in [0, 1]. */
   readonly weight: number;
 }
 
@@ -31,11 +23,8 @@ export type Side = "buy" | "sell";
 export interface RebalanceOrder {
   readonly symbol: string;
   readonly side: Side;
-  /** Notional to trade, in USD, always positive. */
   readonly usd: number;
-  /** Portfolio weight before the trade. */
   readonly fromWeight: number;
-  /** Portfolio weight the trade targets. */
   readonly toWeight: number;
 }
 
@@ -58,7 +47,6 @@ export function capWeights(weights: readonly Weight[], maxWeight: number): Weigh
   if (maxWeight <= 0 || maxWeight > 1) throw new RangeError("capWeights: maxWeight must be in (0, 1]");
 
   const base = normalizeWeights(weights);
-  // A cap below an equal split is unsatisfiable.
   if (maxWeight * base.length < 1 - 1e-12) {
     throw new RangeError(
       `capWeights: ${base.length} positions cannot fit under a ${maxWeight} cap`,
@@ -86,11 +74,9 @@ export function capWeights(weights: readonly Weight[], maxWeight: number): Weigh
     for (const w of breaching) capped.add(w.symbol);
   }
 
-  // Every name is at the cap, which only happens when the cap is exactly 1/n.
   return base.map((w) => ({ symbol: w.symbol, weight: maxWeight }));
 }
 
-/** Value each holding and express the portfolio as weights. */
 export function currentWeights(
   holdings: readonly Holding[],
   priceUsdBySymbol: ReadonlyMap<string, number>,
@@ -107,7 +93,6 @@ export function currentWeights(
   };
 }
 
-/** Signed distance from current weight to target weight, per symbol. */
 export function drift(
   current: readonly Weight[],
   target: readonly Weight[],
@@ -129,20 +114,10 @@ export interface RebalanceRequest {
   readonly target: readonly Weight[];
   readonly holdings: readonly Holding[];
   readonly priceUsdBySymbol: ReadonlyMap<string, number>;
-  /**
-   * Fresh capital to deploy, in USD. When positive, the portfolio grows to
-   * `currentValue + deployUsd` and existing positions are only sold if the
-   * target demands it.
-   */
   readonly deployUsd?: number;
   /** Skip legs smaller than this; every leg pays a transfer fee plus spread. */
   readonly minTicketUsd?: number;
-  /**
-   * Leave a leg alone when its trade is smaller than this share of the target
-   * portfolio value, so noise does not cause churn.
-   */
   readonly toleranceBps?: number;
-  /** Sell positions that the target does not include. Defaults to true. */
   readonly liquidateUntargeted?: boolean;
 }
 
@@ -150,7 +125,6 @@ export interface RebalancePlan {
   readonly orders: readonly RebalanceOrder[];
   readonly portfolioValueUsd: number;
   readonly targetValueUsd: number;
-  /** Legs dropped for being below `minTicketUsd` or inside tolerance. */
   readonly skipped: readonly { readonly symbol: string; readonly usd: number; readonly reason: string }[];
   /**
    * Holdings that could not be valued. The plan treats them as worthless, so

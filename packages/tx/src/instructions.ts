@@ -11,7 +11,6 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 
-/** Jupiter's wire format for an instruction. */
 export interface JupiterInstruction {
   readonly programId: string;
   readonly accounts: readonly {
@@ -19,11 +18,9 @@ export interface JupiterInstruction {
     readonly isSigner: boolean;
     readonly isWritable: boolean;
   }[];
-  /** base64 */
   readonly data: string;
 }
 
-/** The fields of the /swap-instructions response used here. */
 export interface SwapInstructionsResponse {
   readonly tokenLedgerInstruction: JupiterInstruction | null;
   readonly computeBudgetInstructions: readonly JupiterInstruction[];
@@ -32,7 +29,6 @@ export interface SwapInstructionsResponse {
   readonly cleanupInstruction: JupiterInstruction | null;
   readonly otherInstructions: readonly JupiterInstruction[];
   readonly addressLookupTableAddresses: readonly string[];
-  /** Present on current versions; saves fetching each table from chain. */
   readonly addressesByLookupTableAddress?: Readonly<Record<string, readonly string[]>>;
   readonly computeUnitLimit?: number;
   readonly simulationError?: unknown;
@@ -88,7 +84,6 @@ export function instructionKey(source: JupiterInstruction): string {
   ].join("|");
 }
 
-/** Drops repeated instructions (typically account creations) within one transaction. */
 export function dedupeWithinTransaction(
   instructions: readonly TransactionInstruction[],
 ): TransactionInstruction[] {
@@ -101,7 +96,6 @@ export function dedupeWithinTransaction(
   });
 }
 
-/** The same identity, for an already-converted instruction. */
 export function compiledInstructionKey(source: TransactionInstruction): string {
   return [
     source.programId.toBase58(),

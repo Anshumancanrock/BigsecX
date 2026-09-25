@@ -32,7 +32,6 @@ function tradeValueUsd(
 
 describe("trade valuation", () => {
   test("a buy spends, so it is positive", () => {
-    // Wallet's USDC fell by 500.
     expect(tradeValueUsd(-500_000_000n, null, null, null)).toBeCloseTo(500, 9);
   });
 
@@ -41,13 +40,10 @@ describe("trade valuation", () => {
   });
 
   test("falls back to the SOL leg, which most routes actually use", () => {
-    // Spent 2 SOL at $200.
     expect(tradeValueUsd(null, -2_000_000_000n, null, 200)).toBeCloseTo(400, 9);
   });
 
   test("prefers the stablecoin leg when both moved", () => {
-    // An intermediate SOL hop can leave a residue; the stablecoin leg is what
-    // the wallet paid.
     expect(tradeValueUsd(-500_000_000n, -2_000_000_000n, null, 200)).toBeCloseTo(500, 9);
   });
 
@@ -60,7 +56,6 @@ describe("trade valuation", () => {
   });
 
   test("reports no cost when neither cash leg is present", () => {
-    // A plain transfer, or a route through an unpriced token.
     expect(tradeValueUsd(null, null, null, 200)).toBeNull();
     expect(tradeValueUsd(0n, 0n, 0n, 200)).toBeNull();
   });

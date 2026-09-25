@@ -1,9 +1,6 @@
-/* ------------------------------------------------------------ the digits */
-
 export interface Digit {
   readonly char: string;
   readonly key: number;
-  /** Position in the pop-in stagger, or null for a digit that did not change. */
   readonly stagger: number | null;
 }
 

@@ -1,9 +1,6 @@
-/** Lookups derived from a market snapshot, shared by the routes and the builder. */
-
 import type { IndexInput } from "@ps/core";
 import type { MarketSnapshot } from "@ps/market";
 
-/** One index-construction input per token. */
 export function indexInputs(snapshot: MarketSnapshot): IndexInput[] {
   return snapshot.tokens.map((t) => ({
     symbol: t.token.symbol,

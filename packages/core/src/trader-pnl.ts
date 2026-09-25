@@ -8,9 +8,7 @@
 export interface TradeRecord {
   readonly owner: string;
   readonly symbol: string;
-  /** Signed share change. Positive is a buy. */
   readonly uiAmount: number;
-  /** Signed USD value. Positive is money spent. Null when unpriced. */
   readonly valueUsd: number | null;
   readonly slot: number;
 }
@@ -18,13 +16,8 @@ export interface TradeRecord {
 export interface TraderPnl {
   readonly owner: string;
   readonly trades: number;
-  /** Absolute USD traded, both directions. */
   readonly volumeUsd: number;
   readonly netInvestedUsd: number;
-  /**
-   * The most capital committed at once, and the denominator for return: after
-   * a round trip `netInvestedUsd` collapses to the profit or loss itself.
-   */
   readonly peakInvestedUsd: number;
   readonly markValueUsd: number;
   readonly pnlUsd: number;
@@ -76,7 +69,6 @@ export function computeTraderPnl(
   let volumeUsd = 0;
   let unpriced = false;
 
-  // The running-minimum check needs trades in execution order.
   for (const trade of [...trades].sort((a, b) => a.slot - b.slot)) {
     const next = (position.get(trade.symbol) ?? 0) + trade.uiAmount;
     position.set(trade.symbol, next);
@@ -99,7 +91,6 @@ export function computeTraderPnl(
   let markValueUsd = 0;
   const positions: { symbol: string; uiAmount: number }[] = [];
   for (const [symbol, uiAmount] of position) {
-    // Dust below a nanoshare is rounding, not a position.
     if (Math.abs(uiAmount) < 1e-9) continue;
     positions.push({ symbol, uiAmount });
     markValueUsd += uiAmount * (priceBySymbol.get(symbol) ?? 0);
@@ -129,7 +120,6 @@ export function computeTraderPnl(
 }
 
 export interface LeaderboardOptions {
-  /** Ignore wallets that traded less than this in the window. */
   readonly minVolumeUsd?: number;
   readonly limit?: number;
   /**

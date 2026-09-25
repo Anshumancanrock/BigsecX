@@ -5,7 +5,6 @@
  * `diffUniverse` reports drift against the live listing.
  */
 
-/** A company theme. Indexes are built by selecting on these. */
 export type Sector =
   | "ai-lab"
   | "robotics"

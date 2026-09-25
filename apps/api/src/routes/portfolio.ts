@@ -18,7 +18,6 @@ export interface PortfolioPosition {
   readonly uiAmount: number;
   readonly priceUsd: number | null;
   readonly valueUsd: number | null;
-  /** Share of the portfolio's priced value. Null when the price is missing. */
   readonly weight: number | null;
   /** The issuer has immobilised this account; the balance cannot be sold. */
   readonly frozen: boolean;
@@ -52,7 +51,6 @@ function strandedFor(
   return value;
 }
 
-/** A wallet's positions, cash and weights, from chain balances and a market snapshot. */
 export async function readPortfolio(
   services: Services,
   owner: string,
@@ -71,7 +69,6 @@ export async function readPortfolio(
   readonly usdcUsd: number;
   readonly solLamports: number;
   readonly weights: Weight[];
-  /** Held outside the associated account, so not shown above and not sellable here. */
   readonly elsewhere: { symbol: string; uiAmount: number; valueUsd: number | null; accounts: number }[];
 }> {
   const scaleConfig = new Map(
@@ -99,7 +96,6 @@ export async function readPortfolio(
 
   for (const token of UNIVERSE) {
     const balance = balances.get(token.symbol);
-    // A zero balance is not a position.
     if (!balance || balance.uiAmount <= 0) continue;
 
     const priceUsd = priceBySymbol.get(token.symbol) ?? null;
@@ -120,7 +116,6 @@ export async function readPortfolio(
     });
   }
 
-  // Weights are shares of priced value, so an unpriced position gets null.
   const withWeights = positions
     .map((p) => ({ ...p, weight: p.valueUsd === null || totalUsd <= 0 ? null : p.valueUsd / totalUsd }))
     .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
@@ -152,7 +147,6 @@ export function registerPortfolioRoutes(
   services: Services,
   market: () => Promise<MarketSnapshot>,
 ): void {
-  /** A wallet's live holdings, optionally measured against a published strategy (`?compare=<id>`). */
   app.get("/api/portfolio/:wallet", async (c) => {
     const owner = requireBase58Address(c.req.param("wallet"), "wallet");
     const snapshot = await market();
@@ -185,8 +179,6 @@ export function registerPortfolioRoutes(
       },
       positions: portfolio.positions,
       sectors: Object.fromEntries(sectorExposure(portfolio.weights)),
-      // Non-empty means some position could not be valued, so totalUsd and
-      // every weight understate the portfolio.
       unpriced: portfolio.unpriced,
       frozen: portfolio.positions.filter((p) => p.frozen).map((p) => p.symbol),
       elsewhere: portfolio.elsewhere,
@@ -194,14 +186,12 @@ export function registerPortfolioRoutes(
     });
   });
 
-  /** What a wallet can spend right now (USDC and SOL), checked before an amount is quoted. */
   app.get("/api/cash/:wallet", async (c) => {
     const owner = requireBase58Address(c.req.param("wallet"), "wallet");
     const spendable = await getSpendable(services.rpc, owner);
     return c.json({ owner, usdcUsd: spendable.usdc, solLamports: spendable.lamports });
   });
 
-  /** Holdings for one symbol, for an asset page. */
   app.get("/api/portfolio/:wallet/:symbol", async (c) => {
     const owner = requireBase58Address(c.req.param("wallet"), "wallet");
     const token = bySymbol(c.req.param("symbol"));
@@ -215,7 +205,6 @@ export function registerPortfolioRoutes(
       owner,
       symbol: token.symbol,
       asOf: snapshot.takenAt.toISOString(),
-      // An absent position is a zero position, not an error.
       position: position ?? {
         symbol: token.symbol,
         name: token.name,

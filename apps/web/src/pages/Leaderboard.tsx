@@ -1,8 +1,3 @@
-/**
- * Leaderboard: the top three on a podium and the rest in a table, plus a
- * feed of trades by followed wallets.
- */
-
 import { useState } from "react";
 import { api, type FeedTrade, type FollowEntry, type Leaderboard as Board } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
@@ -30,7 +25,6 @@ const SORTS = [
   { label: "Return", key: "return" },
 ] as const;
 
-/** Minimum volume to be ranked; below the minimum ticket size a ranking means little. */
 const MIN_VOLUME_USD = 25;
 
 export function Leaderboard() {
@@ -71,7 +65,6 @@ function Top({ me }: { me: string | null }) {
     (signal) => api.leaderboard({ hours, sortBy, limit: 50, minVolumeUsd: MIN_VOLUME_USD }, signal),
     [hours, sortBy],
   );
-  // Wallets already followed, so each button starts in the right state.
   const following = useAsync<readonly FollowEntry[]>(
     (signal) => (me ? api.following(me, signal).then((r) => r.following) : Promise.resolve([])),
     [me],
@@ -136,7 +129,6 @@ function Top({ me }: { me: string | null }) {
               <div className="list-cols" aria-hidden="true">
                 <span className="col-rank">#</span>
                 <span className="col-trader">Trader</span>
-                {/* On a wide screen there is room for the rest of the record. */}
                 <span className="col-stat desk-only">Worth now</span>
                 <span className="col-stat desk-only">Trades</span>
                 <span className="col-stat desk-only">Traded</span>

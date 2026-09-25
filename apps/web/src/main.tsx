@@ -1,8 +1,3 @@
-/**
- * Entry point. The landing page and the app are separate trees with separate
- * styles, so neither has to override the other.
- */
-
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Landing } from "./landing/Landing.tsx";
@@ -14,8 +9,6 @@ import "./styles/theme.css";
 
 function Root() {
   const path = usePath();
-  // The provider wraps both trees: the landing page reads no wallet state
-  // today, but a "connect" affordance there should not need a second one.
   return (
     <WalletProvider>{path === "/" ? <Landing /> : <AppShell path={path} />}</WalletProvider>
   );

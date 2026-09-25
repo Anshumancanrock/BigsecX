@@ -10,10 +10,6 @@ import { RpcFailure, encodeBase58 } from "@ps/chain";
 import type { Services } from "../context.ts";
 import { BadRequest, readJson } from "../lib/validate.ts";
 
-/**
- * Copy onto a plain ArrayBuffer. WebCrypto takes a BufferSource, which a view
- * over a SharedArrayBuffer or a pooled Node Buffer does not satisfy.
- */
 function copy(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(new ArrayBuffer(bytes.length));
   out.set(bytes);
@@ -23,10 +19,8 @@ function copy(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
 /** A versioned transaction cannot exceed this on the wire. */
 const MAX_TRANSACTION_BYTES = 1232;
 
-/** More than any basket needs, and too few to make this a bulk relay. */
 const MAX_TRANSACTIONS = 20;
 
-/** Most signatures one status request may ask about. */
 const MAX_SIGNATURES = 40;
 
 interface Parsed {
@@ -114,14 +108,12 @@ function parseTransactionShape(raw: unknown, index: number): Parsed & { transact
 /** Everything parseTransactionShape checks, plus: it must actually be signed. */
 function parseTransaction(raw: unknown, index: number): Parsed & { transaction: VersionedTransaction } {
   const parsed = parseTransactionShape(raw, index);
-  // An unsigned transaction serialises with a zero-filled signature slot.
   if (parsed.transaction.signatures[0]?.every((byte) => byte === 0)) {
     throw new BadRequest(`transactions[${index}] is not signed`);
   }
   return parsed;
 }
 
-/** A base58 transaction signature: 64 bytes, usually 86-88 characters. */
 function parseSignature(raw: unknown, index: number): string {
   if (typeof raw !== "string" || raw.length < 64 || raw.length > 96) {
     throw new BadRequest(`signatures[${index}] is not a transaction signature`);
@@ -147,9 +139,7 @@ export interface SubmitResult {
   readonly signature: string;
   readonly submitted: boolean;
   readonly error?: string;
-  /** The simulated error the node reported, when it reported one. */
   readonly err?: unknown;
-  /** The tail of the program logs, which is where the cause is. */
   readonly logs?: readonly string[];
 }
 
@@ -163,7 +153,6 @@ export function registerSubmitRoutes(app: Hono, services: Services): void {
     const body = await readJson(c);
     const raw = parseArray(body["transactions"], "transactions", MAX_TRANSACTIONS);
 
-    // Wire-format checks only: transactions here are expected to be unsigned.
     const parsed = raw.map(parseTransactionShape);
 
     const settled = await Promise.allSettled(
@@ -197,7 +186,6 @@ export function registerSubmitRoutes(app: Hono, services: Services): void {
           index,
           ok: false,
           err: value.err,
-          // The tail is where the cause is; the head is invoke noise.
           logs: (value.logs ?? []).slice(-8),
           unitsConsumed: value.unitsConsumed ?? null,
         };
@@ -217,15 +205,10 @@ export function registerSubmitRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /**
-   * Relay signed transactions to the cluster. Results are per transaction, and
-   * a failed send still reports the locally derived signature.
-   */
   app.post("/api/submit", async (c) => {
     const body = await readJson(c);
     const raw = parseArray(body["transactions"], "transactions", MAX_TRANSACTIONS);
     const parsed = raw.map(parseTransaction);
-    // Sequential, so verification stops at the first bad transaction.
     for (const entry of parsed) await verifySignatures(entry.transaction, entry.index);
 
     // Preflight is on by default: one simulation round trip buys a real error
@@ -242,7 +225,6 @@ export function registerSubmitRoutes(app: Hono, services: Services): void {
             encoding: "base64",
             skipPreflight,
             preflightCommitment: "confirmed",
-            // Let the node rebroadcast into the next few slots.
             maxRetries: 3,
           },
         ]),
@@ -295,7 +277,6 @@ export function registerSubmitRoutes(app: Hono, services: Services): void {
           signature,
           status: "failed" as const,
           slot: entry.slot,
-          // Verbatim: the program error code is what explains the failure.
           err: entry.err,
         };
       }
@@ -311,11 +292,6 @@ export function registerSubmitRoutes(app: Hono, services: Services): void {
   });
 }
 
-/**
- * A send failure with the node's simulated `err` and log tail attached, which
- * name the cause. Passed through unsummarised: the custom error code is what a
- * reader looks up.
- */
 function explain(reason: unknown): { error: string; err?: unknown; logs?: readonly string[] } {
   const message = (reason as Error)?.message ?? "send failed";
   if (!(reason instanceof RpcFailure) || !reason.rpcError) return { error: message };
@@ -326,7 +302,7 @@ function explain(reason: unknown): { error: string; err?: unknown; logs?: readon
   if (!data) return { error: message };
 
   const logs = Array.isArray(data.logs)
-    ? // The tail is where the failure is; the head is invoke noise.
+    ?
       (data.logs as string[]).slice(-6)
     : undefined;
 

@@ -30,12 +30,6 @@ export function currentMultiplier(
     : config.multiplier;
 }
 
-/**
- * Convert a raw base-unit amount to its UI value.
- *
- * Mirrors `amount_to_ui_amount`: scale, truncate toward zero, then divide by
- * 10^decimals. Truncating after scaling is what matches the chain.
- */
 export function rawToUi(
   raw: bigint,
   decimals: number,

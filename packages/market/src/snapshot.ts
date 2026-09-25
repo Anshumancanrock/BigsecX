@@ -23,11 +23,9 @@ export interface TokenView {
   readonly token: PreStock;
   /** Multiplier in force at the snapshot timestamp. */
   readonly multiplier: number;
-  /** Supply in UI shares. */
   readonly supplyUi: number;
   readonly marketUsd: number | null;
   readonly markUsd: number | null;
-  /** Market over mark, as a fraction. Null when the mark is unavailable. */
   readonly basis: number | null;
   readonly basisLabel: BasisLabel | null;
   readonly liquidityUsd: number;
@@ -55,9 +53,7 @@ export interface MarketSnapshot {
   readonly totalLiquidityUsd: number;
   /** Set when a transfer fee change is scheduled but not yet live. */
   readonly pendingFeeChange: { readonly fromBps: number; readonly toBps: number; readonly atEpoch: number } | null;
-  /** Symbols with missing mint state or prices. */
   readonly degraded: readonly string[];
-  /** Set when the price feed failed outright and every price is missing. */
   readonly priceFeedError: string | null;
 }
 
@@ -99,7 +95,6 @@ function buildTokenView(
   };
 }
 
-/** Just under the API's snapshot lifetime, so each snapshot asks once. */
 const PRICE_TTL_MS = 2_500;
 
 export async function takeSnapshot(
@@ -136,7 +131,6 @@ export async function takeSnapshot(
     tokens.push(view);
   }
 
-  // The fee schedule is identical across these mints, so any one will do.
   const anyMint = mints.get(UNIVERSE[0]?.mint ?? "");
 
   return {

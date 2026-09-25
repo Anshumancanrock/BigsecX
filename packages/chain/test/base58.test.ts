@@ -36,8 +36,6 @@ describe("base58", () => {
   });
 
   test("preserves leading zero bytes, which the integer conversion drops", () => {
-    // Leading zero bytes do not change the integer value; only the '1' prefix
-    // distinguishes a 32-byte key from a shorter one.
     const bytes = new Uint8Array(32);
     bytes[31] = 1;
     const encoded = encodeBase58(bytes);
@@ -47,7 +45,6 @@ describe("base58", () => {
   });
 
   test("rejects characters outside the alphabet", () => {
-    // 0, O, I and l are excluded from the alphabet as confusable.
     for (const bad of ["0", "O", "I", "l", "abc!", "hello world", "é"]) {
       expect(() => decodeBase58(bad)).toThrow();
     }

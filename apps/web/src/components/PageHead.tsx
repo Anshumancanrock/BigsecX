@@ -1,5 +1,3 @@
-/** A page's title row: the title on the left, page actions on the right. */
-
 import { go } from "../lib/router.ts";
 
 export function PageHead({
@@ -8,7 +6,6 @@ export function PageHead({
   children,
 }: {
   title: React.ReactNode;
-  /** A way back to the list a detail page came from. */
   back?: { readonly href: string; readonly label: string } | undefined;
   children?: React.ReactNode;
 }) {

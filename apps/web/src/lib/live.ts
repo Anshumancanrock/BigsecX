@@ -30,7 +30,6 @@ export function withLivePrices<T extends PriceTable>(table: T | null, market: Ma
  */
 export function useLivePrices<T extends PriceTable>(table: T | null, market: Market | null): T | null {
   const key = market ? market.tokens.map((t) => `${t.symbol}:${t.marketUsd}`).join("|") : "";
-  // The market is read through the key: only its prices matter here.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => withLivePrices(table, market), [table, key]);
 }

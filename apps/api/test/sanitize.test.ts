@@ -2,11 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { displayLength, overstacked, sanitizeDisplayText } from "../src/lib/validate.ts";
 
 describe("display text sanitiser", () => {
-  /*
-   * Basket names are published by any wallet and are the only identity a
-   * reader has. These characters are instructions to the text renderer, not
-   * markup, so escaping does not help; they are removed.
-   */
   test("strips bidi overrides, which make a name render as something else", () => {
     expect(sanitizeDisplayText("Safe‮tekcab")).toBe("Safetekcab");
     for (const ch of ["‪", "‫", "‬", "‭", "‮", "⁦", "⁧", "⁨", "⁩", "‎", "‏"]) {
@@ -15,7 +10,6 @@ describe("display text sanitiser", () => {
   });
 
   test("strips zero-width characters, which are pure impersonation", () => {
-    // Pixel-identical to "Verified Index" but a different string.
     expect(sanitizeDisplayText("Ver​ified Index")).toBe("Verified Index");
     for (const ch of ["​", "‌", "‍", "﻿"]) {
       expect(sanitizeDisplayText(`a${ch}b`)).toBe("ab");
@@ -35,7 +29,6 @@ describe("display text sanitiser", () => {
   });
 
   test("normalises to NFC so one glyph has one representation", () => {
-    // "é" composed vs decomposed: identical on screen, different bytes.
     expect(sanitizeDisplayText("é")).toBe("é");
     expect(sanitizeDisplayText("é")).toBe(sanitizeDisplayText("é"));
   });
@@ -59,8 +52,6 @@ describe("display text sanitiser", () => {
   });
 
   test("strips the other characters that draw nothing", () => {
-    // Arabic letter mark, soft hyphen, word joiner, Mongolian vowel
-    // separator, Hangul filler, braille blank, a tag character.
     for (const ch of ["\u061C", "\u00AD", "\u2060", "\u180E", "\u3164", "\u2800", "\u{E0041}"]) {
       expect(sanitizeDisplayText(`a${ch}b`)).toBe("ab");
     }
@@ -70,9 +61,7 @@ describe("display text sanitiser", () => {
 
   test("keeps the joiner inside an emoji, where it is what joins it", () => {
     expect(sanitizeDisplayText("👩\u200D💻 dev")).toBe("👩\u200D💻 dev");
-    // With a skin tone between the emoji and its joiner, too.
     expect(sanitizeDisplayText("👩🏽\u200D💻")).toBe("👩🏽\u200D💻");
-    // Between letters it still goes.
     expect(sanitizeDisplayText("a\u200Db")).toBe("ab");
   });
 });

@@ -33,14 +33,11 @@ export function PerformanceCard({
   compareLabel,
 }: {
   weights: Weights;
-  /** What the line is, in the legend: "This basket", "OpenAI". */
   label: string;
-  /** A second, dotted line to measure it against, from the same start. */
   compare?: Weights | undefined;
   compareLabel?: string | undefined;
 }) {
   const fetched = useAsync<History>((signal) => api.history(365, signal), []);
-  // Today's value follows the live prices between fetches (lib/live.ts).
   const history = { ...fetched, data: useLivePrices(fetched.data, useMarket()) };
   const [range, setRange] = useState<number>(365);
   const model = useMemo(
@@ -111,7 +108,6 @@ export function PerformanceCard({
   );
 }
 
-/** A basket's change over all the history there is, and the day it starts. */
 export function growthOf(
   history: History,
   weights: Weights,
@@ -169,7 +165,6 @@ function build(history: History, range: number, weights: Weights, compare: Weigh
   };
 }
 
-/** The first day on which companies making up most of a basket had a price. */
 function startOf(table: HistoryTable, weights: Weights): number {
   const total = weights.reduce((sum, w) => sum + w.weight, 0) || 1;
   for (let i = 0; i < table.days.length; i++) {

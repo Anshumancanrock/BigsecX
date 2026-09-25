@@ -19,7 +19,6 @@ export function AssetChart({ symbol }: { symbol: string }) {
   const [range, setRange] = useState<RangeKey>("1M");
   const intraday = useAsync<Intraday>((signal) => api.intraday(168, signal), [], { pollMs: 5 * 60_000 });
   const history = useAsync<History>((signal) => api.history(365, signal), []);
-  // The newest point follows the live price between fetches (lib/live.ts).
   const market = useMarket();
   const liveIntraday = useLivePrices(intraday.data, market);
   const liveHistory = useLivePrices(history.data, market);

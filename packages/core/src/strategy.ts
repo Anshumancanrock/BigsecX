@@ -14,13 +14,9 @@ export type RebalanceFrequency = "manual" | "daily" | "weekly" | "monthly";
  * rebalance rather than only at creation.
  */
 export interface Guardrails {
-  /** No single position may exceed this fraction. */
   readonly maxWeight: number;
-  /** A position below this is not worth its share of the fees. */
   readonly minWeight: number;
-  /** Optional ceiling on any one sector's combined weight. */
   readonly maxSectorWeight?: number;
-  /** Rebalance once any position drifts this far from target, in bps. */
   readonly driftBps: number;
 }
 
@@ -39,7 +35,6 @@ export const DEFAULT_GUARDRAILS: Guardrails = {
 export interface StrategyDraft {
   readonly name: string;
   readonly description?: string;
-  /** Wallet that authored it. Absent for system indexes. */
   readonly creator?: string;
   readonly constituents: readonly Weight[];
   readonly guardrails?: Partial<Guardrails>;
@@ -47,10 +42,6 @@ export interface StrategyDraft {
 }
 
 export interface Strategy extends Portfolio {
-  /**
-   * Narrower than Portfolio's kind: a trader's live holdings are a portfolio
-   * but not an authored strategy.
-   */
   readonly kind: "index" | "user";
   readonly description: string;
   readonly creator: string | null;
@@ -63,7 +54,6 @@ export interface Strategy extends Portfolio {
 
 /** A strategy cannot hold more names than exist. */
 export const MAX_CONSTITUENTS = UNIVERSE.length;
-/** One holding is a position, not a basket. */
 export const MIN_CONSTITUENTS = 2;
 export const MAX_NAME_LENGTH = 60;
 export const MAX_DESCRIPTION_LENGTH = 280;
@@ -88,10 +78,6 @@ function resolveGuardrails(partial: Partial<Guardrails> | undefined): Guardrails
   };
 }
 
-/**
- * Check guardrails are valid and satisfiable before checking weights against
- * them, so an impossible cap or floor is reported as such.
- */
 function guardrailProblems(rails: Guardrails, count: number): string[] {
   const problems: string[] = [];
 
@@ -111,7 +97,6 @@ function guardrailProblems(rails: Guardrails, count: number): string[] {
     problems.push("maxSectorWeight must be between 0 and 1");
   }
 
-  // Feasibility: the caps have to admit a basket that sums to one.
   if (problems.length === 0) {
     if (rails.maxWeight * count < 1 - 1e-12) {
       problems.push(
@@ -127,7 +112,6 @@ function guardrailProblems(rails: Guardrails, count: number): string[] {
   return problems;
 }
 
-/** Combined weight per sector. A token in two sectors counts in both. */
 export function sectorExposure(weights: readonly Weight[]): Map<Sector, number> {
   const exposure = new Map<Sector, number>();
   for (const { symbol, weight } of weights) {
@@ -138,12 +122,6 @@ export function sectorExposure(weights: readonly Weight[]): Map<Sector, number> 
   return exposure;
 }
 
-/**
- * Validate a draft and return the strategy it describes.
- *
- * Weights may be in any units (percentages, dollars, scores); they are
- * normalised, then capped. Throws `StrategyInvalid` listing every problem.
- */
 export function buildStrategy(
   draft: StrategyDraft,
   options: { readonly id: string; readonly now: Date; readonly published?: boolean },
@@ -232,11 +210,6 @@ export function buildStrategy(
   };
 }
 
-/**
- * Whether any holding has drifted more than `driftBps` from target. Drift is
- * absolute weight: 300 bps is three points of the portfolio, not 3% of the
- * position.
- */
 export function driftExceeded(
   current: readonly Weight[],
   target: readonly Weight[],
@@ -255,7 +228,6 @@ export function driftExceeded(
   return { exceeded: worst !== null && worst.driftBps > driftBps, worst };
 }
 
-/** Milliseconds between scheduled rebalances, or null when manual. */
 export function rebalanceIntervalMs(frequency: RebalanceFrequency): number | null {
   switch (frequency) {
     case "manual":
@@ -265,17 +237,10 @@ export function rebalanceIntervalMs(frequency: RebalanceFrequency): number | nul
     case "weekly":
       return 7 * 24 * 60 * 60 * 1000;
     case "monthly":
-      // Calendar months vary; 30 days is the convention for a drift-driven
-      // schedule where the exact boundary does not matter.
       return 30 * 24 * 60 * 60 * 1000;
   }
 }
 
-/**
- * Combined exposure per symbol across the strategies a user holds, which often
- * share constituents. `shareOfCapital` is each strategy's share of the user's
- * capital.
- */
 export function combinedExposure(
   holdings: readonly { readonly weights: readonly Weight[]; readonly shareOfCapital: number }[],
 ): Weight[] {

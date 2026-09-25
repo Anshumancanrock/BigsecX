@@ -22,7 +22,6 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    // The component stack locates the fault; it is logged, not shown.
     console.error("render failed:", error, info.componentStack);
   }
 

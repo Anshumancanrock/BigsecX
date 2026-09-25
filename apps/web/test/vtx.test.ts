@@ -34,8 +34,6 @@ describe("splitTransaction", () => {
   });
 
   test("the message is identical before and after signing", () => {
-    // This is the property the wallet check relies on: signing changes only
-    // the signature section.
     const payer = Keypair.generate();
     const unsigned = build({ payer, sign: false });
     const signed = build({ payer, sign: true });

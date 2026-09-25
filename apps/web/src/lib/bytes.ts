@@ -1,10 +1,3 @@
-/**
- * Byte and base64 helpers. The API uses base64 for transactions and the
- * Wallet Standard uses Uint8Array. Encoding avoids
- * `String.fromCharCode(...bytes)`, which can overflow the stack on a
- * full-size transaction.
- */
-
 export function toBase64(bytes: Uint8Array): string {
   let binary = "";
   // Chunked rather than spread: String.fromCharCode(...bytes) passes every
@@ -29,7 +22,6 @@ export function utf8(value: string): Uint8Array {
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
-/** Base58, for displaying a transaction signature the explorer will accept. */
 export function toBase58(bytes: Uint8Array): string {
   if (bytes.length === 0) return "";
   let value = 0n;

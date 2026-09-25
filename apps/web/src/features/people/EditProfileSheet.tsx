@@ -15,8 +15,6 @@ import { useToast } from "../../components/Toast.tsx";
 import { Sheet } from "../../components/Sheet.tsx";
 import { Face } from "./Face.tsx";
 
-/* ------------------------------------------------------- edit profile */
-
 export function EditProfileSheet({
   profile,
   onClose,
@@ -112,12 +110,6 @@ export function EditProfileSheet({
   );
 }
 
-/* ------------------------------------------------------------- picture */
-
-/**
- * Profile picture: an upload or one of the nine characters. Each choice is
- * saved immediately under the existing sign-in session.
- */
 function PictureChooser({ wallet, saved }: { wallet: string; saved: string | null }) {
   const me = useWallet();
   const toast = useToast();
@@ -127,7 +119,6 @@ function PictureChooser({ wallet, saved }: { wallet: string; saved: string | nul
   const [problem, setProblem] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
-  // The character on show: chosen, or picked by the address when nothing is.
   const character = presetOf(current) ?? (current === null ? defaultCharacter(wallet) : null);
 
   const change = async (
@@ -194,7 +185,6 @@ function PictureChooser({ wallet, saved }: { wallet: string; saved: string | nul
           hidden
           onChange={(event) => {
             const file = event.target.files?.[0];
-            // Cleared, so choosing the same file again still counts as a choice.
             event.target.value = "";
             if (file) upload(file);
           }}
@@ -210,7 +200,6 @@ function PictureChooser({ wallet, saved }: { wallet: string; saved: string | nul
             title={c.name}
             className={`picture-character${character === i ? " on" : ""}${busy === i ? " busy" : ""}`}
             onClick={() => {
-              // The character already on show needs no saving.
               if (character !== i) void change(i, async () => ({ preset: i }), `You are ${c.name} now`);
             }}
             disabled={busy !== null || !me.connection}

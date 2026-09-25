@@ -25,7 +25,6 @@ const problemsOf = (fn: () => unknown): readonly string[] => {
 
 describe("buildStrategy", () => {
   test("normalises arbitrary units into weights that sum to one", () => {
-    // An author should be able to type percentages, dollars or scores.
     const strategy = build({
       name: "Private AI",
       constituents: [
@@ -106,7 +105,6 @@ describe("buildStrategy", () => {
       ).join(" "),
     ).toContain("cannot sum to 100%");
 
-    // Nor above a 50% floor.
     expect(
       problemsOf(() =>
         build({
@@ -143,7 +141,6 @@ describe("buildStrategy", () => {
   });
 
   test("enforces a sector ceiling", () => {
-    // SpaceX and Anduril are both defence; together they breach a 50% cap.
     expect(
       problemsOf(() =>
         build({
@@ -234,7 +231,6 @@ describe("buildStrategy", () => {
     });
     expect(strategy.rebalance).toBe("manual");
     expect(strategy.published).toBe(false);
-    // Defaults constrain nothing about the allocation.
     expect(strategy.guardrails).toEqual(DEFAULT_GUARDRAILS);
   });
 });
@@ -302,8 +298,6 @@ describe("rebalanceIntervalMs", () => {
 
 describe("combinedExposure", () => {
   test("reveals concentration hidden across several baskets", () => {
-    // Two baskets, half the capital each, both 60% OPENAI: the user is 60% in
-    // one name.
     const combined = combinedExposure([
       {
         shareOfCapital: 0.5,

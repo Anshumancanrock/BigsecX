@@ -1,6 +1,5 @@
 import { hues } from "../../lib/avatars.ts";
 
-/** A profile's cover: soft light in the wallet's own colours. */
 export function Cover({ wallet, children }: { wallet: string; children?: React.ReactNode }) {
   const [a, b, c] = hues(wallet);
   return (

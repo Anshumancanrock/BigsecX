@@ -36,7 +36,6 @@ describe("basket covers", () => {
     expect(lazy).toContain('src="/covers/liquid-720.webp"');
     expect(lazy).toContain("/covers/liquid-1200.webp 1200w");
     expect(lazy).toContain('loading="lazy"');
-    // Decorative: the card names the basket in text.
     expect(lazy).toContain('alt=""');
     expect(renderToStaticMarkup(<BasketCover id="liquid" weights={null} eager />)).toContain('loading="eager"');
   });

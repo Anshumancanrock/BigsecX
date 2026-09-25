@@ -31,10 +31,8 @@ import {
 } from "../lib/validate.ts";
 
 const REBALANCE: readonly RebalanceFrequency[] = ["manual", "daily", "weekly", "monthly"];
-/** Nothing legitimate overlaps more baskets than this. */
 const MAX_OVERLAP_HOLDINGS = 32;
 
-/** The creator wallet, once its signature over this action and resource is verified. */
 async function requireCreator(
   body: Record<string, unknown>,
   action: string,
@@ -101,7 +99,6 @@ function parseGuardrails(value: unknown): Partial<Guardrails> | undefined {
     return parsed;
   };
 
-  // Mutable while assembling; the domain takes it as readonly.
   const out: { -readonly [K in keyof Guardrails]?: Guardrails[K] } = {};
   const max = fraction("maxWeight");
   if (max !== undefined) out.maxWeight = max;
@@ -127,7 +124,6 @@ function parseRebalance(value: unknown): RebalanceFrequency {
   return value as RebalanceFrequency;
 }
 
-/** A readable, url-safe id from the name, with a random suffix so equal names do not collide. */
 function strategyId(name: string): string {
   const slug = name
     .toLowerCase()
@@ -172,7 +168,6 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /** Published strategies, optionally filtered by creator or holding. Drafts are listed only by /api/strategies/mine. */
   app.get("/api/strategies", (c) => {
     const creator = c.req.query("creator");
     const holding = c.req.query("holding");
@@ -196,7 +191,6 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     return c.json({ strategies: rows.map(toDto), scope: "creator" });
   });
 
-  /** One published strategy. A draft answers 404, the same as an unknown id. */
   app.get("/api/strategies/:id", (c) => {
     const row = publicStrategy(services.store, c.req.param("id"));
     if (!row) return c.json({ error: "unknown strategy" }, 404);
@@ -245,7 +239,6 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     return c.json(toDto(saved), 201);
   });
 
-  /** Replace a strategy. Scoped to its creator. */
   app.put("/api/strategies/:id", async (c) => {
     const id = c.req.param("id");
     const body = await readJson(c);
@@ -263,7 +256,6 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
         ? sanitizeDisplayText(body["description"])
         : existing.description;
 
-    // Omitted guardrails keep their stored values.
     const guardrails = parseGuardrails(body["guardrails"]) ?? {
       maxWeight: existing.maxWeight,
       minWeight: existing.minWeight,
@@ -294,7 +286,6 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
       throw error;
     }
 
-    // Keep the original creation time.
     services.store.writeStrategy({ ...toRow(strategy), createdAt: existing.createdAt });
     const saved = services.store.getStrategy(id);
     if (!saved) throw new Error(`strategy ${id} vanished after write`);
@@ -313,14 +304,12 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     return c.json({ deleted: c.req.param("id") });
   });
 
-  /** Combined exposure across several published strategies, which often share constituents. */
   app.post("/api/strategies/overlap", async (c) => {
     const body = await readJson(c);
     const entries = body["holdings"];
     if (!Array.isArray(entries) || entries.length === 0) {
       throw new BadRequest("holdings must be a non-empty array of { strategyId, usd }");
     }
-    // Each entry costs a database read.
     if (entries.length > MAX_OVERLAP_HOLDINGS) {
       throw new BadRequest(`holdings must contain at most ${MAX_OVERLAP_HOLDINGS} entries`);
     }
@@ -351,7 +340,6 @@ export function registerStrategyRoutes(app: Hono, services: Services): void {
     });
   });
 
-  /** Whether a wallet's actual weights have drifted from a strategy. */
   app.post("/api/strategies/:id/drift", async (c) => {
     const body = await readJson(c);
     // The response includes the target weights, so a draft must not resolve here.

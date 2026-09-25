@@ -7,8 +7,6 @@ import { Sheet } from "../../components/Sheet.tsx";
 import { Segmented } from "../../components/Segmented.tsx";
 import { Face } from "./Face.tsx";
 
-/* ------------------------------------------------------- follow lists */
-
 export function FollowListSheet({
   wallet,
   initial,

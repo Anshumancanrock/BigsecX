@@ -47,8 +47,6 @@ describe("capWeights", () => {
     );
     expect(sum(out)).toBeCloseTo(1, 12);
     expect(out.find((w) => w.symbol === "BIG")?.weight).toBeCloseTo(0.5, 12);
-    // The freed weight splits in proportion to the uncapped names, which were
-    // equal, so they end up equal.
     expect(out.find((w) => w.symbol === "A")?.weight).toBeCloseTo(0.25, 12);
   });
 
@@ -156,7 +154,6 @@ describe("planRebalance", () => {
   });
 
   test("ignores drift inside the tolerance band", () => {
-    // 51/49 against a 50/50 target is 100bps of drift.
     const plan = planRebalance({
       target,
       holdings: [
@@ -210,8 +207,6 @@ describe("planRebalance", () => {
   });
 
   test("tops up a portfolio that is already exactly at target", () => {
-    // The churn guard measures dollars against the target book, so new capital
-    // into an at-target wallet still produces trades.
     const plan = planRebalance({
       target,
       holdings: [

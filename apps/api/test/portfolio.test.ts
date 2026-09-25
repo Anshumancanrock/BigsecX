@@ -96,7 +96,6 @@ describe("portfolio compared to a strategy", () => {
   async function withStrategy(options: FakeOptions) {
     const { app: a } = app(options);
     const author = new TestWallet();
-    // The signature covers the body, so build it first and sign that.
     const body = {
       creator: author.address,
       name: "Even",
@@ -126,7 +125,6 @@ describe("portfolio compared to a strategy", () => {
     const body = (await (await a.request(`/api/portfolio/${WALLET}?compare=${id}`)).json()) as {
       comparison: { exceeded: boolean; worst: { symbol: string; driftBps: number } };
     };
-    // Held 70/30 against a 50/50 target: 2000bps of drift.
     expect(body.comparison.exceeded).toBe(true);
     expect(body.comparison.worst.driftBps).toBeCloseTo(2_000, 0);
   });
@@ -174,7 +172,6 @@ describe("tokens held outside the associated account", () => {
     expect(body.elsewhere[0]!.uiAmount).toBeCloseTo(133, 6);
     expect(body.elsewhere[0]!.accounts).toBe(2);
     expect(body.elsewhere[0]!.valueUsd).toBeCloseTo(13_300, 0);
-    // Kept out of the sellable total.
     expect(body.totalUsd).toBeCloseTo(0.01, 4);
   });
 

@@ -21,7 +21,6 @@ export const PYTH_FEED_IDS: Readonly<Record<string, string>> = {
 export interface OraclePrice {
   readonly symbol: string;
   readonly priceUsd: number;
-  /** Pyth's confidence interval in USD; wide when publishers disagree. */
   readonly confidenceUsd: number;
   readonly publishedAt: Date;
 }
@@ -40,7 +39,6 @@ export class PythClient {
     this.#apiKey = apiKey;
   }
 
-  /** False when no key is configured, so callers can explain the absence. */
   get available(): boolean {
     return this.#apiKey !== undefined && this.#apiKey.length > 0;
   }
@@ -93,22 +91,13 @@ export type PriceTruthVerdict = "aligned" | "token-rich" | "token-cheap" | "unkn
 
 export interface PriceTruth {
   readonly symbol: string;
-  /** What the token trades at on Solana. */
   readonly marketUsd: number | null;
-  /** The issuer's valuation of its own SPV exposure. */
   readonly markUsd: number | null;
-  /** An unrelated publisher's price for the same company. */
   readonly oracleUsd: number | null;
   readonly oracleConfidenceUsd: number | null;
   readonly oracleAgeSeconds: number | null;
-  /** Market against the issuer mark, as a fraction. */
   readonly basisToMark: number | null;
-  /** Market against the oracle, as a fraction. */
   readonly basisToOracle: number | null;
-  /**
-   * Issuer mark against the oracle, as a fraction. A wide spread means the
-   * reference itself is uncertain.
-   */
   readonly referenceSpread: number | null;
   readonly verdict: PriceTruthVerdict;
 }
@@ -123,7 +112,6 @@ export function priceTruth(args: {
   readonly markUsd: number | null;
   readonly oracle: OraclePrice | undefined;
   readonly now: Date;
-  /** Basis within this fraction either way counts as aligned. */
   readonly toleranceFraction?: number;
 }): PriceTruth {
   const tolerance = args.toleranceFraction ?? 0.02;

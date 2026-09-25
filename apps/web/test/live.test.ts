@@ -23,7 +23,6 @@ describe("withLivePrices", () => {
     const live = withLivePrices(table, market({ OPENAI: 1349.25, SPACEX: 116 }))!;
     expect(live.prices.OPENAI).toEqual([1300, 1349.25]);
     expect(live.prices.SPACEX).toBe(table.prices.SPACEX);
-    // Everything else about the table is kept.
     expect(live.days).toBe(table.days);
     expect(live.asOf).toBe(table.asOf);
   });

@@ -1,16 +1,9 @@
-/** Price history routes for the dashboard charts, served from the PriceHistory cache. */
-
 import type { Hono } from "hono";
 import type { MarketSnapshot } from "@ps/market";
 import type { Services } from "../context.ts";
 import { INTRADAY_HOURS, dayOf } from "../lib/price-history.ts";
 import { requireInt } from "../lib/validate.ts";
 
-/**
- * Hourly prices on one aligned axis: the last `hours` hours plus now. An hour
- * with no trade carries the previous price forward, and the final point is the
- * live market price.
- */
 export function intradayTable(
   closes: Record<string, Record<number, number>>,
   snapshot: MarketSnapshot,
@@ -31,7 +24,6 @@ export function intradayTable(
       .sort((a, b) => a - b);
     let k = 0;
     let last: number | null = null;
-    // Carry in the last close from before the window, if there is one.
     while (k < known.length && known[k]! < times[0]!) last = perHour[known[k++]!]! / multiplier;
     prices[token.token.symbol] = times.map((t, i) => {
       while (k < known.length && known[k]! <= t) last = perHour[known[k++]!]! / multiplier;
@@ -43,11 +35,6 @@ export function intradayTable(
   return { times, prices };
 }
 
-/**
- * Stored daily closes as one aligned table for the chart. Every symbol has a
- * value per day (null where it has no print), and today's point is the live
- * market price.
- */
 export function historyTable(
   closes: Record<string, Record<string, number>>,
   snapshot: MarketSnapshot,
@@ -81,7 +68,6 @@ export function registerHistoryRoutes(
   services: Services,
   market: () => Promise<MarketSnapshot>,
 ): void {
-  /** Hourly prices for every company, over at most the last week. */
   app.get("/api/history/intraday", async (c) => {
     const hours = requireInt(c.req.query("hours"), "hours", { min: 6, max: INTRADAY_HOURS, fallback: INTRADAY_HOURS });
     const history = services.history ?? null;

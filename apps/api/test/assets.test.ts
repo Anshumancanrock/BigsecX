@@ -63,10 +63,8 @@ describe("asset detail", () => {
 
     expect(body.symbol).toBe("OPENAI");
     expect(body.launchedAt).toContain("2025-08-07");
-    // Daily figures, differenced from the cumulative series.
     expect(body.volume.every((v) => v.usd === 100)).toBe(true);
     expect(body.holders.map((h) => h.holders)).toEqual([50, 100]);
-    // Issuer powers travel with the asset.
     expect(body.issuerControl).toBeDefined();
   });
 

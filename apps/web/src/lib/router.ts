@@ -24,8 +24,6 @@ export function usePath(): string {
       const next = window.location.pathname;
       const apply = () => {
         flushSync(() => setPath(next));
-        // A new page starts at its top; back and forward keep the browser's
-        // own scroll restoration.
         if (event.type === "bx:navigate") window.scrollTo(0, 0);
       };
       if (canTransition()) document.startViewTransition(apply);
@@ -50,10 +48,6 @@ export function navigate(to: string): void {
   window.dispatchEvent(new Event("bx:navigate"));
 }
 
-/**
- * Match `/traders/:wallet` against a live path, returning its params.
- * Returns null when the pattern does not match, so callers can chain.
- */
 export function match(pattern: string, path: string): Record<string, string> | null {
   const patternParts = pattern.split("/").filter(Boolean);
   const pathParts = path.split("/").filter(Boolean);
@@ -69,7 +63,6 @@ export function match(pattern: string, path: string): Record<string, string> | n
   return params;
 }
 
-/** Click handler for in-app links: navigates client side, but leaves modified clicks to the browser. */
 export function go(to: string) {
   return (event: MouseEvent) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;

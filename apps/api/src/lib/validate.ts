@@ -13,16 +13,13 @@ export class BadRequest extends Error {
   }
 }
 
-/** Largest basket that will be priced. */
 const MAX_WEIGHTS = 32;
 /**
  * Largest claimed holding, in UI shares. Catches raw base units sent by
  * mistake, and values that would overflow to Infinity once multiplied by a price.
  */
 const MAX_HOLDING_UI = 1e12;
-/** Positions a caller may claim. The universe has eight tokens. */
 const MAX_HOLDINGS = 32;
-/** Above this, quotes are meaningless against $2.6M of total liquidity. */
 const MAX_DEPLOY_USD = 10_000_000;
 
 /** Parse a JSON object body, turning malformed JSON into a 400 rather than a 500. */
@@ -39,11 +36,6 @@ export async function readJson(c: { req: { json: () => Promise<unknown> } }): Pr
   return body as Record<string, unknown>;
 }
 
-/**
- * Coerce a request field to a number, or throw BadRequest. Only a finite
- * number, or a string that is entirely one, is accepted: `Number()` alone
- * turns true, [], "" and null into real values. Every numeric field uses this.
- */
 export function toNumber(value: unknown, field: string): number {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) throw new BadRequest(`${field} must be a finite number`);
@@ -73,7 +65,6 @@ export function requireFiniteUsd(
 
 export function requireBase58Address(value: unknown, field: string): string {
   if (typeof value !== "string") throw new BadRequest(`${field} is required`);
-  // Base58 alphabet, and the length range a Solana public key encodes to.
   if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value)) {
     throw new BadRequest(`${field} is not a valid Solana address`);
   }
@@ -124,7 +115,6 @@ export function parseWeights(value: unknown): Weight[] {
   return weights;
 }
 
-/** Validate holdings supplied by a caller describing their current position. */
 export function parseHoldings(
   value: unknown,
 ): { readonly symbol: string; readonly uiAmount: number }[] {
@@ -157,7 +147,6 @@ export function requireInt(
   field: string,
   { min, max, fallback }: { min: number; max: number; fallback: number },
 ): number {
-  // An empty string is an unset form field, not a request for zero.
   if (value === undefined || value === null || value === "") return fallback;
   const parsed = toNumber(value, field);
   return Math.min(max, Math.max(min, Math.trunc(parsed)));
@@ -193,7 +182,6 @@ export function sanitizeDisplayText(value: string): string {
 }
 
 const PICTOGRAPH = /^\p{Extended_Pictographic}$/u;
-/** A variation selector or skin tone, which sits between an emoji and a joiner. */
 const EMOJI_SUFFIX = /^[\uFE0F\u{1F3FB}-\u{1F3FF}]$/u;
 
 /**
@@ -218,17 +206,12 @@ function keepEmojiJoiners(text: string): string {
 
 const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
 
-/** Length in graphemes, so an emoji made of several code points counts once. */
 export function displayLength(value: string): number {
   let count = 0;
   for (const _ of graphemes.segment(value)) count++;
   return count;
 }
 
-/**
- * Whether any character carries more than `maxMarks` combining marks. A
- * stacked character draws over the lines around it; real text uses a few.
- */
 export function overstacked(value: string, maxMarks = 3): boolean {
   for (const { segment } of graphemes.segment(value)) {
     if ((segment.match(/\p{M}/gu)?.length ?? 0) > maxMarks) return true;

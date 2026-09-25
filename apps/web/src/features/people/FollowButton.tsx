@@ -6,12 +6,6 @@ import { useToast } from "../../components/Toast.tsx";
 import { Sheet } from "../../components/Sheet.tsx";
 import { WalletPicker } from "../wallet/ConnectButton.tsx";
 
-/* ----------------------------------------------------------- follow */
-
-/**
- * Follow or unfollow. The first follow signs in once; the button updates
- * optimistically and reverts if the server refuses.
- */
 export function FollowButton({
   wallet,
   following,
@@ -21,7 +15,6 @@ export function FollowButton({
   wallet: string;
   following: boolean;
   onChange?: (following: boolean, followers: number | null) => void;
-  /** "icon" is a round button for tight rows; it keeps the words for readers. */
   size?: "sm" | "md" | "icon";
 }) {
   const me = useWallet();

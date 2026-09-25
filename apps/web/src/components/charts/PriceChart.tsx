@@ -9,7 +9,6 @@ import { price } from "../../lib/format.ts";
 import { smoothPath } from "../../lib/series.ts";
 
 export interface PricePoint {
-  /** Unix milliseconds. */
   readonly t: number;
   readonly v: number | null;
 }
@@ -89,9 +88,7 @@ export function PriceChart({ points, grain, height = 320 }: { points: readonly P
   const base = PAD.top + innerH;
   const area = `${line}L${x(t1).toFixed(1)},${base}L${x(t0).toFixed(1)},${base}Z`;
 
-  // Five price labels, top to bottom, evenly spaced across the drawn range.
   const ticks = Array.from({ length: 5 }, (_, i) => hi - ((hi - lo) * i) / 4);
-  // As many time labels as fit, about one per 110px.
   const count = Math.max(2, Math.min(7, Math.floor(innerW / 110)));
   const times = Array.from({ length: count }, (_, i) => t0 + ((t1 - t0) * i) / (count - 1));
 
@@ -135,7 +132,6 @@ export function PriceChart({ points, grain, height = 320 }: { points: readonly P
           {times.map((t, i) => (
             <g key={t}>
               <line x1={x(t)} x2={x(t)} y1={PAD.top} y2={base} className="pc-grid" />
-              {/* The end labels are anchored inward, so neither is cut off at the edge. */}
               <text
                 x={x(t)}
                 y={height - 8}
@@ -147,7 +143,6 @@ export function PriceChart({ points, grain, height = 320 }: { points: readonly P
             </g>
           ))}
 
-          {/* Keyed by the range, so switching range draws the new line in. */}
           <path key={`fill-${drawKey}`} className="draw-fill" d={area} fill={`url(#pc-fill-${id})`} />
           <path
             key={`line-${drawKey}`}
@@ -187,7 +182,6 @@ export function PriceChart({ points, grain, height = 320 }: { points: readonly P
   );
 }
 
-/** The card's line: no axes, no labels, the shape of the move and its colour. */
 export function Sparkline({ values, up, height = 96 }: { values: readonly (number | null)[]; up: boolean; height?: number }) {
   const id = useId().replace(/:/g, "");
   const series = values.filter((v): v is number => v !== null);

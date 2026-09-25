@@ -52,11 +52,9 @@ describe("inspectImage", () => {
 
   test("refuses a header whose lengths point past the end", () => {
     const broken = bytes(fixture.png);
-    // The first chunk's length, made enormous.
     broken[8] = 0x7f;
     expect(inspectImage(broken)).toBeNull();
     const riff = bytes(fixture.webpLossy);
-    // The RIFF size, larger than the file.
     riff[7] = 0x7f;
     expect(inspectImage(riff)).toBeNull();
   });

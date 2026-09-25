@@ -26,19 +26,15 @@ interface ParsedAccount {
   owner: string;
 }
 
-/** Everything about a mint that affects what a user sees or pays. */
 export interface MintState {
   readonly mint: string;
   readonly decimals: number;
   readonly rawSupply: bigint;
   readonly scale: ScaledUiAmountConfig;
   readonly transferFee: TransferFeeConfig;
-  /** True when transfers are halted by the pausable extension. */
   readonly paused: boolean;
-  /** Set when the issuer can seize balances from any account. */
   readonly permanentDelegate: string | null;
   readonly freezeAuthority: string | null;
-  /** Set when transfers invoke a hook program outside this app's control. */
   readonly transferHookProgramId: string | null;
 }
 
@@ -74,8 +70,6 @@ function readTransferFee(extensions: readonly ParsedExtension[]): TransferFeeCon
     return {
       epoch: Number(fee.epoch),
       transferFeeBasisPoints: Number(fee.transferFeeBasisPoints),
-      // maximumFee is u64: it arrives as a string or as a JSON number already
-      // imprecise at the u64::MAX sentinel, and String() accepts both.
       maximumFee: BigInt(String(fee.maximumFee)),
     };
   };
@@ -108,10 +102,6 @@ function parseMint(mint: string, account: ParsedAccount | null): MintState {
   };
 }
 
-/**
- * Fetch several mints in one round trip. getMultipleAccounts takes at most 100
- * addresses, far more than the universe holds, so requests are not chunked.
- */
 export async function getMintStates(
   rpc: Rpc,
   mints: readonly string[],

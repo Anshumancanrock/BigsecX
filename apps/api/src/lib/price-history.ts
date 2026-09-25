@@ -9,7 +9,6 @@ import { dirname } from "node:path";
 import { UNIVERSE } from "@ps/core";
 
 export interface DailyCandle {
-  /** Start of the candle's period, in unix seconds. */
   readonly time: number;
   readonly close: number;
   readonly volumeUsd: number;
@@ -17,26 +16,20 @@ export interface DailyCandle {
 
 export interface PoolRef {
   readonly address: string;
-  /** Which side of the pool the company's token is on. */
   readonly side: "base" | "quote";
   readonly reserveUsd: number;
-  /** Traded in the last day. The ranking key: see `pools` below. */
   readonly volumeUsd?: number;
 }
 
-/** Where candles come from. An interface so tests need no network. */
 export interface HistorySource {
   pools(mint: string): Promise<PoolRef[]>;
   daily(pool: PoolRef, days: number): Promise<DailyCandle[]>;
-  /** Hourly candles, newest last. Optional: the daily chart does not need them. */
   hourly?(pool: PoolRef, hours: number): Promise<DailyCandle[]>;
 }
 
 const GECKO = "https://api.geckoterminal.com/api/v2";
-/** Just over two seconds, which keeps a burst under 30 a minute. */
 const MIN_INTERVAL_MS = 2_100;
 
-/** GeckoTerminal's free API, paced to its published limit. */
 export function geckoTerminal(options: { fetchImpl?: typeof fetch; minIntervalMs?: number } = {}): HistorySource {
   const fetchImpl = options.fetchImpl ?? fetch;
   const interval = options.minIntervalMs ?? MIN_INTERVAL_MS;
@@ -51,7 +44,6 @@ export function geckoTerminal(options: { fetchImpl?: typeof fetch; minIntervalMs
         headers: { accept: "application/json;version=20230302" },
         signal: AbortSignal.timeout(20_000),
       });
-      // Rate limited: back off for a whole window.
       if (response.status === 429) {
         nextAt = Date.now() + 30_000;
         continue;
@@ -70,9 +62,6 @@ export function geckoTerminal(options: { fetchImpl?: typeof fetch; minIntervalMs
           relationships?: { base_token?: { data?: { id?: string } } };
         }[];
       };
-      // Ranked by 24h volume, then reserves: the deepest pools can trade almost
-      // nothing and have only weeks of candles, while a shallower USDC pool
-      // trades daily and has months.
       return (body.data ?? [])
         .map((pool) => ({
           address: pool.attributes?.address ?? "",
@@ -105,16 +94,10 @@ export function geckoTerminal(options: { fetchImpl?: typeof fetch; minIntervalMs
   };
 }
 
-/** "2026-09-23" for a unix-seconds timestamp. */
 export function dayOf(time: number): string {
   return new Date(time * 1000).toISOString().slice(0, 10);
 }
 
-/**
- * One close per day across several pools: the close of the pool that traded
- * most that day, dropped when it is more than twice or under half the median
- * of the surrounding week (a new pool's first print, or a single bad trade).
- */
 export function mergeDaily(perPool: readonly (readonly DailyCandle[])[]): Map<string, number> {
   const best = new Map<string, DailyCandle>();
   for (const candles of perPool) {
@@ -140,32 +123,24 @@ export function mergeDaily(perPool: readonly (readonly DailyCandle[])[]): Map<st
 
 interface CacheFile {
   readonly fetchedAt: number;
-  /** Raw-unit closes per symbol, keyed by day. */
   readonly bySymbol: Record<string, Record<string, number>>;
 }
 
-/** How long a fetched history is served before it is refreshed. */
 const FRESH_MS = 6 * 60 * 60 * 1000;
-/** How many pools per company are read. The rest are too thin to matter. */
 const POOLS_PER_TOKEN = 3;
 const DAYS = 365;
 
-/** The hourly cache sits beside the daily one. */
 function hourlyPath(dailyPath: string): string {
   return dailyPath.replace(/(\.json)?$/, "-hourly.json");
 }
 
-/** How long hourly prices are served before they are fetched again. */
 const INTRADAY_FRESH_MS = 15 * 60 * 1000;
-/** A week of hours: enough for the one-day and one-week charts. */
 export const INTRADAY_HOURS = 168;
 
-/** Daily and hourly closes for every company, refreshed in the background and cached on disk. */
 export class PriceHistory {
   #data: CacheFile | null = null;
   #refreshing: Promise<void> | null = null;
   #lastError: string | null = null;
-  /** The busiest pool per symbol, remembered from the last daily refresh. */
   readonly #pools = new Map<string, PoolRef>();
   #hourly: { fetchedAt: number; bySymbol: Record<string, Record<number, number>> } | null = null;
   #refreshingHourly: Promise<void> | null = null;
@@ -202,7 +177,6 @@ export class PriceHistory {
     return this.#lastError;
   }
 
-  /** Raw-unit closes per symbol, or an empty record before the first fetch. */
   closes(): Record<string, Record<string, number>> {
     return this.#data?.bySymbol ?? {};
   }
@@ -213,7 +187,6 @@ export class PriceHistory {
     if (stale && !this.#refreshing) void this.refresh();
   }
 
-  /** One refresh at a time; a caller arriving mid-refresh shares it. */
   refresh(): Promise<void> {
     if (this.#refreshing) return this.#refreshing;
     this.#refreshing = (async () => {
@@ -231,7 +204,6 @@ export class PriceHistory {
             fetchedAny = true;
           }
         } catch (error) {
-          // One company failing keeps its previous history; the rest update.
           this.#lastError = `${token.symbol}: ${(error as Error).message}`;
         }
       }
@@ -259,7 +231,6 @@ export class PriceHistory {
   // Hourly prices come from one pool per company, the busiest, because an hour
   // in a thin pool often has no trade at all.
 
-  /** Raw-unit hourly closes per symbol, keyed by the hour's unix second. */
   hourlyCloses(): Record<string, Record<number, number>> {
     return this.#hourly?.bySymbol ?? {};
   }

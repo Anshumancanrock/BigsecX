@@ -38,7 +38,6 @@ describe("symbolBooks", () => {
   });
 
   test("an unbelievable cost is dropped and flagged", () => {
-    // $92 for 0.0004 OpenAI: the stablecoin belonged to another leg.
     const [book] = symbolBooks([trade("OPENAI", 0.0004, 92, 1)], prices);
     expect(book!.boughtUsd).toBe(0);
     expect(book!.complete).toBe(false);
@@ -90,7 +89,6 @@ describe("averageHoldSeconds", () => {
 
   test("nothing to measure is null, not zero", () => {
     expect(averageHoldSeconds([], 100)).toBeNull();
-    // Only a sale of something bought before indexing: no hold began.
     expect(averageHoldSeconds([trade("OPENAI", -1, -1_000, 1)], 100)).toBeNull();
     // A buy with no known time cannot be timed.
     expect(averageHoldSeconds([trade("OPENAI", 1, 1_000, 1, null)], 100)).toBeNull();
@@ -98,7 +96,6 @@ describe("averageHoldSeconds", () => {
 });
 
 describe("trades in one slot", () => {
-  // A buy and a sale in the same slot: which came first is not recorded.
   const pair = [trade("OPENAI", 1, 1_000, 5, 50), trade("OPENAI", -1, -1_000, 5, 50)];
 
   test("give the same book in either order", () => {

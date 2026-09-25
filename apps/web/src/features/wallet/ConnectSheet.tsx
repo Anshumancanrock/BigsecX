@@ -3,7 +3,6 @@ import { Sheet } from "../../components/Sheet.tsx";
 import { WalletPicker } from "./ConnectButton.tsx";
 import { useWallet } from "./WalletContext.tsx";
 
-/** The wallet picker in a sheet. Closes itself once a wallet connects. */
 export function ConnectSheet({ onClose }: { onClose: () => void }) {
   const wallet = useWallet();
   useEffect(() => {
@@ -21,7 +20,6 @@ export function ConnectSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** A button that opens the connect sheet, for anything that needs a wallet first. */
 export function ConnectSheetButton({ className = "btn-mint", label = "Connect wallet" }: { className?: string; label?: string }) {
   const [open, setOpen] = useState(false);
   return (

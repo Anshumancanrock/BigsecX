@@ -1,8 +1,3 @@
-/**
- * Desktop layout: a header with brand, search and account, and a grouped
- * section list down the left that ends with the price feed status.
- */
-
 import { useState } from "react";
 import { api, type Portfolio } from "../lib/api.ts";
 import { list, usd } from "../lib/format.ts";
@@ -17,7 +12,6 @@ interface Section {
   readonly href: string;
   readonly label: string;
   readonly icon: () => React.ReactNode;
-  /** Older paths that land on the same page. */
   readonly also: readonly string[];
 }
 
@@ -45,7 +39,6 @@ const GROUPS: readonly { readonly label: string | null; readonly sections: reado
   },
 ];
 
-/** The header and the sidebar, sharing one read of what the wallet holds. */
 export function DeskFrame({ path }: { path: string }) {
   const wallet = useWallet();
   const portfolio = useAsync<Portfolio | null>(
@@ -54,7 +47,6 @@ export function DeskFrame({ path }: { path: string }) {
     { pollMs: 60_000 },
   );
   const data = portfolio.data;
-  // Everything the wallet holds here: the companies, wherever they sit, and cash.
   const total = data
     ? data.totalUsd + list(data.elsewhere).reduce((sum, e) => sum + (e.valueUsd ?? 0), 0) + data.cash.usdcUsd
     : null;
@@ -151,8 +143,6 @@ function SideBar({ path }: { path: string }) {
     </nav>
   );
 }
-
-/* ------------------------------------------------------------------ icons */
 
 const stroke = { stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 

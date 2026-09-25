@@ -26,14 +26,12 @@ const send = (a: ReturnType<typeof createApp>, method: string, path: string, bod
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-/** Sign as Alice for an action, merging the proof into a request body. */
 async function signed(
   wallet: TestWallet,
   action: string,
   resource: string,
   body: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  // The signature covers the body it will be sent with, including creator.
   const full = { ...body, creator: wallet.address };
   return { ...full, ...(await wallet.sign(action, resource, full)) };
 }
@@ -48,7 +46,6 @@ const draftBody = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-/** A signed create request from Alice. */
 const draft = async (over: Record<string, unknown> = {}) =>
   signed(alice, "create-strategy", "new", draftBody(over));
 
@@ -85,7 +82,6 @@ describe("creating strategies", () => {
       }),
     );
     const body = (await res.json()) as { sectors: Record<string, number> };
-    // Both are defence; SpaceX is also space.
     expect(body.sectors["defense"]).toBeCloseTo(1, 9);
     expect(body.sectors["space"]).toBeCloseTo(0.5, 9);
   });
@@ -146,7 +142,6 @@ describe("authentication", () => {
    * could publish a basket attributed to any wallet and corrupt its record.
    */
   test("refuses to attribute a strategy to a wallet the caller cannot sign for", async () => {
-    // Alice signs, but claims to be Bob.
     const body = { ...draftBody(), creator: bob.address };
     const proof = await alice.sign("create-strategy", "new", body);
     const res = await send(app(), "POST", "/api/strategies", { ...body, ...proof });
@@ -185,7 +180,6 @@ describe("authentication", () => {
     const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as {
       id: string;
     };
-    // Signed for a different strategy id.
     const res = await send(
       a,
       "DELETE",
@@ -299,7 +293,6 @@ describe("visibility and ownership", () => {
     };
     expect(byCreator.strategies).toHaveLength(0);
 
-    // Reading one's own drafts requires proving wallet ownership.
     const mine = (await (
       await send(a, "POST", "/api/strategies/mine", await signed(alice, "list-drafts", "mine", {}))
     ).json()) as { strategies: { id: string }[] };
@@ -387,8 +380,6 @@ describe("response consistency", () => {
   });
 
   test("a draft is not readable by id, however consistent it would be", async () => {
-    // The access rule wins over the consistency rule: drafts are hidden from
-    // anyone holding an id, as they are on the list endpoint.
     const a = app();
     const created = (await (await send(a, "POST", "/api/strategies", await draft())).json()) as {
       id: string;
@@ -400,10 +391,6 @@ describe("response consistency", () => {
 });
 
 describe("a published strategy can be bought", () => {
-  /**
-   * A published strategy can be bought through the mirror routes by its id,
-   * not only system indexes and inline weights.
-   */
   test("its id resolves as a mirror target", async () => {
     const a = app();
     const created = (await (await send(a, "POST", "/api/strategies", await draft({ published: true }))).json()) as {
@@ -490,14 +477,12 @@ describe("editing", () => {
     // Omitted guardrails must not be dropped by a rename.
     expect(updated.guardrails.driftBps).toBe(111);
     expect(updated.guardrails.maxWeight).toBeCloseTo(0.7, 9);
-    // Nor may the weights vanish.
     expect(updated.weights).toHaveLength(2);
   });
 });
 
 describe("retracting", () => {
   test("a creator can unpublish a strategy", async () => {
-    // Or-ing the request with the stored value made publication permanent.
     const a = app();
     const created = (await (
       await send(a, "POST", "/api/strategies", await draft({ published: true }))
@@ -568,7 +553,6 @@ describe("overlap", () => {
       exposure: { symbol: string; weight: number; usd: number }[];
     };
     expect(body.totalUsd).toBe(1_000);
-    // Two "different" baskets, and the user is 60% in one name.
     expect(body.exposure[0]?.symbol).toBe("OPENAI");
     expect(body.exposure[0]?.weight).toBeCloseTo(0.6, 9);
     expect(body.exposure[0]?.usd).toBeCloseTo(600, 9);

@@ -78,7 +78,6 @@ describe("read endpoints", () => {
 
     const openai = body.tokens.find((t) => t.symbol === "OPENAI");
     expect(openai?.marketUsd).toBe(1_000);
-    // Mark is 5% above market in the fake, so basis is a discount.
     expect(openai?.basis).toBeCloseTo(1 / 1.05 - 1, 9);
   });
 
@@ -131,14 +130,10 @@ describe("read endpoints", () => {
 });
 
 describe("leaderboard over indexed trades", () => {
-  /** Seed two wallets: one that bought and gained, one that bought and lost. */
   function seed(store: Store) {
     store.writeTrades([
-      // winner bought 100 shares for $5,000; marks at $100 => +$5,000
       { signature: "s1", owner: "winner", symbol: "OPENAI", slot: 10, blockTime: 1, deltaRaw: 1n, uiAmount: 100, valueUsd: 5_000 },
-      // loser bought 100 shares for $20,000; marks at $100 => -$10,000
       { signature: "s2", owner: "loser", symbol: "OPENAI", slot: 11, blockTime: 1, deltaRaw: 1n, uiAmount: 100, valueUsd: 20_000 },
-      // bagholder only ever sold: cost basis unknown
       { signature: "s3", owner: "bagholder", symbol: "OPENAI", slot: 12, blockTime: 1, deltaRaw: -1n, uiAmount: -500, valueUsd: -50_000 },
     ]);
   }
@@ -172,8 +167,6 @@ describe("leaderboard over indexed trades", () => {
   });
 
   test("an empty query param means unset, not zero", async () => {
-    // Any frontend produces "" from an unset form field. Number("") is 0,
-    // which clamps to the minimum and silently answers a different question.
     const { app: a, services } = app({ priceUsd: { OPENAI: 100 } });
     seed(services.store);
     const res = await a.request("/api/leaderboard?hours=&limit=&minVolumeUsd=");
@@ -266,8 +259,6 @@ describe("mirror/plan validation", () => {
     ["negative deployUsd", { indexId: "prediction", deployUsd: -5_000 }, "at least 0"],
     ["absurd deployUsd", { indexId: "prediction", deployUsd: 1e30 }, "at most"],
     ["no capital and no holdings", { indexId: "prediction" }, "provide deployUsd"],
-    // Two gates now: a type gate that refuses anything that is not a number,
-    // then the domain check that refuses numbers outside (0, inf).
     ["null weight", { weights: [{ symbol: "OPENAI", weight: null }], deployUsd: 100 }, "must be a number"],
     ["boolean weight", { weights: [{ symbol: "OPENAI", weight: true }], deployUsd: 100 }, "must be a number"],
     ["negative weight", { weights: [{ symbol: "OPENAI", weight: -1 }], deployUsd: 100 }, "positive finite"],
@@ -368,8 +359,6 @@ describe("mirror/build guards", () => {
   });
 
   test("refuses a sell leg against a frozen account", async () => {
-    // A frozen account reports its full balance, so comparing amounts alone
-    // passes it and the swap fails on chain after the user has signed.
     const res = await post(
       app({
         balances: { OPENAI: 20_000_000_000n },
@@ -394,8 +383,6 @@ describe("mirror/build guards", () => {
   });
 
   test("refuses when the wallet has no USDC for the buy legs", async () => {
-    // Sell legs were checked against the chain while buys were checked
-    // against nothing, so an empty wallet still received a signable bundle.
     const res = await post(app({ usdcRaw: 0n }).app, "/api/mirror/build", {
       indexId: "pre8",
       deployUsd: 5_000,
@@ -407,8 +394,6 @@ describe("mirror/build guards", () => {
   });
 
   test("refuses when the wallet has no SOL for fees", async () => {
-    // USDC alone is not enough: every transaction pays a signature fee and
-    // may open accounts.
     const res = await post(app({ lamports: 0 }).app, "/api/mirror/build", {
       indexId: "pre8",
       deployUsd: 1_000,
@@ -420,8 +405,6 @@ describe("mirror/build guards", () => {
   });
 
   test("refuses when part of the wallet cannot be valued", async () => {
-    // An unpriced holding is silently worth zero to the rebalancer, which
-    // then sizes every other leg against a portfolio value that is too low.
     const res = await post(
       app({ balances: { OPENAI: 20_000_000_000n }, pricesThrow: true }).app,
       "/api/mirror/build",
@@ -455,8 +438,6 @@ describe("mirror/build guards", () => {
   });
 
   test("refuses a basket containing a paused mint", async () => {
-    // The issuer holds pause authority on every mint; every swap touching a
-    // paused mint fails.
     const res = await post(app({ paused: ["SPACEX"] }).app, "/api/mirror/build", {
       weights: [{ symbol: "SPACEX", weight: 1 }],
       deployUsd: 1_000,
@@ -485,7 +466,6 @@ describe("plan and build agree", () => {
    * NEURALINK leg, a deferred KALSHI leg).
    */
   test("a build that can price nothing refuses rather than bundling raw orders", async () => {
-    // quoteThrows makes the premise explicit: no leg can be quoted.
     const res = await post(
       app({ usdcRaw: 100_000_000_000n, quoteThrows: true }).app,
       "/api/mirror/build",
@@ -499,7 +479,6 @@ describe("plan and build agree", () => {
     const body = (await res.json()) as { problems: { kind: string; deferred?: unknown[] }[] };
     const problem = body.problems.find((p) => p.kind === "no-executable-legs");
     expect(problem).toBeDefined();
-    // The legs that could not be executed are named, not swallowed.
     expect(Array.isArray(problem?.deferred)).toBe(true);
   });
 });
@@ -520,7 +499,6 @@ describe("failure handling", () => {
     expect(body.priceFeedError).toBeTruthy();
     expect(body.degraded).toHaveLength(8);
     expect(body.tokens.every((t) => t.marketUsd === null)).toBe(true);
-    // Chain-derived facts still hold: those did not depend on the feed.
     expect(body.tokens.every((t) => t.transferFeeBps === 50)).toBe(true);
   });
 

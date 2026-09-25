@@ -1,9 +1,3 @@
-/**
- * Typed client for the API. Types mirror the route handlers in apps/api,
- * including every nullable field. There are no client-side retries: the
- * server already caches and coalesces upstream reads.
- */
-
 import { API_BASE as BASE } from "./base.ts";
 
 export class ApiError extends Error {
@@ -18,7 +12,6 @@ export class ApiError extends Error {
   }
 }
 
-/** The shape of every refusal from the API. */
 interface ErrorBody {
   readonly error?: string;
 }
@@ -60,8 +53,6 @@ async function post<T>(path: string, payload: unknown, signal?: AbortSignal): Pr
   return (await response.json()) as T;
 }
 
-/* ------------------------------------------------------------------ types */
-
 export interface IssuerControl {
   readonly permanentDelegate: string | null;
   readonly freezeAuthority: string | null;
@@ -73,11 +64,8 @@ export interface MarketToken {
   readonly name: string;
   readonly mint: string;
   readonly sectors: readonly string[];
-  /** Price the market is actually paying, from DEX depth. Null when unroutable. */
   readonly marketUsd: number | null;
-  /** The issuer's published mark. Not a tradeable price. */
   readonly markUsd: number | null;
-  /** (market - mark) / mark. The spread between what it's worth and what it costs. */
   readonly basis: number | null;
   readonly basisLabel: "deep-discount" | "discount" | "fair" | "premium" | "rich" | null;
   readonly liquidityUsd: number;
@@ -87,16 +75,13 @@ export interface MarketToken {
   readonly transferFeeBps: number;
   readonly paused: boolean;
   readonly issuerControl: IssuerControl;
-  /** The issuer's logo, from the token directory; https only, null when unknown. */
   readonly iconUrl?: string | null;
   readonly holders?: number | null;
-  /** Bought plus sold over the last day, as the token directory counts it. */
   readonly volume24hUsd?: number | null;
   readonly traders24h?: number | null;
   readonly verified?: boolean;
 }
 
-/** A transfer-fee change the issuer has scheduled, as the market route sends it. */
 export interface PendingFeeChange {
   readonly fromBps: number;
   readonly toBps: number;
@@ -125,7 +110,6 @@ export interface IndexSummary {
   readonly name: string;
   readonly description: string;
   readonly scheme: string;
-  /** Null when the liquidity floor selected nothing, which is a real, displayable state. */
   readonly weights: readonly Weight[] | null;
   readonly level: number | null;
 }
@@ -148,18 +132,14 @@ export interface LeaderboardEntry {
   readonly owner: string;
   readonly trades: number;
   readonly volumeUsd: number;
-  /** Peak capital deployed: the denominator for the return. */
   readonly peakInvestedUsd: number;
   readonly markValueUsd: number;
   readonly pnlUsd: number;
   readonly returnFraction: number;
   readonly positions: readonly { readonly symbol: string; readonly uiAmount: number }[];
-  /** What the wallet holds on chain right now; null when it could not be read. */
   readonly held?: readonly string[] | null;
-  /** What the wallet calls itself, where it has said. */
   readonly name?: string | null;
   readonly handle?: string | null;
-  /** The wallet's picture token (see lib/avatars.ts); null for its default character. */
   readonly avatar?: string | null;
 }
 
@@ -187,10 +167,6 @@ export interface PortfolioPosition {
   readonly paused: boolean;
 }
 
-/**
- * The portfolio route's response. It nests cash and omits weights, unlike the
- * internal `readPortfolio` result.
- */
 export interface Portfolio {
   readonly owner: string;
   readonly asOf: string;
@@ -218,7 +194,6 @@ export interface Portfolio {
   readonly comparison: unknown;
 }
 
-/** One reason a build refused. The server returns every applicable one. */
 export interface Problem {
   readonly kind: string;
   readonly message: string;
@@ -226,25 +201,16 @@ export interface Problem {
   readonly requiredUsd?: number;
   readonly availableUsd?: number;
   readonly lamports?: number;
-  /** For a SOL shortfall: fees plus a deposit for each account the trade opens. */
   readonly requiredLamports?: number;
   readonly newAccounts?: number;
   readonly symbols?: readonly string[];
-  /** For a thin market: each leg that could not be filled, at what size. */
   readonly deferred?: readonly { readonly symbol: string; readonly usd: number; readonly reason: string }[];
 }
 
-/**
- * A leg as it will trade, after resizing against measured depth. It carries no
- * from/to weights: the resized notional no longer matches the weight that
- * produced it. `slippageBps` is per leg, derived from that leg's measured
- * price impact.
- */
 export interface BuiltLeg {
   readonly symbol: string;
   readonly side: "buy" | "sell";
   readonly usd: number;
-  /** The whole tolerance written into the swap: price movement plus the fee. */
   readonly slippageBps?: number;
   /** The part of slippageBps that is the transfer fee, not price movement. */
   readonly feeAllowanceBps?: number;
@@ -254,23 +220,13 @@ export interface BuiltLeg {
   readonly expectedUsd?: number;
 }
 
-/**
- * A build response. Mirror and copy builds differ: a mirror names a `target`
- * and reports `totalCostUsd`, a copy names a `leader` and `follower` and states
- * its `scope`. The fields specific to one are optional here and reconciled in
- * the review screen.
- */
 export interface BuildResponse {
-  /** Mirror only: the index or basket being mirrored. */
   readonly target?: string;
   readonly targetSource?: string;
-  /** Mirror only: "add" spends new money and sells nothing. */
   readonly mode?: "add" | "rebalance";
-  /** Copy only. */
   readonly leader?: string;
   readonly follower?: string;
   readonly scope?: string;
-  /** Unsigned versioned transactions, base64, in signing order. */
   readonly transactions: readonly string[];
   readonly legsByTransaction: readonly (readonly string[])[];
   readonly blockhash: string;
@@ -281,7 +237,6 @@ export interface BuildResponse {
   readonly legs: readonly BuiltLeg[];
   readonly deferred?: readonly { readonly symbol: string; readonly reason: string }[];
   readonly totalUsd: number;
-  /** Mirror only; for a copy, derive it from totalUsd and costFraction. */
   readonly totalCostUsd?: number;
   readonly costFraction: number;
   readonly atomic: false;
@@ -299,7 +254,6 @@ export interface SimulationResult {
 
 export interface SimulationResponse {
   readonly results: readonly SimulationResult[];
-  /** True when every transaction executed cleanly against live state. */
   readonly wouldLand: boolean;
   readonly ok: number;
   readonly failed: number;
@@ -311,9 +265,7 @@ export interface SubmitResult {
   readonly signature: string;
   readonly submitted: boolean;
   readonly error?: string;
-  /** The node's simulated error. "Transaction simulation failed" alone says nothing. */
   readonly err?: unknown;
-  /** The tail of the program logs, where the cause actually is. */
   readonly logs?: readonly string[];
 }
 
@@ -351,14 +303,12 @@ export interface StrategyDto {
   readonly updatedAt: string;
 }
 
-/** What a wallet can spend: the amount sheet checks this before quoting. */
 export interface Cash {
   readonly owner: string;
   readonly usdcUsd: number;
   readonly solLamports: number;
 }
 
-/** One wallet's reconstructed record, from indexed trades. */
 export interface TraderProfile {
   readonly owner: string;
   readonly window: string;
@@ -374,14 +324,11 @@ export interface TraderProfile {
   readonly closedTrades: number;
   readonly winRate: number | null;
   readonly caveats: readonly string[];
-  /** Per company, over every trade seen: what went in and came out. */
   readonly books?: readonly SymbolBook[];
 }
 
-/** One company in a wallet's record, from the trades the index saw. */
 export interface SymbolBook {
   readonly symbol: string;
-  /** Shares held according to indexed trades, which may differ from the chain. */
   readonly uiAmount: number;
   readonly boughtUsd: number;
   readonly soldUsd: number;
@@ -394,7 +341,6 @@ export interface SymbolBook {
   readonly lastAt: string | null;
 }
 
-/** One trade in a wallet's history, newest first. */
 export interface HistoryTrade {
   readonly signature: string;
   readonly symbol: string;
@@ -405,13 +351,11 @@ export interface HistoryTrade {
   readonly at: string | null;
 }
 
-/** What a wallet says about itself, who follows it, and how it trades. */
 export interface Profile {
   readonly wallet: string;
   readonly name: string;
   readonly handle: string | null;
   readonly bio: string;
-  /** The wallet's picture token (see lib/avatars.ts); null for its default character. */
   readonly avatar: string | null;
   /** When the wallet first saved a profile; null if it never has. */
   readonly joinedAt: string | null;
@@ -429,7 +373,6 @@ export interface Profile {
   };
 }
 
-/** A trade by a wallet someone follows, with its name where it has one. */
 export interface FeedTrade extends RecentTrade {
   readonly name: string | null;
   readonly handle: string | null;
@@ -444,26 +387,21 @@ export interface FollowEntry {
   readonly since: string;
 }
 
-/** Daily prices per company, oldest first, aligned on one axis of days. */
-/** Hourly prices over the last week at most, aligned, ending on the live price. */
 export interface Intraday {
   readonly asOf: string;
   readonly complete: boolean;
-  /** Unix seconds, one per hour, the last one "now". */
   readonly times: readonly number[];
   readonly prices: Readonly<Record<string, readonly (number | null)[]>>;
 }
 
 export interface History {
   readonly asOf: string;
-  /** False until the server has fetched history at least once. */
   readonly complete: boolean;
   readonly refreshing: boolean;
   readonly days: readonly string[];
   readonly prices: Readonly<Record<string, readonly (number | null)[]>>;
 }
 
-/** One trade from the market-wide feed. */
 export interface RecentTrade {
   readonly signature: string;
   readonly owner: string;
@@ -471,11 +409,9 @@ export interface RecentTrade {
   readonly side: "buy" | "sell";
   readonly uiAmount: number;
   readonly valueUsd: number;
-  /** Unix seconds; null when the node did not report it. */
   readonly blockTime: number | null;
 }
 
-/** One position, for a company page. An absent position is a zero one. */
 export interface PositionResponse {
   readonly owner: string;
   readonly symbol: string;
@@ -487,8 +423,6 @@ export interface AuthMessage {
   readonly issuedAt: number;
   readonly required: boolean;
 }
-
-/* --------------------------------------------------------------- requests */
 
 export const api = {
   market: (signal?: AbortSignal) => get<Market>("/api/market", signal),
@@ -513,7 +447,6 @@ export const api = {
   portfolio: (wallet: string, signal?: AbortSignal) =>
     get<Portfolio>(`/api/portfolio/${encodeURIComponent(wallet)}`, signal),
 
-  /** One position, for a company page. */
   position: (wallet: string, symbol: string, signal?: AbortSignal) =>
     get<PositionResponse>(`/api/portfolio/${encodeURIComponent(wallet)}/${encodeURIComponent(symbol)}`, signal),
 
@@ -523,7 +456,6 @@ export const api = {
   recentTrades: (limit = 12, minUsd = 0, signal?: AbortSignal) =>
     get<{ trades: readonly RecentTrade[] }>(`/api/trades/recent?limit=${limit}&minUsd=${minUsd}`, signal),
 
-  /** USDC and SOL only: cheap enough to ask every time the amount sheet opens. */
   cash: (wallet: string, signal?: AbortSignal) => get<Cash>(`/api/cash/${encodeURIComponent(wallet)}`, signal),
 
   trader: (wallet: string, hours?: number, signal?: AbortSignal) =>
@@ -538,7 +470,6 @@ export const api = {
       signal,
     ),
 
-  /** What the wallets someone follows have been trading. */
   feed: (wallet: string, limit = 30, signal?: AbortSignal) =>
     get<{ trades: readonly FeedTrade[] }>(`/api/feed/${encodeURIComponent(wallet)}?limit=${limit}`, signal),
 
@@ -564,7 +495,6 @@ export const api = {
   following: (wallet: string, signal?: AbortSignal) =>
     get<{ following: readonly FollowEntry[] }>(`/api/profiles/${encodeURIComponent(wallet)}/following`, signal),
 
-  /** Trade one signed sign-in message for a token that edits and follows. */
   signIn: (body: Record<string, unknown>, signal?: AbortSignal) =>
     post<{ token: string; wallet: string; expiresAt: string }>("/api/session", body, signal),
 
@@ -576,7 +506,6 @@ export const api = {
   follow: (body: { token: string; followee: string; follow: boolean }, signal?: AbortSignal) =>
     post<{ following: boolean; followers: number }>("/api/follows", body, signal),
 
-  /** Set the profile picture: a character by index, a base64 image, or the default. */
   setAvatar: (
     body: { token: string; preset: number } | { token: string; image: string } | { token: string; clear: true },
     signal?: AbortSignal,
@@ -641,7 +570,6 @@ export const api = {
   confirm: (body: { signatures: readonly string[] }, signal?: AbortSignal) =>
     post<ConfirmResponse>("/api/confirm", body, signal),
 
-  /** Put trades that just landed into the history now, not at the next index pass. */
   recordTrades: (body: { signatures: readonly string[] }, signal?: AbortSignal) =>
     post<{ recorded: number; trades: number; notFound: number }>("/api/trades/record", body, signal),
 

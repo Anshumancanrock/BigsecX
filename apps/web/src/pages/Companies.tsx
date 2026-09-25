@@ -1,9 +1,3 @@
-/**
- * Every company as a card: logo, price, the day's move and an hourly
- * sparkline. Flipping a card shows sector, volume and holders, with a link
- * to the company page.
- */
-
 import { useLivePrices } from "../lib/live.ts";
 import { TickerTape, Ticking } from "../components/Ticker.tsx";
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +12,6 @@ import { Sparkline } from "../components/charts/PriceChart.tsx";
 
 export function Companies({ market, loading }: { market: Market | null; loading: boolean }) {
   const intraday = useAsync<Intraday>((signal) => api.intraday(24, signal), [], { pollMs: 5 * 60_000 });
-  // Each card's line ends on the live price between fetches.
   const liveIntraday = useLivePrices(intraday.data, market);
 
   if (!market && loading) {
@@ -62,7 +55,6 @@ function StockCard({
 }: {
   token: MarketToken;
   line: readonly (number | null)[] | null;
-  /** Place in the grid, which staggers the cards' arrival. */
   order: number;
 }) {
   const [flipped, setFlipped] = useState(false);
@@ -84,7 +76,6 @@ function StockCard({
   return (
     <div className={`flip cascade${flipped ? " flipped" : ""}`} style={{ "--i": order } as React.CSSProperties}>
       <div className="flip-inner">
-        {/* Front: the card as it sits on the page. */}
         <button
           ref={front}
           className="flip-face stock-card"
@@ -119,7 +110,6 @@ function StockCard({
           {token.paused ? <span className="pill warn stock-flag">Paused by the issuer</span> : null}
         </button>
 
-        {/* Back: the few facts worth a second look, and the way in. */}
         <div
           className="flip-face flip-back stock-card"
           aria-hidden={!flipped}

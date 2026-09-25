@@ -1,5 +1,3 @@
-/** The leaderboard's top three on a podium. */
-
 import type { LeaderboardEntry } from "../../lib/api.ts";
 import { go } from "../../lib/router.ts";
 import { Face } from "../people/Face.tsx";
@@ -10,10 +8,6 @@ import { HoldingLogos, holdingsOf } from "./HoldingLogos.tsx";
 
 export type Metric = "pnl" | "return";
 
-/**
- * Second, first and third across the screen, the winner raised. The DOM keeps
- * rank order (the visual order is CSS), so screen readers hear first place first.
- */
 export function TopThree({
   entries,
   metric,
@@ -64,7 +58,6 @@ export function TopThree({
   );
 }
 
-/** The podium while the board loads, in the same shape. */
 export function PodiumGhost() {
   return (
     <div className="podium" aria-hidden="true">

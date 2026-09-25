@@ -13,7 +13,7 @@ import {
   type TransferFeeConfig,
 } from "../src/transfer-fee.ts";
 
-const ONE = 10_000n; // ONE_IN_BASIS_POINTS
+const ONE = 10_000n;
 
 /**
  * The fixture from `test_transfer_fee_config()` in
@@ -27,7 +27,6 @@ const UPSTREAM: TransferFeeConfig = {
   newerTransferFee: { epoch: NEWER_EPOCH, maximumFee: 5_000n, transferFeeBasisPoints: 1 },
 };
 
-/** A PreStocks fee schedule as read from mainnet. */
 const PRESTOCKS: TransferFeeConfig = {
   olderTransferFee: { epoch: 1032, maximumFee: UNCAPPED_FEE, transferFeeBasisPoints: 50 },
   newerTransferFee: { epoch: 1039, maximumFee: UNCAPPED_FEE, transferFeeBasisPoints: 100 },
@@ -58,7 +57,6 @@ describe("epochFee (port of get_epoch_fee)", () => {
 describe("calculateFee (port of calculate_fee)", () => {
   const fee: TransferFee = { epoch: 0, maximumFee: 5_000n, transferFeeBasisPoints: 1 };
 
-  // Vectors from `calculate_fee_max`.
   test("caps at the maximum fee", () => {
     const max = 5_000n;
     expect(calculateFee(fee, 2n ** 64n - 1n)).toBe(max);
@@ -77,7 +75,6 @@ describe("calculateFee (port of calculate_fee)", () => {
     expect(calculateFee(fee, 0n)).toBe(0n);
   });
 
-  // Vectors from `calculate_fee_zero`.
   test("a zero rate and a zero cap both mean no fee", () => {
     const zeroRate: TransferFee = { epoch: 0, maximumFee: UNCAPPED_FEE, transferFeeBasisPoints: 0 };
     for (const amount of [0n, 2n ** 64n - 1n, 1n, ONE]) {
@@ -91,10 +88,9 @@ describe("calculateFee (port of calculate_fee)", () => {
 });
 
 describe("preFeeAmount / postFeeAmount", () => {
-  const fee = epochFee(PRESTOCKS, 1037); // 50 bps, uncapped
+  const fee = epochFee(PRESTOCKS, 1037);
 
   test("post-fee is what the recipient actually receives", () => {
-    // 1 OPENAI raw token at 9 decimals, 50 bps.
     expect(postFeeAmount(fee, 1_000_000_000n)).toBe(995_000_000n);
   });
 
@@ -120,11 +116,11 @@ describe("preFeeAmount / postFeeAmount", () => {
 
 describe("live PreStocks cost of a round trip", () => {
   test("doubles when epoch 1039 arrives", () => {
-    const notional = 1_000_000_000_000n; // 1000 raw tokens at 9 decimals
+    const notional = 1_000_000_000_000n;
     const today = calculateEpochFee(PRESTOCKS, 1037, notional);
     const after = calculateEpochFee(PRESTOCKS, 1039, notional);
-    expect(today).toBe(5_000_000_000n); // 0.5%
-    expect(after).toBe(10_000_000_000n); // 1.0%
+    expect(today).toBe(5_000_000_000n);
+    expect(after).toBe(10_000_000_000n);
     expect(after).toBe(today * 2n);
   });
 });

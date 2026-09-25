@@ -1,12 +1,9 @@
-/** Area chart in hand-rolled SVG: a glowing line over a field of fine vertical rules. */
-
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { axisUsd, dayLabel, niceTicks, smoothPath, xLabels, type Point } from "../../lib/series.ts";
 import { usd } from "../../lib/format.ts";
 
 const PAD = { top: 18, right: 10, bottom: 30, left: 46 };
 
-/** Width of the element, kept current as the layout changes. */
 function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
   const ref = useRef<T | null>(null);
   const [width, setWidth] = useState(0);
@@ -74,7 +71,6 @@ export function AreaChart({
   const activeValue = active >= 0 ? primary[active] : null;
   const activeOther = active >= 0 && secondary ? secondary[active] : null;
   const tipLeft = active >= 0 ? x(active) : 0;
-  // The tooltip sits beside the crosshair, flipping sides near the right edge.
   const flip = tipLeft > width - 170;
 
   return (

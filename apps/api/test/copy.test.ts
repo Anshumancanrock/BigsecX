@@ -24,7 +24,6 @@ const post = (a: ReturnType<typeof createApp>, path: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 
-/** Leader holding 60% OPENAI / 40% SPACEX by value. */
 const leaderBook: FakeOptions = {
   balances: { OPENAI: raw(6, 1.4861347), SPACEX: raw(4, 5) },
   priceUsd: { OPENAI: 100, SPACEX: 100 },
@@ -73,7 +72,6 @@ describe("copy preview", () => {
     };
 
     expect(body.positions.map((p) => p.symbol)).toEqual(["OPENAI"]);
-    // The refused weight is redistributed, not left as unexplained cash.
     expect(body.positions[0]?.usd).toBeCloseTo(1_000, 4);
     expect(body.excluded[0]?.reason).toContain("excluded by the follower");
   });
@@ -256,7 +254,6 @@ describe("copying a leader who holds outside their associated accounts", () => {
     const a = app({
       // $1 of ANTHROPIC in the ATA...
       balances: { ANTHROPIC: raw(0.01) },
-      // ...and $9,000 of KALSHI and $1,000 more ANTHROPIC elsewhere.
       stray: { KALSHI: [raw(90)], ANTHROPIC: [raw(10)] },
       priceUsd: { ANTHROPIC: 100, KALSHI: 100 },
     });

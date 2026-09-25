@@ -11,7 +11,6 @@ import { fileURLToPath } from "node:url";
 import { migrate } from "./schema.ts";
 
 function defaultDatabasePath(): string {
-  // packages/db/src -> repository root
   const here = dirname(fileURLToPath(import.meta.url));
   return join(resolve(here, "..", "..", ".."), "data", "prestocks.db");
 }
@@ -48,7 +47,6 @@ export interface StrategyRow {
   readonly weights: readonly { readonly symbol: string; readonly weight: number }[];
 }
 
-/** The strategy table's column names, as SQLite returns them. */
 interface RawStrategyRow {
   id: string;
   kind: string;
@@ -71,13 +69,11 @@ export interface TradeRow {
   readonly symbol: string;
   readonly slot: number;
   readonly blockTime: number | null;
-  /** Signed raw base units; positive is a buy. */
   readonly deltaRaw: bigint;
   readonly uiAmount: number;
   readonly valueUsd: number | null;
 }
 
-/** What a wallet has said about itself. */
 export interface ProfileRow {
   readonly wallet: string;
   readonly name: string;
@@ -87,23 +83,19 @@ export interface ProfileRow {
   readonly updatedAt: number;
 }
 
-/** A picture a wallet uploaded, as stored. */
 export interface AvatarImage {
   readonly mime: string;
   readonly bytes: Uint8Array;
   readonly updatedAt: number;
 }
 
-/** One side of a follow, with when it began. */
 export interface FollowRow {
   readonly wallet: string;
   readonly at: number;
 }
 
-/** A wallet's trading activity as far as the index has seen it. */
 export interface TradeSummary {
   readonly count: number;
-  /** Unix seconds of the first and last trade with a known time. */
   readonly firstAt: number | null;
   readonly lastAt: number | null;
 }
@@ -130,16 +122,11 @@ export class Store {
     this.#db.close();
   }
 
-  /**
-   * Record a snapshot and its prices atomically. Snapshots are unique by
-   * timestamp; a retry with the same timestamp reuses the row.
-   */
   writeSnapshot(args: {
     readonly takenAt: Date;
     readonly epoch: number;
     readonly prices: readonly PriceRow[];
   }): number {
-    // Milliseconds (migration 6), so snapshots in one second stay distinct.
     const takenAt = args.takenAt.getTime();
 
     return this.#db.transaction(() => {
@@ -170,10 +157,6 @@ export class Store {
     })();
   }
 
-  /**
-   * Market prices from the recorded snapshot nearest a moment, if one lies
-   * within `toleranceMs` of it. What a "24 hours ago" price is read from.
-   */
   marketPricesNear(atMs: number, toleranceMs: number): { takenAt: number; prices: Map<string, number> } | null {
     const row = this.#db
       .query(
@@ -213,7 +196,6 @@ export class Store {
     return row ? { id: row.id, takenAt: new Date(row.taken_at), epoch: row.epoch } : null;
   }
 
-  /** The snapshot closest to, but not after, `at`. */
   snapshotAtOrBefore(at: Date): SnapshotRow | null {
     const row = this.#db
       .query(
@@ -249,7 +231,6 @@ export class Store {
     })();
   }
 
-  /** Newest signature already indexed for an address, mint or pool. */
   cursorFor(address: string): string | null {
     const row = this.#db
       .query("SELECT last_signature AS sig FROM index_cursor WHERE address = ?")
@@ -285,7 +266,6 @@ export class Store {
     return byOwner;
   }
 
-  /** Highest slot indexed, or null when nothing has been indexed. */
   latestTradeSlot(): number | null {
     const row = this.#db.query("SELECT MAX(slot) AS slot FROM trade").get() as {
       slot: number | null;
@@ -293,7 +273,6 @@ export class Store {
     return row.slot;
   }
 
-  /** Distinct wallets seen trading at or after a slot. */
   activeTraderCount(sinceSlot: number): number {
     const row = this.#db
       .query("SELECT COUNT(DISTINCT owner) AS n FROM trade WHERE slot >= ?")
@@ -301,7 +280,6 @@ export class Store {
     return row.n;
   }
 
-  /** The newest trades across every wallet, for a live feed. */
   recentTrades(limit = 50): TradeRow[] {
     const rows = this.#db
       .query(
@@ -324,10 +302,6 @@ export class Store {
     return rows.map((r) => ({ ...r, deltaRaw: BigInt(r.deltaRaw) }));
   }
 
-  /**
-   * Save a strategy and its constituents atomically; constituent rows are
-   * replaced wholesale, not merged.
-   */
   writeStrategy(strategy: StrategyRow): void {
     this.#db.transaction(() => {
       this.#db
@@ -438,11 +412,6 @@ export class Store {
     return result.changes > 0;
   }
 
-  /**
-   * The level and weights last recorded for an index. A period's return is
-   * measured with the basket held during it, not one recomputed from today's
-   * valuations.
-   */
   lastIndexState(indexId: string): {
     readonly level: number;
     readonly weights: { symbol: string; weight: number }[];
@@ -476,9 +445,6 @@ export class Store {
     return rows.reverse().map((r) => ({ takenAt: new Date(r.takenAt), level: r.level }));
   }
 
-  /* ------------------------------------------------------------ trading */
-
-  /** How many trades the index holds for a wallet, and over what span. */
   tradeSummary(owner: string): TradeSummary {
     const row = this.#db
       .query(
@@ -488,8 +454,6 @@ export class Store {
       .get(owner) as { count: number; firstAt: number | null; lastAt: number | null };
     return { count: row.count, firstAt: row.firstAt, lastAt: row.lastAt };
   }
-
-  /* ----------------------------------------------------------- profiles */
 
   profile(wallet: string): ProfileRow | null {
     const row = this.#db
@@ -511,7 +475,6 @@ export class Store {
     return row ?? null;
   }
 
-  /** Profiles for many wallets at once, for lists that show names. */
   profiles(wallets: readonly string[]): Map<string, ProfileRow> {
     const out = new Map<string, ProfileRow>();
     const unique = [...new Set(wallets)];
@@ -553,15 +516,11 @@ export class Store {
         )
         .run(args.wallet, args.name, args.handle, args.bio, args.now, args.now);
     } catch (error) {
-      // Two wallets claiming one handle at once both pass the check above; the
-      // unique index decides.
       if (String(error).includes("UNIQUE")) return "taken";
       throw error;
     }
     return "ok";
   }
-
-  /* ------------------------------------------------------------ avatars */
 
   /**
    * Each wallet's picture as a short token: "p3" for preset 3, "u<updatedAt>"
@@ -588,7 +547,6 @@ export class Store {
     return this.avatars([wallet]).get(wallet) ?? null;
   }
 
-  /** The picture a wallet uploaded; null when it shows a character instead. */
   avatarImage(wallet: string): AvatarImage | null {
     const row = this.#db
       .query(`SELECT mime, bytes, updated_at AS updatedAt FROM avatar WHERE wallet = ? AND kind = 'upload'`)
@@ -619,14 +577,10 @@ export class Store {
       .run(wallet, mime, bytes, now);
   }
 
-  /** Back to the character the wallet's address picks. */
   clearAvatar(wallet: string): void {
     this.#db.query("DELETE FROM avatar WHERE wallet = ?").run(wallet);
   }
 
-  /* ------------------------------------------------------------ follows */
-
-  /** Start following. Following twice is still one follow. */
   follow(follower: string, followee: string, now: number): void {
     this.#db
       .query("INSERT OR IGNORE INTO follow (follower, followee, created_at) VALUES (?, ?, ?)")
@@ -654,7 +608,6 @@ export class Store {
     return { followers: followers.n, following: following.n };
   }
 
-  /** Wallets the viewer follows that also follow this one. */
   mutualFollowers(viewer: string, wallet: string): number {
     const row = this.#db
       .query(
@@ -665,7 +618,6 @@ export class Store {
     return row.n;
   }
 
-  /** Who follows this wallet, newest first. */
   followers(wallet: string, limit = 100): FollowRow[] {
     return this.#db
       .query(
@@ -675,7 +627,6 @@ export class Store {
       .all(wallet, limit) as FollowRow[];
   }
 
-  /** Who this wallet follows, newest first. */
   following(wallet: string, limit = 100): FollowRow[] {
     return this.#db
       .query(
@@ -685,7 +636,6 @@ export class Store {
       .all(wallet, limit) as FollowRow[];
   }
 
-  /** The newest trades by the wallets this one follows. */
   followedTrades(follower: string, limit = 50): TradeRow[] {
     const rows = this.#db
       .query(
@@ -698,8 +648,6 @@ export class Store {
       .all(follower, limit) as (Omit<TradeRow, "deltaRaw"> & { deltaRaw: string })[];
     return rows.map((r) => ({ ...r, deltaRaw: BigInt(r.deltaRaw) }));
   }
-
-  /* ----------------------------------------------------------- sessions */
 
   /**
    * Record a session by the hash of its token.
@@ -737,7 +685,6 @@ export class Store {
     return "ok";
   }
 
-  /** How many live sessions a wallet has. */
   sessionCount(wallet: string, now: number): number {
     const row = this.#db
       .query("SELECT COUNT(*) AS n FROM session WHERE wallet = ? AND expires_at > ?")
@@ -745,7 +692,6 @@ export class Store {
     return row.n;
   }
 
-  /** The wallet a live session belongs to, or null. */
   sessionWallet(tokenHash: string, now: number): string | null {
     const row = this.#db
       .query("SELECT wallet FROM session WHERE token_hash = ? AND expires_at > ?")

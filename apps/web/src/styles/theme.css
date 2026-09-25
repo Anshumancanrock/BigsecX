@@ -8,46 +8,31 @@
  * Type is Switzer, a freely licensed grotesque.
  */
 
-/* ------------------------------------------------------------ shared base */
-
 :root {
   --font-sans: Switzer, "Switzer Variable", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Brand. One saturated mint; everything else is greyscale. */
   --mint: 149 88% 68%;
   --mint-pale: 149 100% 84%;
   --mint-deep: 149 88% 59%;
   --olive: 148 36% 43%;
 
-  /* Large radii: pills for controls, 14-20px for cards. */
   --r-sm: 8px;
   --r-md: 14px;
   --r-lg: 20px;
   --r-xl: 28px;
   --r-pill: 999px;
 
-  /* Page gutter and maximum content width. */
   --gutter: 24px;
   --maxw: 1240px;
 
-  /*
-   * The ink colour for lines, tints and quiet text, used at an alpha: white on
-   * the dark scope, black on the light one. Glass, borders and muted labels all
-   * use hsl(var(--ink) / a), so one token flips them all.
-   */
   --ink: 0 0% 100%;
-  /* Menus, popovers, sheets and tooltips: the surface that floats. */
   --raised: 160 12% 8%;
-  /* A sunken well, for an address or code. */
   --well: 160 20% 3%;
-  /* Chart lines, a shade apart from the text colours. */
   --chart-up: 149 88% 64%;
   --chart-down: 3 90% 64%;
   --chart-accent: 149 88% 70%;
 }
-
-/* ----------------------------------------------------- landing scope: light */
 
 .landing {
   --page: 0 0% 100%;
@@ -69,8 +54,6 @@
   background: hsl(var(--page));
   color: hsl(var(--fg));
 }
-
-/* --------------------------------------------------------- app scope: dark */
 
 /*
  * The dark base of the app scope: frosted panels with hairline borders and
@@ -108,8 +91,6 @@
   background: hsl(var(--page));
   color: hsl(var(--fg));
 }
-
-/* ------------------------------------------------------ app scope: light */
 
 /*
  * The app's light palette, used on phone and desktop: an off-white page,
@@ -153,8 +134,6 @@
 
   color-scheme: light;
 }
-
-/* ------------------------------------------------------------------ reset */
 
 *,
 *::before,
@@ -228,8 +207,6 @@ svg {
   max-width: 100%;
 }
 
-/* --------------------------------------------------------------- utility */
-
 .wrap {
   width: 100%;
   max-width: var(--maxw);
@@ -237,10 +214,6 @@ svg {
   padding: 0 var(--gutter);
 }
 
-/*
- * Every figure uses lining tabular numerals, so price columns do not jitter
- * as digits change on each poll.
- */
 .num {
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
@@ -256,7 +229,6 @@ svg {
   color: hsl(var(--fg-muted));
 }
 
-/* Keyboard focus stays visible; pointer focus does not draw a ring. */
 :focus-visible {
   outline: 2px solid hsl(var(--mint));
   outline-offset: 2px;

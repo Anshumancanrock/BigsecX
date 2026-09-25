@@ -19,7 +19,6 @@ export function slots(count: number) {
   };
 }
 
-/** Map with at most `concurrency` calls in flight, keeping order. */
 export async function mapLimit<T, R>(items: readonly T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;

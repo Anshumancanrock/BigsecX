@@ -21,9 +21,7 @@ export const CHARACTERS = [
   { id: "kiwi", name: "Kiwi" },
 ] as const;
 
-/** The character a wallet wears until it chooses: the same one every time. */
 export function defaultCharacter(wallet: string): number {
-  // FNV-1a: cheap, and it spreads addresses that share a prefix.
   let hash = 2166136261;
   for (let i = 0; i < wallet.length; i++) {
     hash ^= wallet.charCodeAt(i);
@@ -36,7 +34,6 @@ export function characterSrc(index: number): string {
   return `/avatars/${CHARACTERS[index]?.id ?? CHARACTERS[0].id}.svg`;
 }
 
-/** The character a token names, or null when it names none. */
 export function presetOf(token: string | null | undefined): number | null {
   if (!token || !/^p\d{1,2}$/.test(token)) return null;
   const index = Number(token.slice(1));
@@ -47,7 +44,6 @@ export function isUpload(token: string | null | undefined): token is string {
   return typeof token === "string" && /^u\d{1,16}$/.test(token);
 }
 
-/** Where a wallet's picture is. Anything unrecognised is the default character. */
 export function avatarSrc(wallet: string, token: string | null | undefined): string {
   if (isUpload(token)) return avatarImageUrl(wallet, token.slice(1));
   return characterSrc(presetOf(token) ?? defaultCharacter(wallet));
@@ -72,7 +68,6 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** The picture this page knows for a wallet: a token, null for the default, undefined if it knows nothing. */
 export function useKnownAvatar(wallet: string): string | null | undefined {
   return useSyncExternalStore(
     subscribe,
@@ -81,9 +76,6 @@ export function useKnownAvatar(wallet: string): string | null | undefined {
   );
 }
 
-/* ------------------------------------------------------------- faces */
-
-/** Hues from an address, so one wallet always gets the same colours. */
 export function hues(address: string): [number, number, number] {
   let hash = 0;
   for (const ch of address) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;

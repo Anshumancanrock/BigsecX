@@ -26,7 +26,6 @@ const SECTIONS = [
   { href: "/learn", label: "How it works" },
 ] as const;
 
-/** The section a path belongs to, for the document title. */
 export function titleFor(path: string): string | null {
   return SECTIONS.find((s) => path === s.href || path.startsWith(`${s.href}/`))?.label ?? null;
 }
@@ -60,7 +59,6 @@ export function Routed({
   const user = match("/u/:handle", path);
   if (user) return <HandleRedirect handle={user.handle!} />;
 
-  // Second paths in each group are older links that still resolve.
   switch (path) {
     case "/dashboard":
     case "/explore":
@@ -90,7 +88,6 @@ export function Routed({
   }
 }
 
-/** `/u/:handle` resolves the username, then replaces itself with the wallet's profile URL. */
 function HandleRedirect({ handle }: { handle: string }) {
   const found = useAsync((signal) => api.handle(handle, signal), [handle]);
   useEffect(() => {

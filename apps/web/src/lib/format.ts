@@ -5,7 +5,6 @@
 
 const DASH = "—";
 
-/** Compact money for headline figures: $1.2M, $48.5K, $312.40. */
 export function usdCompact(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   const abs = Math.abs(value);
@@ -16,7 +15,6 @@ export function usdCompact(value: number | null | undefined): string {
   return `${sign}$${abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** Exact money, for anything the user is about to sign for. */
 export function usd(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   return value.toLocaleString("en-US", {
@@ -41,25 +39,21 @@ export function price(value: number | null | undefined): string {
   return `$${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
-/** A signed percentage from a percentage number (-1.51 -> "-1.51%"). */
 export function pct(value: number | null | undefined, digits = 2): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
 }
 
-/** A signed percentage from a fraction (0.0454 -> "+4.54%"). */
 export function pctOfFraction(value: number | null | undefined, digits = 2): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   return pct(value * 100, digits);
 }
 
-/** An unsigned percentage from a fraction, for costs (0.0799 -> "8.0%"). */
 export function percent(value: number | null | undefined, digits = 1): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   return `${Math.abs(value * 100).toFixed(digits)}%`;
 }
 
-/** An unsigned percentage from a fraction, for weights (0.25 -> "25.0%"). */
 export function weight(value: number | null | undefined, digits = 1): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   return `${(value * 100).toFixed(digits)}%`;
@@ -72,16 +66,13 @@ export function shares(value: number | null | undefined): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 4 });
 }
 
-/** Basis points from a fraction, for fees and slippage. */
 export function bps(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return DASH;
   return `${Math.round(value)} bps`;
 }
 
-/** Base58, 32 to 44 characters: the shape of a Solana address. */
 export const ADDRESS_PATTERN = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-/** `7oaZrZfn…xFbL`: enough to recognise, short enough for a table. */
 export function shortAddress(address: string, lead = 4, tail = 4): string {
   if (address.length <= lead + tail + 1) return address;
   return `${address.slice(0, lead)}…${address.slice(-tail)}`;
@@ -130,16 +121,12 @@ export function markOf(symbol: string): string {
   return MARKS[symbol] ?? symbol.slice(0, 2);
 }
 
-/* ------------------------------------------------------------- words */
-
-/** What to call a wallet: its name, its handle, or its short address. */
 export function displayName(wallet: string, name?: string | null, handle?: string | null): string {
   if (name) return name;
   if (handle) return `@${handle}`;
   return shortAddress(wallet, 4, 4);
 }
 
-/** "4.3K", "321.7K", "1.2M": counts the way a profile shows them. */
 export function compactCount(value: number): string {
   if (value >= 1_000_000) return `${trimmed(value / 1_000_000)}M`;
   if (value >= 10_000) return `${trimmed(value / 1_000)}K`;
@@ -151,7 +138,6 @@ function trimmed(value: number): string {
   return Number(value.toFixed(1)).toString();
 }
 
-/** "1d 6h", "3h 20m", "12m", "under a minute". */
 export function holdWords(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -164,18 +150,15 @@ export function holdWords(seconds: number): string {
 
 const MONTH = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric" });
 
-/** "Jul 2026". */
 export function monthYear(iso: string): string {
   return MONTH.format(new Date(iso));
 }
 
-/** "+$28.96", "−$1.65"; compact past ten thousand. */
 export function signedMoney(value: number): string {
   if (Math.abs(value) < 0.005) return "$0.00";
   return `${value > 0 ? "+" : "−"}${usdCompact(Math.abs(value))}`;
 }
 
-/** "+2.9%", "−6.7%". */
 export function signedReturn(fraction: number, digits = 1): string {
   const pct = fraction * 100;
   if (!Number.isFinite(pct) || Math.abs(pct) < 0.05) return "0.0%";

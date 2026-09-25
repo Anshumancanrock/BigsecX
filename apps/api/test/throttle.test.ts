@@ -34,7 +34,6 @@ describe("throttle", () => {
   });
 
   test("charges a build far more than a cached read", async () => {
-    // One build costs forty units; the same budget allows many market reads.
     const a = app({ capacity: 40, refillPerSecond: 0.0001 });
     expect((await a.request("/api/mirror/build", { method: "POST", ...from("2.2.2.2") })).status).toBe(200);
     expect((await a.request("/api/mirror/build", { method: "POST", ...from("2.2.2.2") })).status).toBe(429);
@@ -87,13 +86,10 @@ describe("throttle", () => {
   });
 
   test("never lets a request through unmetered when the map is full", async () => {
-    // Failing open under pressure hands an attacker the bypass: fill the map
-    // with distinct addresses and everything after is free.
     const a = app({ capacity: 40, refillPerSecond: 0.0001, maxClients: 4 });
     for (let i = 0; i < 20; i++) {
       await a.request("/api/market", from(`172.16.0.${i}`));
     }
-    // A fresh client still gets its own budget, and still runs out.
     expect((await a.request("/api/mirror/build", { method: "POST", ...from("172.31.0.1") })).status).toBe(200);
     expect((await a.request("/api/mirror/build", { method: "POST", ...from("172.31.0.1") })).status).toBe(429);
   });

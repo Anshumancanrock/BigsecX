@@ -17,7 +17,6 @@ import {
 } from "../lib/validate.ts";
 import { readPortfolio } from "./portfolio.ts";
 
-/** Buying a target: a system index, a published strategy, or inline weights. */
 export function registerMirrorRoutes(app: Hono, services: Services, tradingMarket: SnapshotReader): void {
   /**
    * Prices a mirror without building transactions, so the cost and any legs
@@ -108,7 +107,6 @@ export function registerMirrorRoutes(app: Hono, services: Services, tradingMarke
     const owner = requireBase58Address(body["owner"], "owner");
     const target = await resolveTarget(services, tradingMarket, body);
     const deployUsd = requireFiniteUsd(body["deployUsd"] ?? 0, "deployUsd");
-    // A floor: each leg widens it to suit the pool it trades in.
     const slippageBps = requireInt(body["slippageBps"], "slippageBps", {
       min: 1,
       max: 5_000,
@@ -162,7 +160,6 @@ export function registerMirrorRoutes(app: Hono, services: Services, tradingMarke
       targetSource: target.source,
       mode,
       ...outcome.bundle,
-      // The sizes actually built, after depth and impact limits.
       legs: outcome.orders,
       deferred: outcome.plan.deferred,
       totalUsd: outcome.plan.totalUsd,
@@ -187,7 +184,6 @@ function parseMirrorMode(value: unknown): "add" | "rebalance" {
   throw new BadRequest('mode must be "add" or "rebalance"');
 }
 
-/** Only published strategies resolve: a draft is private to its author, and its id is not a secret. */
 async function resolveTarget(
   services: Services,
   tradingMarket: SnapshotReader,

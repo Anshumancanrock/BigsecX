@@ -26,7 +26,6 @@ describe("drawn characters", () => {
   });
 
   test("addresses spread across all nine", () => {
-    // A thousand made-up addresses should land on every character.
     const seen = new Set<number>();
     for (let i = 0; i < 1000; i++) seen.add(defaultCharacter(`Wallet${i}xZ${i * 7919}`));
     expect(seen.size).toBe(CHARACTERS.length);

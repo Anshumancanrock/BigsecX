@@ -1,13 +1,4 @@
-/**
- * Turns a chosen photo into a profile picture on the device: centre crop,
- * redrawn at 256 px and re-encoded as WebP (JPEG as a fallback). Redrawing on
- * a canvas drops all metadata, including location EXIF, and cuts the size to
- * a few tens of kilobytes.
- */
-
-/** The side of the square sent, in pixels. Drawn at up to 84 on screen, so sharp at 3x. */
 export const PICTURE_SIDE = 256;
-/** Refused before reading: nothing a person picks as a face is this large. */
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
 
 export class PictureError extends Error {}
@@ -19,8 +10,6 @@ export async function toProfilePicture(file: File): Promise<{ readonly base64: s
   const height = "naturalHeight" in source ? source.naturalHeight : source.height;
   if (!width || !height) throw new PictureError("That picture could not be read. Try a JPG or PNG.");
 
-  // The centre square, drawn in two steps when it is much larger than the
-  // result: one large reduction in a single draw leaves a picture grainy.
   const side = Math.min(width, height);
   const sx = (width - side) / 2;
   const sy = (height - side) / 2;
@@ -85,7 +74,6 @@ function toBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new PictureError("That picture could not be prepared. Try another."));
-    // "data:image/webp;base64,...": only the part after the comma is sent.
     reader.onload = () => resolve(String(reader.result).split(",", 2)[1] ?? "");
     reader.readAsDataURL(blob);
   });

@@ -1,10 +1,3 @@
-/**
- * Asset routes: price and activity per company. Activity comes from the
- * issuer's undocumented `/api/stats` (cumulative volume by day, holders by
- * week). It is optional: when it fails, `activityAvailable` is false and the
- * activity fields are empty.
- */
-
 import { Hono } from "hono";
 import { UNIVERSE, basisLabel, bySymbol } from "@ps/core";
 import {
@@ -18,7 +11,6 @@ import type { Services } from "../context.ts";
 import { requireInt } from "../lib/validate.ts";
 import type { MarketSnapshot } from "@ps/market";
 
-/** Issuer statistics, or null. The endpoint rate limits, and a failure should cost only the activity columns. */
 async function tryStats(services: Services) {
   try {
     return await services.issuer.stats();
@@ -32,7 +24,6 @@ export function registerAssetRoutes(
   services: Services,
   market: () => Promise<MarketSnapshot>,
 ): void {
-  /** Every asset with price, dislocation and activity. */
   app.get("/api/assets", async (c) => {
     const [snapshot, stats] = await Promise.all([market(), tryStats(services)]);
 
@@ -42,8 +33,6 @@ export function registerAssetRoutes(
 
     return c.json({
       asOf: snapshot.takenAt.toISOString(),
-      // Lets a client show an empty activity column as an upstream failure,
-      // not as no trading.
       activityAvailable: stats !== null,
       assets: snapshot.tokens.map((t) => ({
         symbol: t.token.symbol,
@@ -65,7 +54,6 @@ export function registerAssetRoutes(
     });
   });
 
-  /** One asset, with its history. */
   app.get("/api/assets/:symbol", async (c) => {
     const token = bySymbol(c.req.param("symbol"));
     if (!token) {

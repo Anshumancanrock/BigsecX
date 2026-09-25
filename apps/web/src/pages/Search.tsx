@@ -1,9 +1,3 @@
-/**
- * The search page (the phone's second tab). Empty, it lists companies,
- * baskets and traders; a query filters all three and also resolves wallet
- * addresses and @usernames.
- */
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type IndexList, type Leaderboard as Board, type Market, type StrategyDto } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
@@ -25,8 +19,6 @@ export function Search({ market }: { market: Market | null }) {
     [],
   );
 
-  // On a phone a keyboard popping up unasked is rude; focus only on devices
-  // with a fine pointer, where it is expected.
   useEffect(() => {
     if (typeof matchMedia === "function" && matchMedia("(pointer: fine)").matches) input.current?.focus();
   }, []);

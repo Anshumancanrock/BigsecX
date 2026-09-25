@@ -32,8 +32,6 @@ export function ConnectButton() {
     };
   }, [open]);
 
-  // Connection errors are shown when the menu reopens, but only for attempts
-  // started here; a sheet with its own picker shows its own errors.
   const pickedHere = useRef(false);
   useEffect(() => {
     if (!wallet.error) return;
@@ -49,8 +47,6 @@ export function ConnectButton() {
   return (
     <div className="wallet-box" ref={box}>
       {wallet.address ? (
-        // The wallet chip: the wallet's picture, its short address and the wallet
-        // app it came from.
         <button className="profile" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu">
           <Face wallet={wallet.address} size={28} />
           <span className="profile-text">
@@ -176,8 +172,6 @@ export function WalletPicker({ onPicked }: { onPicked?: () => void }) {
             {w.icon ? (
               <img src={w.icon} alt="" />
             ) : (
-              // aria-hidden, or the fallback initial is read out as part
-              // of the name: "O, Owned Wallet".
               <span className="glyph" aria-hidden="true">
                 {w.name.slice(0, 1)}
               </span>

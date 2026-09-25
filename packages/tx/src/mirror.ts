@@ -1,9 +1,3 @@
-/**
- * Builds the unsigned transactions that move a wallet onto a target allocation:
- * quotes each leg, fetches its Jupiter instructions and packs them for the
- * wallet to sign in one prompt. No key is held here.
- */
-
 import {
   USDC_DECIMALS,
   USDC_MINT,
@@ -38,9 +32,7 @@ const ROUTE_LADDER: readonly { readonly maxAccounts: number; readonly onlyDirect
   { maxAccounts: 24, onlyDirectRoutes: true },
 ];
 
-/** Headroom over the simulated compute estimate. */
 const COMPUTE_MARGIN = 1.25;
-/** Per-transaction ceiling the runtime enforces. */
 const MAX_COMPUTE_UNITS = 1_400_000;
 /**
  * Placeholder price for size measurement. SetComputeUnitPrice encodes a
@@ -51,7 +43,6 @@ const MAX_PRIORITY_FEE = 1_000_000;
 export interface MirrorLeg {
   readonly symbol: string;
   readonly side: RebalanceOrder["side"];
-  /** Notional to trade, in USD. */
   readonly usd: number;
   /**
    * Slippage for this leg, overriding the request default. Set from the impact
@@ -63,33 +54,24 @@ export interface MirrorLeg {
 export interface MirrorRequest {
   readonly owner: string;
   readonly legs: readonly MirrorLeg[];
-  /** Reference price per UI share, used to size sell legs. */
   readonly priceUsdBySymbol: ReadonlyMap<string, number>;
   /** Active scale multiplier per symbol. */
   readonly scaleBySymbol: ReadonlyMap<string, number>;
   readonly blockhash: string;
   readonly lastValidBlockHeight: number;
   readonly slippageBps?: number;
-  /**
-   * Account cap per route. Lower values keep legs small enough to pack, at the
-   * cost of excluding some routes and therefore some price improvement.
-   */
   readonly maxAccounts?: number;
 }
 
 export interface MirrorBundle {
-  /** Unsigned versioned transactions, base64, in signing order. */
   readonly transactions: readonly string[];
-  /** Leg symbols carried by each transaction, parallel to `transactions`. */
   readonly legsByTransaction: readonly (readonly string[])[];
   readonly blockhash: string;
   readonly lastValidBlockHeight: number;
-  /** Legs that could not be built, with the reason. */
   readonly failed: readonly { readonly symbol: string; readonly reason: string }[];
   readonly byteLengths: readonly number[];
 }
 
-/** Quote one leg at the size it will actually trade. */
 async function quoteLeg(
   jupiter: JupiterClient,
   leg: MirrorLeg,
@@ -154,7 +136,6 @@ class RouteRejected extends Error {
   }
 }
 
-/** Build the instruction group for one leg at one route setting. */
 async function buildGroup(
   jupiter: JupiterClient,
   leg: MirrorLeg,
@@ -179,8 +160,6 @@ async function buildGroup(
     );
   }
 
-  // Each leg keeps its own setup (idempotent account creations); duplicates are
-  // removed later, within each transaction.
   const instructions: JupiterInstruction[] = [...response.setupInstructions];
   instructions.push(response.swapInstruction);
   if (response.cleanupInstruction) instructions.push(response.cleanupInstruction);
@@ -225,7 +204,6 @@ export async function buildMirrorBundle(
     | { readonly failed: string }
   > => {
     let lastError = "no route attempted";
-    // Venues that rejected this leg; the fault is usually one pool, not the trade.
     const excluded = new Set<string>();
 
     for (const route of ladder) {
@@ -287,8 +265,6 @@ export async function buildMirrorBundle(
     };
   }
 
-  // Pack against placeholder budget instructions. Both encode fixed-width
-  // integers, so substituting the real values later does not change what fits.
   const preamble = [
     ComputeBudgetProgram.setComputeUnitLimit({ units: MAX_COMPUTE_UNITS }),
     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: MAX_PRIORITY_FEE }),
@@ -307,7 +283,6 @@ export async function buildMirrorBundle(
     });
   }
 
-  // Each transaction's unit limit covers the sum of its swaps, not the largest one.
   const transactions: string[] = [];
   const byteLengths: number[] = [];
   const legsByTransaction: string[][] = [];
@@ -334,7 +309,6 @@ export async function buildMirrorBundle(
       ...(microLamports > 0
         ? [ComputeBudgetProgram.setComputeUnitPrice({ microLamports })]
         : []),
-      // Replaces the placeholder preamble that packing compiled in.
       ...deduped,
     ];
 

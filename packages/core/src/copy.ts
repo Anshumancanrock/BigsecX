@@ -9,19 +9,11 @@ import { capWeights, normalizeWeights, type Weight } from "./portfolio.ts";
 import { bySymbol } from "./universe.ts";
 
 export interface CopyLimits {
-  /** Capital the follower is willing to commit, in USD. */
   readonly capitalUsd: number;
-  /** Fraction of capital to deploy, in (0, 1]; the rest stays in stablecoin. */
   readonly copyRatio: number;
-  /** No copied position may exceed this share of deployed capital. */
   readonly maxPositionWeight: number;
   readonly maxSlippageBps: number;
-  /** Symbols the follower refuses to hold regardless of the leader. */
   readonly excludeSymbols?: readonly string[];
-  /**
-   * Stop copying once the follower is down this fraction from their peak.
-   * Enforced by the caller against observed value.
-   */
   readonly stopLossFraction?: number;
 }
 
@@ -42,7 +34,6 @@ export class CopyLimitsInvalid extends Error {
   }
 }
 
-/** Largest copy this market can absorb, given ~$2.6M of total depth. */
 const MAX_CAPITAL_USD = 1_000_000;
 
 export function validateCopyLimits(limits: CopyLimits): void {
@@ -88,9 +79,7 @@ export function validateCopyLimits(limits: CopyLimits): void {
 
 export interface CopyPreview {
   readonly leader: string;
-  /** Capital actually deployed, after the copy ratio. */
   readonly deployUsd: number;
-  /** Capital deliberately held back in stablecoin. */
   readonly reserveUsd: number;
   readonly targetWeights: readonly Weight[];
   readonly positions: readonly { readonly symbol: string; readonly weight: number; readonly usd: number }[];

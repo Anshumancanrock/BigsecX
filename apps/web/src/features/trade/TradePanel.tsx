@@ -1,9 +1,3 @@
-/**
- * Buy or sell one company from its page. Checks the wallet, amount, USDC and
- * SOL for fees as the amount is typed and names what is missing on the
- * button; the order goes through the same review dialog as every trade.
- */
-
 import { useState } from "react";
 import { api, type Cash, type MarketToken, type PortfolioPosition } from "../../lib/api.ts";
 import { useAsync } from "../../lib/useAsync.ts";
@@ -29,7 +23,6 @@ export function TradePanel({
 }) {
   const wallet = useWallet();
   const market = useMarket();
-  // A scheduled fee change is said where the fee is, before anyone buys.
   const feeChange = feeChangeWords(market?.pendingFeeChange, market?.epoch);
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [unit, setUnit] = useState<"usd" | "token">("usd");
@@ -63,7 +56,6 @@ export function TradePanel({
     setRaw(value > 0 ? String(unit === "usd" ? value : Number(value.toFixed(6))) : "");
   };
 
-  // What stands between this amount and the review screen, in order.
   const blocker = ((): string | null => {
     if (side === "buy") {
       if (token.paused) return "Paused by the issuer";

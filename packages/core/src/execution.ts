@@ -9,11 +9,9 @@ import type { RebalanceOrder } from "./portfolio.ts";
 import { calculateFee, type TransferFee } from "./transfer-fee.ts";
 
 export interface ExecutionLimits {
-  /** Reject or resize a leg whose price impact exceeds this. */
   readonly maxImpactBps: number;
   /** Never shrink a leg below this; defer it instead. */
   readonly minTicketUsd: number;
-  /** Cap on how much of a pool's quotable depth one leg may consume. */
   readonly maxDepthShareBps?: number;
   /**
    * The most a leg may pay when shrinking it does not lower the rate, or it is
@@ -35,19 +33,14 @@ export const DEFAULT_LIMITS: ExecutionLimits = {
   // thinner names would almost never clear.
   maxImpactBps: 200,
   minTicketUsd: 5,
-  // Taking more than a tenth of quotable depth moves the price against every
-  // later leg in the same basket.
   maxDepthShareBps: 1_000,
   maxFloorImpactBps: 500,
 };
 
-/** What a quote reports for one leg at one size. */
 export interface LegProbe {
   readonly symbol: string;
   readonly usd: number;
-  /** Price impact as a fraction, from the aggregator. */
   readonly priceImpact: number;
-  /** Quotable USD depth for this token. */
   readonly liquidityUsd: number;
 }
 
@@ -65,7 +58,6 @@ export type LegVerdict =
   | {
       readonly kind: "defer";
       readonly reason: string;
-      /** What made it undeliverable: too little on offer, or too much impact. */
       readonly cause: ResizeCause;
     };
 
@@ -135,13 +127,6 @@ export function transferFeeCostUsd(netUsd: number, feeBps: number): number {
   return gross - netUsd;
 }
 
-/**
- * Slippage tolerance for a leg, in basis points, from its measured impact.
- *
- * Pools here carry 2-4% spread floors and move within seconds of a quote, so
- * one global tolerance is too tight for thin pools or too loose for deep ones.
- * The result is impact times `headroom` plus `floorBps`, capped at `capBps`.
- */
 export function slippageBpsFor(
   priceImpact: number,
   options: { readonly floorBps?: number; readonly capBps?: number; readonly headroom?: number } = {},
@@ -150,14 +135,11 @@ export function slippageBpsFor(
   const capBps = options.capBps ?? 1_000;
   const headroom = options.headroom ?? 1.5;
 
-  // A negative impact means the route beat the reference price; it needs no
-  // extra room, only the floor.
   const measured = Number.isFinite(priceImpact) && priceImpact > 0 ? priceImpact : 0;
   const derived = Math.ceil(measured * 10_000 * headroom) + floorBps;
   return Math.min(capBps, Math.max(floorBps, derived));
 }
 
-/** Exact fee in raw base units, for display alongside a quote. */
 export function transferFeeRaw(rawAmount: bigint, fee: TransferFee): bigint {
   return calculateFee(fee, rawAmount);
 }
@@ -172,15 +154,10 @@ export function transferFeeRaw(rawAmount: bigint, fee: TransferFee): bigint {
  */
 export interface PlannedLeg {
   readonly order: RebalanceOrder;
-  /** Size actually sent, in USD, after any resize. */
   readonly usd: number;
-  /** Price impact as reported by the aggregator. */
   readonly priceImpact: number;
-  /** Shares received net of fee, in UI units. Null when not measurable. */
   readonly expectedOutUi: number | null;
-  /** Price per UI share the quote implies, all-in. */
   readonly effectivePriceUsd: number | null;
-  /** Mid price the cost is measured against. */
   readonly referencePriceUsd: number | null;
   /**
    * Realized cost as a fraction of notional: spread, impact and transfer fee
@@ -199,11 +176,9 @@ export interface ExecutionPlan {
   readonly legs: readonly PlannedLeg[];
   readonly deferred: readonly { readonly symbol: string; readonly usd: number; readonly reason: string }[];
   readonly totalUsd: number;
-  /** Total realized cost in USD, from measured fills. */
   readonly totalCostUsd: number;
   /** Transfer fee contained within that cost, for disclosure. */
   readonly totalTransferFeeUsd: number;
-  /** Realized cost as a fraction of notional traded. */
   readonly costFraction: number;
 }
 

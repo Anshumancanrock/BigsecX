@@ -34,8 +34,6 @@ import {
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
-/* ------------------------------------------------------------ dimensions */
-
 export const SCREEN = { width: 390, height: 845 } as const;
 const PHONE_W = SCREEN.width / 0.9174;
 const RING = 0.008 * PHONE_W;
@@ -47,15 +45,8 @@ const DEPTH = 44;
 /** The rounding of the frame's edges, seen only when the phone turns. */
 const EDGE = 2;
 
-/*
- * The front plane holds the ring, the glass and the screen, and the camera
- * maps one unit in it to one pixel, so edges stay on the pixel grid. It sits
- * a full unit clear of the frame's face and the button keys: with a 16-bit
- * depth buffer, a smaller gap shows through as speckles.
- */
 const FRONT_Z = DEPTH / 2 + 1;
 
-/** Left and right buttons: top and height as fractions of the phone. */
 const BUTTONS = [
   { side: -1, top: 0.208, height: 0.052 },
   { side: -1, top: 0.29, height: 0.062 },
@@ -63,20 +54,15 @@ const BUTTONS = [
   { side: 1, top: 0.315, height: 0.125 },
 ] as const;
 
-/** On-screen width of the phone at full size. */
 const PHONE_PX = 334;
-/** Side buttons: 4px wide, standing 3px out from the ring, with 3px corners. */
 const BUTTON_SPAN = 4 * (PHONE_W / PHONE_PX);
 const BUTTON_OUT = 3 * (PHONE_W / PHONE_PX);
 const BUTTON_CORNER = 3 * (PHONE_W / PHONE_PX);
 /** Room around the phone so a lean never clips its edge. */
 const SIDE_ROOM = 56;
-/** Space above the phone's top edge, for the settle-in and the lean. */
 const TOP_ROOM = 14;
-/** How far the phone leans toward the pointer, in radians. */
 const LEAN = { x: 0.08, y: 0.16 } as const;
 
-/** A rectangle with circular corners, centred on the origin. */
 function roundedRect(width: number, height: number, radius: number): Shape {
   const x = width / 2;
   const y = height / 2;
@@ -94,8 +80,6 @@ function roundedRect(width: number, height: number, radius: number): Shape {
   return shape;
 }
 
-/* -------------------------------------------------------------- the shaders */
-
 const FLAT_VERTEX = /* glsl */ `
   varying vec3 vLocal;
   varying vec3 vNormal;
@@ -106,13 +90,6 @@ const FLAT_VERTEX = /* glsl */ `
   }
 `;
 
-/*
- * The ring's shading: a 145-degree gradient (#dcdce2, #9d9da4, #4b4b51,
- * #83838a, #d2d2d8) across the phone with a darker outermost pixel, except
- * beside a button. Colours are mixed in sRGB like the browser does, so they
- * match CSS. `uShift` slides the gradient while the phone turns, like a
- * reflection.
- */
 const RING_FRAGMENT = /* glsl */ `
   uniform vec2 uSize;
   uniform float uRadius;
@@ -163,10 +140,6 @@ const RING_FRAGMENT = /* glsl */ `
   }
 `;
 
-/*
- * A side button's face: a gradient (#84848b, #4d4d53 at 55%, #2c2c31) running
- * inward from the outer edge. It darkens as it turns away from the camera.
- */
 const BUTTON_FRAGMENT = /* glsl */ `
   uniform float uSide;
   uniform float uOuter;
@@ -183,7 +156,6 @@ const BUTTON_FRAGMENT = /* glsl */ `
   }
 `;
 
-/** The button gradient, shared by the button faces and the ring beside them. */
 const KEY_GRADIENT = /* glsl */ `
   vec3 key(float u) {
     vec3 c0 = vec3(132.0, 132.0, 139.0) / 255.0;
@@ -193,8 +165,6 @@ const KEY_GRADIENT = /* glsl */ `
     return u < 0.55 ? mix(c0, c1, u / 0.55) : mix(c1, c2, (u - 0.55) / 0.45);
   }
 `;
-
-/* ---------------------------------------------------------------- the scene */
 
 export interface PhoneScene {
   dispose(): void;
@@ -210,7 +180,6 @@ export function mountPhoneScene(
   stage: HTMLElement,
   screen: HTMLElement,
   options: {
-    /** Where the pointer's position steers the lean. */
     readonly tiltArea: HTMLElement;
     readonly onVisible: (visible: boolean) => void;
   },
@@ -238,8 +207,6 @@ export function mountPhoneScene(
   renderer.toneMappingExposure = 1.05;
   renderer.domElement.className = "phone-gl";
 
-  // The screen's layer: the anchor carries the projection, the screen inside
-  // it the zoom that lays it out at its drawn size.
   const layer = document.createElement("div");
   layer.className = "phone-css";
   const anchor = document.createElement("div");
@@ -260,17 +227,14 @@ export function mountPhoneScene(
     return thing;
   };
 
-  // A soft sky above and a key light from the upper left, where the ring is brightest.
   scene.add(new HemisphereLight(0xffffff, 0x8a8a92, 1.3));
   const key = new DirectionalLight(0xffffff, 1.1);
   key.position.set(-1, 1.6, 2.2);
   scene.add(key);
 
-  // ---- the device ------------------------------------------------------
   const phone = new Group();
   scene.add(phone);
 
-  // The frame: brushed titanium, seen at its sides and edges when it turns.
   const titanium = track(
     new MeshPhysicalMaterial({
       color: new Color("#b9b9bf"),
@@ -298,7 +262,6 @@ export function mountPhoneScene(
   body.geometry.center();
   phone.add(body);
 
-  // The ring: the frame's front face, from its outer edge to the glass.
   const ringShape = roundedRect(PHONE_W, PHONE_H, PHONE_R);
   ringShape.holes.push(roundedRect(PHONE_W - 2 * RING, PHONE_H - 2 * RING, GLASS_R));
   const ringMaterial = track(
@@ -310,8 +273,6 @@ export function mountPhoneScene(
         uRadius: { value: PHONE_R },
         uHairline: { value: PHONE_W / PHONE_PX },
         uShift: { value: 0 },
-        // Each button's side and the bottom and top of its span, in the
-        // ring's own coordinates.
         uButtons: {
           value: BUTTONS.flatMap((b) => [
             b.side,
@@ -328,7 +289,6 @@ export function mountPhoneScene(
   ring.position.z = FRONT_Z;
   phone.add(ring);
 
-  // The glass: flat black. The screen covers all of it except the bezel.
   const glass = new Mesh(
     track(new ShapeGeometry(roundedRect(PHONE_W - 2 * RING, PHONE_H - 2 * RING, GLASS_R), 48)),
     track(new MeshBasicMaterial({ color: new Color("#0b0b0b"), toneMapped: false })),
@@ -336,10 +296,6 @@ export function mountPhoneScene(
   glass.position.z = FRONT_Z;
   phone.add(glass);
 
-  // Side buttons: a metal key standing out of the frame. The face sits just
-  // behind the front plane, so perspective does not pull it inward, and ends
-  // under the ring, which draws the same gradient there, so either depth-test
-  // winner gives the same pixel.
   const keyMaterial = track(
     new MeshPhysicalMaterial({
       color: new Color("#8e8e95"),
@@ -378,7 +334,6 @@ export function mountPhoneScene(
     phone.add(face);
   }
 
-  // ---- the camera ------------------------------------------------------
   const camera = new PerspectiveCamera(22, 1, 100, 10_000);
   const view = { width: 0, height: 0, pxPerUnit: PHONE_PX / PHONE_W };
 
@@ -392,11 +347,9 @@ export function mountPhoneScene(
     renderer.domElement.style.width = `${width}px`;
     renderer.domElement.style.height = `${height}px`;
 
-    // As wide as the design phone, or as wide as the stage allows.
     const phonePx = Math.min(PHONE_PX, width - (leans ? SIDE_ROOM : 8));
     view.pxPerUnit = phonePx / PHONE_W;
     camera.aspect = width / height;
-    // Distance at which one unit on the glass is `pxPerUnit` pixels tall.
     const distance = height / (2 * view.pxPerUnit * Math.tan((camera.fov * Math.PI) / 360));
     // Aim so the phone's top edge sits TOP_ROOM pixels below the stage's.
     const centerY = PHONE_H / 2 - (height / 2 - TOP_ROOM) / view.pxPerUnit;
@@ -412,20 +365,13 @@ export function mountPhoneScene(
     screen.style.zoom = String(view.pxPerUnit);
   };
 
-  // ---- the screen's transform -------------------------------------------
   const toPhone = new Matrix4();
   const toStage = new Matrix4();
   const full = new Matrix4();
 
-  /**
-   * Put the screen where the camera sees the glass: the matrix from the
-   * zoomed element's pixels to the stage's, through the phone and camera.
-   */
   const placeScreen = () => {
     const k = 1 / view.pxPerUnit;
-    // Element pixels, origin top-left and y down, to the phone's units.
     toPhone.set(k, 0, 0, -SCREEN.width / 2, 0, -k, 0, SCREEN.height / 2, 0, 0, 1, FRONT_Z, 0, 0, 0, 1);
-    // Clip space to the stage's pixels, flattened onto the page.
     toStage.set(view.width / 2, 0, 0, view.width / 2, 0, -view.height / 2, 0, view.height / 2, 0, 0, 0, 0, 0, 0, 0, 1);
     full
       .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
@@ -433,8 +379,6 @@ export function mountPhoneScene(
       .multiply(toPhone)
       .premultiply(toStage);
     const e = full.elements;
-    // Keep the element a plane, with no depth in or out, which also keeps
-    // the matrix invertible; then scale it so w is 1 at the origin.
     e[2] = e[6] = e[8] = e[9] = e[11] = e[14] = 0;
     const w = e[15]!;
     for (let i = 0; i < 16; i++) e[i] = e[i]! / w;
@@ -445,12 +389,9 @@ export function mountPhoneScene(
       : `matrix3d(${e.join(",")})`;
   };
 
-  // ---- motion ----------------------------------------------------------
   const target = { x: 0, y: 0 };
   const current = { x: reduced ? 0 : 0.32, y: 0 };
   let rise = reduced ? 0 : 1;
-  // The entry is timed from the end of the first frame, which compiles the
-  // shaders: on a slow device that alone can outlast the entry.
   let start = 0;
   let visible = true;
   let frame = 0;
@@ -517,12 +458,9 @@ export function mountPhoneScene(
   });
   resize.observe(stage);
 
-  // Off screen, nothing is drawn and the screen stops ticking.
   const seen = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? false;
     options.onVisible(visible);
-    // Wake even when nothing changed: an entry cut short off screen
-    // finishes when the phone comes back.
     if (visible) wake();
   });
   seen.observe(stage);

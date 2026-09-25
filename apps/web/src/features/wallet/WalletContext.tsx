@@ -70,9 +70,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setConnection(next);
     setAddress(next.address);
     remember(next.walletName);
-    // A wallet can switch account or lock at any time. Treating a null
-    // address as "still connected" is how an app ends up building a
-    // transaction for a wallet the user has walked away from.
     next.onChange((changed) => {
       setAddress(changed);
       if (!changed) {
@@ -82,7 +79,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Silent reconnect, once, after discovery has had a chance to find wallets.
   const tried = useRef(false);
   useEffect(() => {
     if (tried.current || wallets.length === 0) return;
@@ -102,7 +98,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (live) attach(next);
       })
       .catch(() => {
-        // Not authorised any more. Staying signed out is the right answer.
         remember(null);
       });
     return () => {
@@ -117,7 +112,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       try {
         attach(await connectWallet(name));
       } catch (cause) {
-        // A dismissed popup is a choice, not a failure worth shouting about.
         setError(isUserRejection(cause) ? null : (cause as Error).message);
       } finally {
         setConnecting(false);

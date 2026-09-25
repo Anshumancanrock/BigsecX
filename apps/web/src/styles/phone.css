@@ -1,13 +1,3 @@
-/*
- * Phone layout: an off-white page, near-black type in Satoshi, white cards on
- * a hairline, a bright green for the primary action and black pills for the
- * rest, with a floating tab bar. The palette lives in theme.css; this file is
- * layout and the components only the phone has, written against tokens so
- * the ones desktop pages borrow (follow button, sheets) fit there too.
- */
-
-/* ============================================================ components */
-
 .face {
   display: inline-grid;
   place-items: center;
@@ -29,7 +19,6 @@
   box-shadow: inset 0 0 0 1px hsl(var(--ink) / 0.08);
 }
 
-/* Rows: the one list shape the phone uses, for companies, people, trades. */
 .rows {
   display: flex;
   flex-direction: column;
@@ -142,7 +131,6 @@ a.row:active,
   color: hsl(var(--fg-faint));
 }
 
-/* Three small logos, overlapping, for a basket. */
 .basket-logos {
   display: flex;
   flex: none;
@@ -159,7 +147,6 @@ a.row:active,
   margin-left: -16px;
 }
 
-/* Buttons. */
 .round-btn {
   display: grid;
   place-items: center;
@@ -244,7 +231,6 @@ a.row:active,
   transform: scale(0.96);
 }
 
-/* The quiet action beside a primary one: Edit profile, Copy. */
 .pill-btn {
   display: inline-flex;
   align-items: center;
@@ -307,7 +293,6 @@ a.row:active,
   text-underline-offset: 3px;
 }
 
-/* A segmented choice drawn as pills: the chosen one black, the rest grey. */
 .seg.pill-seg {
   border: 0;
   padding: 3px;
@@ -355,7 +340,6 @@ a.row:active,
   font-size: 13.5px;
 }
 
-/* Sheets for people. */
 .people-list {
   display: flex;
   flex-direction: column;
@@ -516,7 +500,6 @@ a.row:active,
   font-weight: 650;
 }
 
-/* The value chart. */
 .value-chart {
   position: relative;
   width: 100%;
@@ -567,13 +550,6 @@ a.row:active,
   margin-top: 4px;
 }
 
-/* ================================================================= frame */
-
-/*
- * The frame: one light page and a single column of content under the
- * floating tab bar. The desktop uses the same design with its own
- * measurements, set at the end of this file.
- */
 body:has(.app) {
   background: hsl(60 23% 97.5%);
 }
@@ -590,8 +566,6 @@ body:has(.app) {
   padding: 8px 40px calc(132px + env(safe-area-inset-bottom, 0px));
 }
 
-/* The light pooling in each card's corner has nothing to glow against on
-   a white page. */
 .tile::after {
   content: none;
 }
@@ -636,7 +610,6 @@ body:has(.app) {
   bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 }
 
-/* Above Trade and Transfer where they float, not behind them. */
 .app:has(.home-pills) .toasts {
   bottom: calc(160px + env(safe-area-inset-bottom, 0px));
 }
@@ -659,7 +632,6 @@ body:has(.app) {
   color: hsl(var(--fg));
 }
 
-/* Figures are set bold. */
 .asset-title h1,
 .card-title,
 .sub-head,
@@ -702,8 +674,6 @@ body:has(.app) {
   font-weight: 700;
 }
 
-/* The bright green is a fill; as text on white it is too faint, so links
-   and small labels that were mint read in the deeper green. */
 .menu-row.on,
 .card-more,
 .start-steps b,
@@ -736,7 +706,6 @@ body:has(.app) {
     bottom: calc(148px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Sheets rise from the bottom edge, with a grab handle. */
   .sheet-backdrop {
     padding: 0;
   }
@@ -763,8 +732,6 @@ body:has(.app) {
     font-size: 21px;
   }
 }
-
-/* ============================================================== tab bar */
 
 .tabbar {
   position: fixed;
@@ -848,8 +815,6 @@ body:has(.app) {
 .tab-face .face {
   font-size: 12px !important;
 }
-
-/* ================================================================= home */
 
 .home {
   padding-top: 8px;
@@ -1000,7 +965,6 @@ body:has(.app) {
   transform: scaleX(1);
 }
 
-/* Trade and Transfer, floating over the list above the tab bar. */
 .home-pills {
   position: fixed;
   left: 0;
@@ -1020,8 +984,6 @@ body:has(.app) {
 .home .rows {
   padding-bottom: 64px;
 }
-
-/* ============================================================== profile */
 
 .profile-page {
   margin: 0 -16px;
@@ -1337,8 +1299,6 @@ body:has(.app) {
   text-align: left;
 }
 
-/* ============================================================== traders */
-
 .feed-faces {
   position: relative;
   flex: none;
@@ -1358,8 +1318,6 @@ body:has(.app) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-
-/* =============================================================== search */
 
 .find-page {
   padding-top: 14px;
@@ -1441,8 +1399,6 @@ body:has(.app) {
   }
 }
 
-/* ======================================================== reduced motion */
-
 @media (prefers-reduced-motion: reduce) {
   .row.ghost,
   .traders-card-row.ghost,
@@ -1455,26 +1411,10 @@ body:has(.app) {
   }
 }
 
-/* ================================================================ glass */
-
-/*
- * Glass: frosted white surfaces that let a soft wash of colour through, with
- * a bright top edge, a hairline and a soft shadow. Buttons carry a faint
- * gloss across their top half, and the dark ones are tinted glass rather
- * than flat black.
- */
-
 .app {
   --gl-fill: linear-gradient(170deg, hsl(0 0% 100% / 0.78), hsl(0 0% 100% / 0.56));
   --gl-fill-solid: linear-gradient(180deg, hsl(0 0% 100% / 0.9), hsl(0 0% 100% / 0.72));
   --gl-edge: hsl(0 0% 100% / 0.85);
-  /*
-   * No backdrop blur on surfaces that sit on the page: behind them is only the
-   * fixed colour wash, which looks the same blurred, and a blur under every card
-   * makes scrolling several times more expensive. Glass that floats over moving
-   * content (tab bar, sheets, the Trade and Transfer pills, the sticky search
-   * field) keeps its blur.
-   */
   --gl-blur: none;
   --gl-blur-float: blur(26px) saturate(180%);
   --gl-shadow:
@@ -1491,8 +1431,6 @@ body:has(.app) {
     0 10px 24px -12px rgb(0 0 0 / 0.5);
 }
 
-/* A soft wash of colour for the glass to show: mint and sky at the top,
-   a trace of lavender lower down. The page still reads as white. */
 .app-glow {
   display: block;
   background:
@@ -1502,7 +1440,6 @@ body:has(.app) {
     radial-gradient(80vw 60vw at 100% 100%, hsl(150 55% 84% / 0.3), transparent 72%);
 }
 
-/* Surfaces. */
 .card,
 .stock-card,
 .tile,
@@ -1538,7 +1475,6 @@ body:has(.app) {
   background: var(--gl-fill);
 }
 
-/* Small tiles inside a glass card: a lighter frost, not a second card. */
 .value-cash span,
 .transfer-balances span {
   border: 1px solid hsl(0 0% 100% / 0.7);
@@ -1546,7 +1482,6 @@ body:has(.app) {
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9), 0 0 0 1px rgb(16 24 40 / 0.035);
 }
 
-/* The green button: a faint gloss over the green, a line of light on top. */
 .btn-go,
 .btn-mint {
   border: 0;
@@ -1572,7 +1507,6 @@ body:has(.app) {
   opacity: 0.5;
 }
 
-/* Tinted dark glass for the pills and Follow. */
 .dark-pill,
 .follow-btn,
 .tab-mark-disc {
@@ -1581,14 +1515,12 @@ body:has(.app) {
   box-shadow: var(--gl-dark-shadow);
 }
 
-/* The Trade and Transfer pills float over the page as it scrolls. */
 .dark-pill {
   height: 50px;
   -webkit-backdrop-filter: blur(16px) saturate(160%);
   backdrop-filter: blur(16px) saturate(160%);
 }
 
-/* Frosted white for the quiet ones. */
 .follow-btn.on,
 .pill-btn,
 .btn-ghost,
@@ -1616,7 +1548,6 @@ body:has(.app) {
   backdrop-filter: none;
 }
 
-/* Segmented controls: a frosted track, a dark glass thumb. */
 .seg,
 .seg.pill-seg {
   border: 1px solid hsl(0 0% 100% / 0.8);
@@ -1681,7 +1612,6 @@ body:has(.app) {
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.5), 0 8px 18px -10px hsl(134 60% 36% / 0.7);
 }
 
-/* Sheets: frosted white, rising from the bottom. */
 .sheet {
   border-top: 1px solid hsl(0 0% 100% / 0.9);
   background: linear-gradient(180deg, hsl(0 0% 100% / 0.9), hsl(0 0% 100% / 0.8));
@@ -1694,7 +1624,6 @@ body:has(.app) {
   background: rgb(16 24 40 / 0.26);
 }
 
-/* The search field stays put while results scroll under it. */
 .find-field {
   border: 1px solid hsl(0 0% 100% / 0.85);
   background: var(--gl-fill-solid);
@@ -1716,7 +1645,6 @@ body:has(.app) {
     0 22px 44px -22px rgb(0 0 0 / 0.55);
 }
 
-/* People who asked their system for less transparency get solid white. */
 @media (prefers-reduced-transparency: reduce) {
   .app {
     --gl-fill: hsl(0 0% 100%);
@@ -1729,9 +1657,6 @@ body:has(.app) {
   }
 }
 
-/* ======================================================= leaderboard kit */
-
-/* A rank: a plain figure, the top three tinted in their metal. */
 .medal {
   display: inline-grid;
   flex: none;
@@ -1793,7 +1718,6 @@ body:has(.app) {
   text-overflow: ellipsis;
 }
 
-/* The top three: three equal cards, first to third. */
 .top3 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1903,8 +1827,6 @@ body:has(.app) {
   max-width: 96px;
 }
 
-/* Three black pills in a row weigh more than the cards they sit in; here
-   Follow is an outline until it is pressed. */
 .top3-card .follow-btn:not(.on) {
   background: hsl(0 0% 100% / 0.7);
   color: hsl(var(--fg));
@@ -1917,7 +1839,6 @@ body:has(.app) {
   color: #fff;
 }
 
-/* A card holding a ranked list: heading, column labels, rows. */
 .list-card {
   margin-top: 14px;
   padding: 4px 14px 6px;
@@ -2024,13 +1945,11 @@ body:has(.app) {
   color: hsl(var(--fg-faint));
 }
 
-/* The second figure in a row: coloured text, no badge. */
 .pct-pill {
   font-size: 12.5px !important;
   font-weight: 600 !important;
 }
 
-/* In a tight row, Follow is a round outline button with an icon. */
 .follow-btn.icon {
   width: 36px;
   min-width: 0;
@@ -2094,7 +2013,6 @@ body:has(.app) {
   color: hsl(var(--fg-muted));
 }
 
-/* The traders page. */
 .people-page {
   padding-top: 8px;
 }
@@ -2205,9 +2123,6 @@ body:has(.app) {
   text-overflow: ellipsis;
 }
 
-/* ========================================== home: traders of the week */
-
-/* The dark traders card: a quiet gradient, rows on hairlines. */
 .traders-card {
   position: relative;
   overflow: hidden;
@@ -2383,7 +2298,6 @@ body:has(.app) {
   text-decoration: underline;
 }
 
-/* The desktop board: follow beside "See and copy", the top three above. */
 .board-actions {
   display: inline-flex;
   align-items: center;
@@ -2407,7 +2321,6 @@ body:has(.app) {
   }
 }
 
-/* A scheduled fee change, beside the fee it changes. */
 .trade-fee-change {
   display: block;
   margin-top: 6px;

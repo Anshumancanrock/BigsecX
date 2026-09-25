@@ -1,5 +1,3 @@
-/** Three product highlights under the copy-trading section, each illustrated with live data. */
-
 import { TokenLogo } from "../components/TokenLogo.tsx";
 import { Sparkline } from "../components/charts/PriceChart.tsx";
 import { Trophy } from "../features/leaderboard/Trophy.tsx";
@@ -10,7 +8,6 @@ import { MarketContext } from "../lib/market.ts";
 import { go } from "../lib/router.ts";
 import { useAsync } from "../lib/useAsync.ts";
 
-/** Days of history behind the trend lines. */
 const TREND_DAYS = 90;
 
 export function HighlightsSection({ market }: { market: Market | null }) {
@@ -119,7 +116,6 @@ function PriceList({ tokens }: { tokens: readonly MarketToken[] }) {
   );
 }
 
-/** Second, first and third, with the winner raised; the DOM keeps rank order. */
 function MiniPodium({ entries }: { entries: readonly LeaderboardEntry[] | null }) {
   const tiers = ["gold", "silver", "bronze"] as const;
   return (

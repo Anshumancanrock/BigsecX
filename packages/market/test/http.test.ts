@@ -109,7 +109,6 @@ describe("Cache", () => {
     });
     expect(reloaded).toBe(true);
 
-    // The newest entry survived.
     let touched = false;
     await cache.fetch("k499", 60_000, async () => {
       touched = true;
@@ -128,7 +127,7 @@ describe("RateLimiter", () => {
   });
 
   test("makes a caller wait once the bucket is empty", async () => {
-    const limiter = new RateLimiter(1, 20); // refills in ~50ms
+    const limiter = new RateLimiter(1, 20);
     await limiter.acquire();
     const started = Date.now();
     await limiter.acquire();

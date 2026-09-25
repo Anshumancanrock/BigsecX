@@ -21,7 +21,6 @@ const SIG = "5".repeat(88);
 const LATE = "6".repeat(88);
 const AIRDROP = "7".repeat(88);
 
-/** A $5 buy of OpenAI, shaped as the node returns it: USDC out, shares in. */
 function buy(owner: string, signer: boolean) {
   return {
     slot: 450_340_000,

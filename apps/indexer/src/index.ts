@@ -1,14 +1,8 @@
-/**
- * Indexer entrypoint. Runs the job once, then on an interval.
- */
-
 import { PUBLIC_RPC_URLS, Rpc } from "@ps/chain";
 import { JupiterClient } from "@ps/market";
 import { Store } from "@ps/db";
 import { runJob } from "./job.ts";
 
-// The API's public RPCs in reverse order, so indexing load falls on the API's
-// fallback endpoint. Either still fails over to the other.
 const RPC_URL = process.env["SOLANA_RPC_URL"] ?? [...PUBLIC_RPC_URLS].reverse();
 const INTERVAL_MS = Number(process.env["INDEXER_INTERVAL_MS"] ?? 5 * 60_000);
 

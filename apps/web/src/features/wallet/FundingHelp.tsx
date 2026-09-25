@@ -15,9 +15,7 @@ export function FundingHelp({
   address: string;
   needUsdc: boolean;
   needSol: boolean;
-  /** How much SOL to suggest, when the caller knows better than the default. */
   solAmount?: string;
-  /** What to do once the money lands; a refusal says "try again", a deposit does not. */
   after?: string;
 }) {
   const [copied, setCopied] = useState(false);

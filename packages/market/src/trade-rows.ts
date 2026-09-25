@@ -16,14 +16,12 @@ const LAMPORTS_PER_SOL = 1_000_000_000;
  */
 const MIN_LAMPORT_TRADE = 5_000_000;
 
-/** Same shape as the database's TradeRow. */
 export interface TradeRowData {
   readonly signature: string;
   readonly owner: string;
   readonly symbol: string;
   readonly slot: number;
   readonly blockTime: number | null;
-  /** Signed raw base units; positive is a buy. */
   readonly deltaRaw: bigint;
   readonly uiAmount: number;
   readonly valueUsd: number | null;
@@ -80,7 +78,6 @@ export function tradeRows(
     const mintState = mintStates.get(trade.mint);
     if (!token || !mintState) continue;
 
-    // rawToUi takes an unsigned amount, so scale the magnitude and reapply the sign.
     const magnitude = trade.deltaRaw < 0n ? -trade.deltaRaw : trade.deltaRaw;
     const uiMagnitude = rawToUi(magnitude, mintState.decimals, mintState.scale, unixSeconds);
     rows.push({

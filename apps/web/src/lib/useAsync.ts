@@ -23,8 +23,6 @@ export function useAsync<T>(
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
-  // Held in a ref so changing the callback identity on every render does not
-  // restart the request; the dependency array is the contract instead.
   const runRef = useRef(run);
   runRef.current = run;
 

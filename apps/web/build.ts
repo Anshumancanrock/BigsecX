@@ -1,8 +1,3 @@
-/**
- * Production build: typecheck, bundle with content-hashed names, copy public/,
- * precompress, and bake in the API base (API_BASE, default same origin).
- */
-
 import { cp, mkdir, rm } from "node:fs/promises";
 import { brotliCompressSync, constants as zlib, gzipSync } from "node:zlib";
 
@@ -51,8 +46,6 @@ if (!result.success) {
   process.exit(1);
 }
 
-// index.html names /main.js and /main.css (what the dev server serves);
-// point it at the hashed files the build wrote.
 const entryName = (extension: string) =>
   result.outputs
     .map((o) => o.path.split("/").pop()!)
@@ -82,10 +75,6 @@ await cp(`${ROOT}public`, OUT, { recursive: true }).catch((error: NodeJS.ErrnoEx
 // matching `connect-src` instead of assuming same origin.
 await Bun.write(`${OUT}/manifest.json`, JSON.stringify({ apiBase: API_BASE }, null, 2));
 
-/*
- * Fail the build if the API_BASE define did not take: a bundle that still
- * contains the localhost fallback works only on the machine that built it.
- */
 const scripts = await Promise.all(
   result.outputs.filter((o) => o.path.endsWith(".js")).map((o) => Bun.file(o.path).text()),
 );
@@ -101,11 +90,6 @@ if (API_BASE === "" && scripts.some((code) => code.includes("localhost:3111"))) 
   process.exit(1);
 }
 
-/*
- * Precompress text assets once at build time; the server picks the .br or .gz
- * sibling by Accept-Encoding. Brotli brings the landing page to about a
- * quarter of its raw size. Source maps are left uncompressed.
- */
 const glob = new Bun.Glob("*.{js,css,html,json}");
 for await (const name of glob.scan(OUT)) {
   const bytes = new Uint8Array(await Bun.file(`${OUT}/${name}`).arrayBuffer());

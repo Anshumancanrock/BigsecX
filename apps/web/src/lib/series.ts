@@ -9,7 +9,6 @@ export interface HistoryTable {
   readonly prices: Readonly<Record<string, readonly (number | null)[]>>;
 }
 
-/** Carry the last known value forward over gaps; leading gaps stay null. */
 export function forwardFill(values: readonly (number | null)[]): (number | null)[] {
   let last: number | null = null;
   return values.map((value) => {
@@ -50,10 +49,6 @@ export function basketSeries(
   });
 }
 
-/**
- * Daily value of a fixed set of holdings at past prices (not the wallet's
- * actual history). A day on which any holding lacks a price is null.
- */
 export function holdingsSeries(
   table: HistoryTable,
   units: Readonly<Record<string, number>>,
@@ -84,7 +79,6 @@ export function sampleIndices(length: number, target = 52): number[] {
   return indices;
 }
 
-/** Index of the first non-null value, or -1. */
 export function firstValue(values: readonly (number | null)[]): number {
   return values.findIndex((v) => v !== null);
 }
@@ -108,7 +102,6 @@ export function niceTicks(max: number, count = 4, min = 0): number[] {
   return ticks;
 }
 
-/** Axis labels: "$40K", "$1.2K", "$950", "$2.30". Unsigned. */
 export function axisUsd(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `$${trim(abs / 1_000_000)}M`;
@@ -178,7 +171,6 @@ const f = (value: number) => (Math.round(value * 10) / 10).toString();
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"];
 
-/** "2 June" for an ISO day. */
 export function dayLabel(iso: string): string {
   const [, month, day] = iso.split("-").map(Number);
   return `${day} ${MONTHS[(month ?? 1) - 1]}`;

@@ -24,10 +24,8 @@ const SECTOR_TAG: Readonly<Record<string, string>> = {
   neurotech: "Neurotech",
 };
 
-/** How long the phone waits for the real history before showing the demo line. */
 const HISTORY_WAIT_MS = 2500;
 
-/** A single-letter mark per company, for the phone's holdings list. */
 const MARK: Readonly<Record<string, string>> = {
   SPACEX: "X",
   OPENAI: "O",
@@ -59,8 +57,6 @@ export function PhoneHero({ market, indexes }: { market: Market | null; indexes:
   }, [history.data, history.error, weights, waited]);
   const ready = frames !== null;
 
-  // The two biggest parts of the demo position, valued from the same
-  // balance the screen shows, with each company's own month.
   const holdings = useMemo<PhoneHolding[]>(() => {
     const balance = frames?.get("Max")?.balance ?? 0;
     return [...weights]
@@ -98,7 +94,6 @@ export function PhoneHero({ market, indexes }: { market: Market | null; indexes:
   const [mode, setMode] = useState<"loading" | "3d" | "flat">("loading");
   const [active, setActive] = useState(true);
 
-  // Fetch the scene's code straight away, alongside the history.
   const [sceneModule, setSceneModule] = useState<typeof import("./PhoneScene.ts") | null>(null);
   useEffect(() => {
     let live = true;
@@ -153,7 +148,6 @@ export function PhoneHero({ market, indexes }: { market: Market | null; indexes:
  * bezel and the screen inside, in plain DOM.
  */
 function FlatPhone({ slot }: { slot: React.RefObject<HTMLDivElement | null> }) {
-  // The screen is laid out at 390px wide; scale it to the slot it sits in.
   useEffect(() => {
     const el = slot.current;
     if (!el) return;

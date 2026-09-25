@@ -124,11 +124,7 @@ export async function getStrandedBalances(
   }));
   let pages: Page[];
   try {
-    // Capped at timeoutMs: the RPC client's own retries run far longer, and no
-    // trade depends on this.
     pages = await Promise.race([
-      // Separate calls, not a batch: publicnode allows one of these per batch
-      // and mainnet-beta rate limits an eight-item batch.
       Promise.all(calls.map((c) => rpc.call<Page>(c.method, c.params))),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("stranded scan timed out")), timeoutMs)),
     ]);
@@ -164,7 +160,6 @@ export async function getStrandedBalances(
   return stranded;
 }
 
-/** Legacy SPL token program, which is what USDC is minted under. */
 const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 /**

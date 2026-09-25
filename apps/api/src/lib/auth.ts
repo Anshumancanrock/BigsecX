@@ -7,9 +7,7 @@
 import { decodeBase58 as sharedDecodeBase58 } from "@ps/chain";
 import { BadRequest } from "./validate.ts";
 
-/** Maximum age of a signed message's timestamp. */
 export const SIGNATURE_WINDOW_MS = 5 * 60_000;
-/** Forward allowance for a client clock running fast. */
 export const CLOCK_SKEW_MS = 30_000;
 
 export class Unauthorized extends Error {
@@ -20,7 +18,6 @@ export class Unauthorized extends Error {
 }
 
 export interface SignedAction {
-  /** Base58 wallet address claiming the action. */
   readonly wallet: string;
   /** Base64 Ed25519 signature over the canonical message. */
   readonly signature: string;
@@ -46,7 +43,6 @@ export function canonicalMessage(args: {
   readonly resource: string;
   readonly wallet: string;
   readonly issuedAt: number;
-  /** Hex sha256 of the request body. Empty for actions that carry none. */
   readonly bodyDigest?: string;
 }): string {
   return [
@@ -59,10 +55,6 @@ export function canonicalMessage(args: {
   ].join("\n");
 }
 
-/**
- * Hex SHA-256 of a request body, with keys sorted and the proof fields
- * (signature, issuedAt) removed.
- */
 export async function bodyDigest(body: Record<string, unknown>): Promise<string> {
   const canonical = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(canonical);
@@ -123,7 +115,6 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/** Verify that `wallet` signed this action recently. Throws Unauthorized on any failure. */
 export async function verifySignedAction(
   signed: SignedAction,
   args: {
@@ -197,7 +188,6 @@ export function signatureRequired(): boolean {
   return process.env["REQUIRE_WALLET_SIGNATURE"] !== "0";
 }
 
-/** Verify the signature and issuedAt carried in a request body for this action. */
 export async function authorize(
   body: Record<string, unknown>,
   args: { readonly action: string; readonly resource: string; readonly wallet: string },

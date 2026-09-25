@@ -1,8 +1,3 @@
-/**
- * Serves the production build the way a deployment should: static files, an
- * SPA fallback, security headers, and the API proxied under the same origin.
- */
-
 import { file } from "bun";
 
 const ROOT = new URL(".", import.meta.url).pathname;
@@ -51,10 +46,7 @@ const CSP = [
   INLINE_SCRIPT_HASH ? `script-src 'self' '${INLINE_SCRIPT_HASH}'` : "script-src 'self'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.fontshare.com",
   "font-src 'self' https://fonts.gstatic.com https://cdn.fontshare.com",
-  // Same origin, plus whatever origin the bundle was actually built to talk
-  // to. Assuming 'self' here is what bricked a cross-origin deployment.
   `connect-src ${CONNECT_SRC}`,
-  // Wallets supply their icons as data: or https: URLs.
   "img-src 'self' data: https:",
   "frame-ancestors 'none'",
   "base-uri 'none'",
@@ -120,7 +112,6 @@ Bun.serve({
 
       const headers = new Headers(request.headers);
       for (const name of SPOOFABLE) headers.delete(name);
-      // Set from what the socket says, not from what the request claims.
       const peer = server.requestIP(request)?.address;
       if (peer) headers.set("x-forwarded-for", peer);
 
@@ -134,8 +125,6 @@ Bun.serve({
         duplex: "half",
       });
 
-      // JSON reads gzipped on the way out: a year of prices is 28KB as text
-      // and a few KB compressed, and the API itself sends it plain.
       const type = upstream.headers.get("content-type") ?? "";
       const accepts = request.headers.get("accept-encoding") ?? "";
       if (
@@ -157,12 +146,7 @@ Bun.serve({
 
     const asset = file(`${OUT}${url.pathname}`);
     if (url.pathname !== "/" && !/\.(br|gz)$/.test(url.pathname) && (await asset.exists())) {
-      // Every built file but index.html is named by its content hash, so
-      // those may be cached forever; anything else is revalidated.
       const hashed = /-[0-9a-z]{8}\.(js|css)(\.map)?$/.test(url.pathname) || /\.[0-9a-f]{8,}\./.test(url.pathname);
-      // The basket covers and the drawn characters change rarely and are not
-      // named by hash; a week is long enough that returning visitors do not
-      // fetch them again.
       const cover = url.pathname.startsWith("/covers/") || url.pathname.startsWith("/avatars/");
       return compressed(
         request,

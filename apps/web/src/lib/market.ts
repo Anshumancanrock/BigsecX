@@ -12,7 +12,6 @@ export function useMarket(): Market | null {
   return useContext(MarketContext);
 }
 
-/** A company's name from its symbol, falling back to the symbol itself. */
 export function useCompanyName(): (symbol: string) => string {
   const market = useMarket();
   return (symbol) => market?.tokens.find((t) => t.symbol === symbol)?.name ?? symbol;

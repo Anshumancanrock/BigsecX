@@ -55,14 +55,12 @@ export function TradeDialog({
   const wallet = useWallet();
   const [state, setState] = useState<TradeState>(IDLE);
   const builtAt = useRef(0);
-  // Bumped by "Try again", which re-runs the build below from scratch.
   const [attempt, setAttempt] = useState(0);
 
   const patch = useCallback((next: Partial<TradeState>) => {
     setState((current) => ({ ...current, ...next }));
   }, []);
 
-  // ---- build on open ------------------------------------------------------
   useEffect(() => {
     const controller = new AbortController();
     let live = true;
@@ -139,7 +137,6 @@ export function TradeDialog({
     // Released only when nothing was sent (a cancelled signature or a refusal
     // during the re-quote). Once `committed` is set the bundle must never be sent again.
     if (!settled.committed) running.current = false;
-    // A cancel returns to the review; only a real outcome counts as settled.
     if (settled.phase !== "review") onSettled?.();
   }, [wallet.connection, state.build, request, patch, onSettled]);
 
@@ -171,7 +168,6 @@ export function TradeDialog({
             </button>
           </>
         ) : state.phase === "settled" ? (
-          /* After a fill, offer a way to the positions it created. */
           state.outcomes.some((o) => o.state === "landed") ? (
             <>
               <button className="btn-ghost" onClick={onClose}>
@@ -197,7 +193,6 @@ export function TradeDialog({
             <button className="btn-ghost" onClick={onClose}>
               Close
             </button>
-            {/* Retry only while nothing has been sent; after a submit, point to the wallet instead. */}
             {state.committed ? (
               <button
                 className="btn-mint"
@@ -261,10 +256,6 @@ export function TradeDialog({
   );
 }
 
-/**
- * The moment a trade has landed, said plainly: what arrived, and whether
- * anything did not. The per-transaction detail stays below it.
- */
 function Landed({ outcomes, selling }: { outcomes: TradeState["outcomes"]; selling: boolean }) {
   const nameOf = useCompanyName();
   const landed = outcomes.filter((o) => o.state === "landed").flatMap((o) => o.symbols.map(nameOf));
@@ -311,7 +302,6 @@ function DryRun({ sim }: { sim: SimulationResponse }) {
   );
 }
 
-/** A refusal reason, in the words of the person it happened to. */
 function describeProblem(problem: Problem, selling: boolean): { title: string; body: string } {
   switch (problem.kind) {
     case "insufficient-usdc":
@@ -340,8 +330,6 @@ function describeProblem(problem: Problem, selling: boolean): { title: string; b
         body: `The issuer has paused ${list(problem.symbols).join(", ") || "this token"}. Nobody can trade it until they resume.`,
       };
     case "no-executable-legs": {
-      // "Try a smaller amount" is wrong advice for an order already at the
-      // smallest size there is; say what can actually help.
       const smallest = list(problem.deferred).length > 0 && list(problem.deferred).every((d) => d.usd <= 5.01);
       return {
         title: "The market is too thin right now",
@@ -371,9 +359,6 @@ function describeProblem(problem: Problem, selling: boolean): { title: string; b
 }
 
 function Refusal({ state, selling, owner }: { state: TradeState; selling: boolean; owner: string | null }) {
-  // The server's top-line error is just the first problem's message, so
-  // showing both repeats one line verbatim. The summary states what
-  // happened; the list states why, once each.
   const problems = state.problems;
   const needUsdc = problems.some((p) => p.kind === "insufficient-usdc");
   const needSol = problems.some((p) => p.kind === "insufficient-sol");
@@ -471,7 +456,6 @@ function Review({
         ) : null}
         <div className="kv">
           <span>Fees and price gap</span>
-          {/* A negative cost means the price is in the user's favour; it is not shown as a refund. */}
           <span className={`num ${costHigh ? "down" : ""}`}>
             {costUsd > 0.005 ? `${usd(costUsd)} · ${percent(build.costFraction)}` : "None, the price is in your favour"}
           </span>

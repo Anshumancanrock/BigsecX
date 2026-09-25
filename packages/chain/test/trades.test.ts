@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { fetchTrades, getSignaturesSince, type SignatureRef } from "../src/trades.ts";
 
-/**
- * A fake node holding a fixed signature history, newest first, honouring the
- * `until` and `before` bounds the real RPC does.
- */
 function fakeRpc(history: readonly string[]) {
   const calls: { until?: string; before?: string; limit: number }[] = [];
   return {
@@ -33,7 +29,6 @@ function fakeRpc(history: readonly string[]) {
   };
 }
 
-// Newest first, as the RPC returns them.
 const HISTORY = Array.from({ length: 25 }, (_, i) => `sig${i}`);
 
 describe("getSignaturesSince", () => {
@@ -97,8 +92,6 @@ describe("getSignaturesSince", () => {
 
 describe("a cursor the node no longer holds", () => {
   test("starts again from the newest page and reports the gap", async () => {
-    // Free endpoints keep a short history. A cursor saved days ago names a
-    // transaction they no longer have, and the node refuses the whole call.
     const inner = fakeRpc(HISTORY.slice(0, 3));
     const rpc = {
       call: async <T>(method: string, params: unknown[] = []): Promise<T> => {
@@ -124,7 +117,6 @@ describe("a cursor the node no longer holds", () => {
 
 describe("fetching transactions from a node that refuses batches", () => {
   test("falls back to one call at a time and loses nothing", async () => {
-    // The default endpoint allows one getTransaction per batch.
     let batches = 0;
     let singles = 0;
     const rpc = {
@@ -140,7 +132,6 @@ describe("fetching transactions from a node that refuses batches", () => {
     const { missed } = await fetchTrades(rpc as never, ["a", "b", "c", "d", "e"], new Set(), { batchSize: 2 });
     expect(missed).toBe(0);
     expect(singles).toBe(5);
-    // One refusal is enough to stop trying batches for the rest of the run.
     expect(batches).toBe(1);
   });
 

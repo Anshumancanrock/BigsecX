@@ -21,12 +21,9 @@ const DAYS: Record<Timeframe, number> = { "1M": 30, "3M": 90, "6M": 182, Max: In
 /** Points on the chart. One more than drawn, so a tick can scroll one in. */
 export const CURVE_POINTS = 44;
 
-/** How often the demo ticks, and how far one tick can move the balance. */
 export const TICK_MS = 900;
 
 const TICK_STEP = 6e-4;
-
-/* ------------------------------------------------------------- the money */
 
 const usd0 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
@@ -36,7 +33,6 @@ export function fmtUsd(value: number, decimals = 2): string {
   return `$${(decimals === 0 ? usd0 : usd2).format(value)}`;
 }
 
-/** "+$2,536.55 (+24.6%)" or "-$158.62 (-1.23%)". */
 export function fmtChange(delta: number, base: number): string {
   const pct = base > 0 ? (delta / base) * 100 : 0;
   const sign = delta < 0 ? "-" : "+";
@@ -44,14 +40,11 @@ export function fmtChange(delta: number, base: number): string {
   return `${sign}${fmtUsd(Math.abs(delta))} (${pct < 0 ? "-" : "+"}${Math.abs(pct).toFixed(digits)}%)`;
 }
 
-/* ------------------------------------------------------------- the curve */
-
 export interface Range {
   readonly lo: number;
   readonly hi: number;
 }
 
-/** The value range a curve is drawn against, with room above and below. */
 export function rangeOf(values: readonly number[]): Range {
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -59,12 +52,10 @@ export function rangeOf(values: readonly number[]): Range {
   return { lo: Math.max(0, min - pad), hi: max + pad * 0.6 };
 }
 
-/** A value as a fraction of its range, kept inside the drawable band. */
 export function normalise(value: number, range: Range): number {
   return Math.min(1, Math.max(0.02, (value - range.lo) / (range.hi - range.lo || 1)));
 }
 
-/** Resample a series to exactly `count` points by linear interpolation. */
 export function resample(values: readonly number[], count: number): number[] {
   if (values.length === 0) return [];
   if (values.length === 1) return Array.from({ length: count }, () => values[0]!);
@@ -85,7 +76,6 @@ export function swing(beforeLast: number, last: number, target: number, random: 
   return last + (last - beforeLast) * 0.5 + (random - 0.5) * 0.16 + (target - last) * 0.15;
 }
 
-/** One tick: the balance moves a hair, and the curve takes a step to match. */
 export function tick(
   state: { balance: number; points: readonly number[]; range: Range },
   random: () => number,
@@ -98,29 +88,19 @@ export function tick(
   return { balance, points: [...state.points.slice(1), next] };
 }
 
-/* ------------------------------------------------------------ the frames */
-
 export interface Frame {
   readonly timeframe: Timeframe;
-  /** What the demo position is worth now. */
   readonly balance: number;
-  /** What it was worth at the start of this timeframe. */
   readonly base: number;
-  /** Normalised to the range, CURVE_POINTS long. */
   readonly points: readonly number[];
   readonly range: Range;
 }
 
-/**
- * The demo position, from real history: $10,000 put into a basket at the
- * start of its history, then each timeframe's window of that same line.
- */
 export function framesFromHistory(
   table: HistoryTable,
   weights: readonly { symbol: string; weight: number }[],
 ): Map<Timeframe, Frame> | null {
   if (table.days.length < 8 || weights.length === 0) return null;
-  // Start where most of the basket had a price, as the dashboard does.
   const total = weights.reduce((sum, w) => sum + w.weight, 0) || 1;
   let from = 0;
   for (let i = 0; i < table.days.length; i++) {
@@ -196,16 +176,12 @@ export function fallbackFrames(): Map<Timeframe, Frame> {
   return frames;
 }
 
-/* ------------------------------------------------------------- the chart */
-
 export const CHART = { width: 390, height: 215, rightGutter: 64 } as const;
 
-/** y of a normalised value, with 12px kept clear at the top and bottom. */
 export function yOf(value: number, height: number = CHART.height): number {
   return height - 12 - value * (height - 24);
 }
 
-/** Horizontal distance between points; the first sits one step off-screen. */
 export function stepOf(count: number): number {
   return (CHART.width - CHART.rightGutter) / (count - 2);
 }
@@ -215,13 +191,11 @@ export function polyline(points: readonly number[]): string {
   return points.map((v, i) => `${(i - 1) * step},${yOf(v)}`).join(" ");
 }
 
-/** The fill under the line, closed along the bottom edge. */
 export function polygon(points: readonly number[]): string {
   const step = stepOf(points.length);
   return `${-step},${CHART.height} ${polyline(points)} ${(points.length - 2) * step},${CHART.height}`;
 }
 
-/** Three price labels up the right edge. */
 export function axisLabels(range: Range): { y: number; label: string }[] {
   return [0.95, 0.62, 0.28].map((v) => ({ y: yOf(v), label: fmtUsd(range.lo + v * (range.hi - range.lo), 0) }));
 }

@@ -73,7 +73,6 @@ describe("a wallet's picture", () => {
     expect(image.headers.get("content-type")).toBe("image/webp");
     expect(image.headers.get("x-content-type-options")).toBe("nosniff");
     expect(image.headers.get("content-security-policy")).toContain("sandbox");
-    // The version in the link makes it safe to keep forever.
     expect(image.headers.get("cache-control")).toContain("immutable");
     expect(Buffer.from(await image.arrayBuffer()).toString("base64")).toBe(fixture.webpLossy);
 
@@ -172,7 +171,6 @@ describe("a wallet's picture", () => {
     };
     expect(following.following).toEqual([expect.objectContaining({ wallet: alice.address, avatar: "p7" })]);
 
-    // A wallet with a picture and no name is still listed.
     const batch = (await (await a.request(`/api/profiles?wallets=${alice.address},${bob.address}`)).json()) as {
       profiles: Record<string, { avatar: string | null }>;
     };

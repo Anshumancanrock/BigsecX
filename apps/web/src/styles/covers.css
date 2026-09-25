@@ -1,8 +1,3 @@
-/*
- * Basket covers and the cards around them. The cover is the same photograph
- * on phone and desktop; each stylesheet sets only the card.
- */
-
 .basket-cover {
   position: relative;
   display: block;
@@ -32,7 +27,6 @@
   pointer-events: none;
 }
 
-/* A slow push in on the picture when the card is pointed at. */
 @media (hover: hover) {
   .basket-tile:hover .basket-cover img,
   .ex-basket:hover .basket-cover img {
@@ -51,7 +45,6 @@
   }
 }
 
-/* The cover across the top of the card, flush with its edges; the words under it. */
 .tile.basket-tile {
   justify-content: flex-start;
   gap: 0;
@@ -81,7 +74,6 @@
   padding: 14px 18px 18px;
 }
 
-/* A basket's own page: the cover beside what it is. */
 .basket-hero {
   display: grid;
   gap: 14px;

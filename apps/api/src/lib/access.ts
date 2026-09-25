@@ -8,10 +8,6 @@ import type { Store } from "@ps/db";
 
 type StrategyRow = NonNullable<ReturnType<Store["getStrategy"]>>;
 
-/**
- * The strategy if it is published, else null. Only routes that verify the
- * creator's signature (list-mine, update, delete) may read a draft.
- */
 export function publicStrategy(store: Store, id: string): StrategyRow | null {
   const row = store.getStrategy(id);
   if (!row || !row.published) return null;

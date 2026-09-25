@@ -1,9 +1,3 @@
-/**
- * Profile page for any wallet; the owner's view adds editing, history and
- * settings. The value line is today's holdings at past prices, and position
- * profit is shown only where every trade behind it was indexed.
- */
-
 import { useMemo, useState } from "react";
 import {
   api,
@@ -53,7 +47,6 @@ export type RangeKey = (typeof RANGES)[number]["key"];
 
 export const RANGE_WORDS: Record<RangeKey, string> = { "24h": "24h", "7d": "7d", "30d": "30d", all: "all time" };
 
-/** Your own profile, or the way in to it. */
 export function MyProfile({ market }: { market: Market | null }) {
   const me = useWallet();
   if (!me.address) return <SignedOut />;
@@ -109,11 +102,9 @@ export function ProfilePage({ wallet, market }: { wallet: string; market: Market
   );
   const intradayFetched = useAsync<Intraday>((signal) => api.intraday(168, signal), [], { pollMs: 5 * 60_000 });
   const historyFetched = useAsync<History>((signal) => api.history(365, signal), []);
-  // The line's end follows the live prices between fetches (lib/live.ts).
   const intraday = { ...intradayFetched, data: useLivePrices(intradayFetched.data, market) };
   const history = { ...historyFetched, data: useLivePrices(historyFetched.data, market) };
 
-  // Everything held, wherever it sits: the main accounts and the rest.
   const held = useMemo(() => {
     const out = new Map<string, { uiAmount: number; valueUsd: number; priceUsd: number | null; frozen: boolean; paused: boolean }>();
     for (const p of list(portfolio.data?.positions)) {
@@ -164,8 +155,6 @@ export function ProfilePage({ wallet, market }: { wallet: string; market: Market
   const openRows = [...held]
     .map(([symbol, h]) => {
       const book = books.get(symbol);
-      // Profit only where every trade behind the position was indexed and the
-      // indexed shares match what the wallet holds.
       const known =
         book && book.complete && !book.closed && book.netInvestedUsd > 0 && Math.abs(book.uiAmount - h.uiAmount) <= h.uiAmount * 0.01;
       const pnl = known ? h.valueUsd - book.netInvestedUsd : null;
@@ -197,7 +186,6 @@ export function ProfilePage({ wallet, market }: { wallet: string; market: Market
   const followerCount = followers ?? p?.followers ?? 0;
 
   const share = async () => {
-    // A username makes the nicer link; the address one always works.
     const url = `${window.location.origin}${p?.handle ? `/u/${p.handle}` : `/traders/${wallet}`}`;
     const title = `${name} on Bigsec`;
     try {
@@ -587,12 +575,6 @@ export function ProfilePage({ wallet, market }: { wallet: string; market: Market
   );
 }
 
-/* ---------------------------------------------------------------- value */
-
-/**
- * What the holdings are worth over a range, plus the cash, which does not
- * move. Hourly for a day or a week, daily beyond.
- */
 export function valuePoints(
   range: RangeKey,
   units: Record<string, number>,
@@ -632,7 +614,6 @@ export function scrubLabel(t: number, range: RangeKey): string {
   return range === "24h" || range === "7d" ? HOUR.format(new Date(t)) : DAY.format(new Date(t));
 }
 
-/** "+$1.20", "−$0.40", or "$0.00" for a move too small to have a sign. */
 function signedUsd(value: number): string {
   if (Math.abs(value) < 0.005) return usd(0);
   return `${value > 0 ? "+" : "−"}${usd(Math.abs(value))}`;
@@ -645,9 +626,6 @@ function signedPct(fraction: number | null): string {
   return `${pct > 0 ? "+" : "−"}${Math.abs(pct).toFixed(2)}%`;
 }
 
-/* -------------------------------------------------------------- warnings */
-
-/** What stops this wallet trading, said once, above the positions. */
 function Warnings({ data }: { data: PortfolioDto }) {
   const frozen = list(data.frozen);
   const elsewhere = list(data.elsewhere);
@@ -675,8 +653,6 @@ function Warnings({ data }: { data: PortfolioDto }) {
     </div>
   );
 }
-
-/* --------------------------------------------------------------- sheets */
 
 function HistorySheet({ wallet, mine, onClose }: { wallet: string; mine: boolean; onClose: () => void }) {
   const nameOf = useCompanyName();
@@ -789,8 +765,6 @@ function SettingsSheet({
     </Sheet>
   );
 }
-
-/* ---------------------------------------------------------------- icons */
 
 const stroke = { stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 

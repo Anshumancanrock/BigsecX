@@ -1,8 +1,3 @@
-/**
- * Prints a market snapshot. A smoke test for the read path: RPC, mint parsing,
- * scaling, fee selection and the price feed.
- */
-
 import { Rpc } from "@ps/chain";
 import { JupiterClient } from "@ps/market";
 import { takeSnapshot } from "@ps/market";

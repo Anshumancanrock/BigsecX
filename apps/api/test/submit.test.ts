@@ -32,7 +32,6 @@ const post = (a: ReturnType<typeof createApp>, path: string, body: unknown) =>
 
 const BLOCKHASH = "9C62FZuEUbpZmFrqPQbNfBiPr5U1JcTBhCfKqGgSEg4m";
 
-/** A real, signable v0 transaction, in the shape the builder produces. */
 function makeTransaction(options: { sign?: boolean; payer?: Keypair; lamports?: number } = {}) {
   const payer = options.payer ?? Keypair.generate();
   const message = new TransactionMessage({
@@ -98,7 +97,6 @@ describe("POST /api/submit", () => {
     const failed = body.results.find((r) => !r.submitted)!;
     expect(failed.index).toBe(1);
     expect(failed.error).toContain("Blockhash not found");
-    // Derived from the transaction, not invented.
     expect(failed.signature).toBe(txs[1]!.signature);
     expect(decodeBase58(failed.signature)).toHaveLength(64);
   });
@@ -242,7 +240,6 @@ describe("POST /api/confirm", () => {
       blockHeight: number;
       statuses: { signature: string; status: string; slot: number | null }[];
     };
-    // The client needs this to tell "not landed yet" from "expired".
     expect(body.blockHeight).toBe(426_629_400);
     expect(body.statuses).toEqual([
       { signature: sigA, status: "confirmed", slot: 42, err: null },

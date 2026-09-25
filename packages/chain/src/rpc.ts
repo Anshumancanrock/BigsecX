@@ -1,9 +1,3 @@
-/**
- * Minimal read-only Solana JSON-RPC client over `fetch`. @solana/web3.js adds
- * nothing for reading parsed account state; signing, which does use it, lives
- * in the frontend.
- */
-
 export interface RpcError {
   readonly code: number;
   readonly message: string;
@@ -26,31 +20,21 @@ export class RpcFailure extends Error {
   }
 }
 
-/**
- * Free public endpoints run by different operators, so one failing or rate
- * limiting leaves the other. The first is preferred.
- */
 export const PUBLIC_RPC_URLS: readonly string[] = [
   "https://solana-rpc.publicnode.com",
   "https://api.mainnet-beta.solana.com",
 ];
 
-/** An endpoint list from a string that may name several, comma-separated. */
 export function rpcUrls(value: string | readonly string[]): string[] {
   const list = typeof value === "string" ? value.split(",") : [...value];
   return [...new Set(list.map((url) => url.trim()).filter(Boolean))];
 }
 
 export interface RpcOptions {
-  /**
-   * The endpoint, or several in order of preference. A string may list them
-   * comma-separated, so one environment variable can name a fallback.
-   */
   readonly url: string | readonly string[];
   /** Requests are retried on 429, 5xx and network failures, with backoff. */
   readonly maxRetries?: number;
   readonly timeoutMs?: number;
-  /** How long an endpoint that just failed is passed over for the others. */
   readonly cooldownMs?: number;
 }
 
@@ -60,12 +44,7 @@ export class Rpc {
   readonly #maxRetries: number;
   readonly #timeoutMs: number;
   readonly #cooldownMs: number;
-  /** When each endpoint that recently failed may be preferred again. */
   readonly #restingUntil = new Map<string, number>();
-  /**
-   * Methods an endpoint refused, and until when to ask the others first.
-   * publicnode refuses indexed calls such as getTokenAccountsByOwner.
-   */
   readonly #refusals = new Map<string, number>();
 
   constructor(options: RpcOptions) {
@@ -76,16 +55,8 @@ export class Rpc {
     this.#cooldownMs = options.cooldownMs ?? 30_000;
   }
 
-  /**
-   * POST a payload for single and batch calls alike, failing over between
-   * endpoints and retrying on the statuses public endpoints use to shed load.
-   * A failure moves straight to the next endpoint; the backoff pause comes
-   * only once every endpoint has failed.
-   */
   async #send(label: string, body: string): Promise<unknown> {
     let lastError: Error | null = null;
-    // Endpoints that refused this request (a method their plan excludes); not
-    // asked again, though another endpoint may answer.
     const refused = new Map<string, RpcFailure>();
     // Endpoints tried since the last pause.
     const tried = new Set<string>();
@@ -110,15 +81,12 @@ export class Rpc {
           signal: AbortSignal.timeout(this.#timeoutMs),
         });
 
-        // Public endpoints rate limit hard; treat that as retryable.
         if (response.status === 429 || response.status >= 500) {
           this.#rest(url);
           lastError = new RpcFailure(label, null, `HTTP ${response.status}`);
           continue;
         }
         if (!response.ok) {
-          // Any other refusal is final for this endpoint: a 403 for a method
-          // outside its plan answers the same way on every retry.
           let refusal: RpcError = { code: response.status, message: `HTTP ${response.status}` };
           try {
             const body = (await response.json()) as { error?: RpcError };
@@ -141,7 +109,6 @@ export class Rpc {
       }
     }
 
-    // Refused everywhere it was asked: say why, not "failed after retries".
     const refusal = refused.values().next().value as RpcFailure | undefined;
     if (refusal && refused.size === this.#urls.length) throw refusal;
     throw new RpcFailure(label, null, `${label} failed after retries: ${lastError?.message ?? refusal?.message}`);
@@ -158,7 +125,6 @@ export class Rpc {
     const now = Date.now();
     const refusedLately = (url: string) => Number((this.#refusals.get(`${url} ${label}`) ?? 0) > now);
     const resting = (url: string) => Number((this.#restingUntil.get(url) ?? 0) > now);
-    // Sort is stable, so ties keep the order of preference.
     return [...untried].sort((a, b) => refusedLately(a) - refusedLately(b) || resting(a) - resting(b))[0]!;
   }
 
@@ -175,7 +141,6 @@ export class Rpc {
     return json.result as T;
   }
 
-  /** Batch several calls into one HTTP request. */
   async batch<T>(calls: readonly { method: string; params?: unknown[] }[]): Promise<T[]> {
     if (calls.length === 0) return [];
     const payload = calls.map((c) => ({
@@ -194,7 +159,6 @@ export class Rpc {
     if (!Array.isArray(results)) {
       throw new RpcFailure(calls[0]?.method ?? "batch", null, "batch response was not an array");
     }
-    // Batch responses may arrive out of order; restore the request order.
     const byId = new Map(results.map((r) => [r.id, r]));
     return payload.map((p) => {
       const entry = byId.get(p.id);
@@ -217,7 +181,6 @@ export class Rpc {
   }
 }
 
-/** How long an endpoint that refused a method is asked for it last. */
 const REFUSAL_MEMORY_MS = 10 * 60_000;
 
 function sleep(ms: number): Promise<void> {

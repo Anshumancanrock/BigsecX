@@ -1,8 +1,3 @@
-/**
- * One indexing pass: records a market snapshot, new trades and each index's
- * level. Leaderboards, index charts and trader mirroring read what it writes.
- */
-
 import { INDEX_DEFINITIONS, buildIndex, type IndexInput, type Weight } from "@ps/core";
 import { Rpc, fetchTrades, getMintStates, getSignaturesSince } from "@ps/chain";
 import { discoverVenues, tradeRows, type JupiterClient } from "@ps/market";
@@ -20,17 +15,12 @@ export interface JobResult {
   readonly tradesWritten: number;
   readonly tradersSeen: number;
   readonly indexesWritten: number;
-  /** Signatures whose fetch failed; their windows will be retried. */
   readonly missedSignatures: number;
-  /** Addresses whose backlog exceeded the page budget, leaving a gap. */
   readonly skippedBacklog: number;
-  /** Pool accounts scanned this pass, on top of the mints. */
   readonly venuesScanned: number;
-  /** Set when trade indexing failed but the snapshot still succeeded. */
   readonly tradeError: string | null;
 }
 
-/** Signatures per page when scanning an address. */
 const SIGNATURES_PER_MINT = Number(process.env["SIGNATURES_PER_MINT"] ?? 15);
 /**
  * Pool accounts scanned per pass, on top of the mints. Bounded because each
@@ -77,8 +67,6 @@ function nextLevel(
     periodReturn += weight * (now / before - 1);
     covered += weight;
   }
-  // Return over the priced part of the basket only; with nothing priced the
-  // level is unchanged.
   if (covered <= 0) return previousLevel;
   return previousLevel * (1 + periodReturn / covered);
 }
@@ -129,7 +117,6 @@ export async function runJob(
     const watched = new Set(mints);
     const rows: TradeRow[] = [];
 
-    // SOL is priced once per pass to value the SOL side of trades.
     let solUsd: number | null = null;
     try {
       const solPrice = await jupiter.prices([WSOL_MINT]);
@@ -139,7 +126,6 @@ export async function runJob(
       solUsd = null;
     }
 
-    // Pools first: nearly every transaction on a pool is a trade.
     let venueAddresses: string[] = [];
     try {
       const venues = await discoverVenues(jupiter, snapshot.tokens.map((t) => t.token));
@@ -204,20 +190,17 @@ export async function runJob(
     tradeError = (error as Error).message;
   }
 
-  // Index levels.
   const inputs = indexInputs(snapshot);
   let indexesWritten = 0;
   for (const definition of INDEX_DEFINITIONS) {
     const portfolio = buildIndex(definition, inputs);
     if (!portfolio) continue;
 
-    // The previous level and the basket that earned it travel together.
     const last = previous ? store.lastIndexState(definition.id) : null;
     store.writeIndexLevel({
       indexId: definition.id,
       snapshotId,
       level: nextLevel(last?.weights ?? portfolio.weights, priceNow, previousPrices, last?.level ?? null),
-      // The next period is measured with the basket chosen now.
       weights: portfolio.weights,
     });
     indexesWritten++;

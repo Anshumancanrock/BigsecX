@@ -10,7 +10,6 @@ interface ToastItem {
 
 const ToastContext = createContext<(message: string, tone?: Tone) => void>(() => {});
 
-/** Say something briefly at the foot of the screen. */
 export function useToast(): (message: string, tone?: Tone) => void {
   return useContext(ToastContext);
 }

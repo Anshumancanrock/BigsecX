@@ -1,9 +1,3 @@
-/**
- * Landing page. Every figure on it is live: prices and traders come from the
- * API, and the hero phone draws the Everything basket's real history; only
- * the sub-second ticking is animation.
- */
-
 import { api, type IndexList, type Market } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
 import { navigate } from "../lib/router.ts";
@@ -21,8 +15,6 @@ const NAV = [
 ] as const;
 
 export function Landing() {
-  // One poll for the whole page. The market endpoint is the expensive read,
-  // and every figure below is a different view of the same snapshot.
   const market = useAsync<Market>((signal) => api.market(signal), [], { pollMs: 30_000 });
   const indexes = useAsync<IndexList>((signal) => api.indexes(signal), []);
 
@@ -125,7 +117,6 @@ function Footer() {
   );
 }
 
-/** The Bigsec mark: three stacked bars. */
 function Mark({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -136,7 +127,6 @@ function Mark({ size = 18 }: { size?: number }) {
   );
 }
 
-/** Intercept in-app links so navigation stays client side. */
 function link(to: string) {
   return (event: React.MouseEvent) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;

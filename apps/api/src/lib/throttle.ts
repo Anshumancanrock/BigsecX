@@ -1,9 +1,3 @@
-/**
- * Per-client token-bucket rate limiting. Requests are weighted by upstream
- * cost: a cached market read is nearly free, while a build spends the
- * deployment's small shared Jupiter quota on every leg.
- */
-
 import type { Context, Next } from "hono";
 
 interface Bucket {
@@ -12,50 +6,35 @@ interface Bucket {
 }
 
 export interface ThrottleOptions {
-  /** Burst capacity, in cost units. */
   readonly capacity?: number;
-  /** Sustained refill, in cost units per second. */
   readonly refillPerSecond?: number;
-  /** Cost of a request whose path matches none of the rules. */
   readonly defaultCost?: number;
   readonly maxClients?: number;
 }
 
-/** What each route costs, by path prefix, most specific first. */
 const COSTS: readonly { readonly prefix: string; readonly cost: number }[] = [
-  // Builds quote every leg and then fetch instructions for each.
   { prefix: "/api/mirror/build", cost: 40 },
   { prefix: "/api/copy/build", cost: 40 },
   { prefix: "/api/exit/build", cost: 40 },
-  // One RPC call per transaction, but an outbound relay, so dearer than a read.
   { prefix: "/api/submit", cost: 10 },
-  // The same RPC cost as a submit, priced lower to encourage simulating first.
   { prefix: "/api/simulate", cost: 6 },
   { prefix: "/api/confirm", cost: 2 },
-  // Plans quote every leg.
   { prefix: "/api/mirror/plan", cost: 20 },
   { prefix: "/api/exit/plan", cost: 20 },
   { prefix: "/api/copy/preview", cost: 8 },
-  // Chain reads, but no aggregator traffic.
   { prefix: "/api/portfolio", cost: 4 },
   { prefix: "/api/cash", cost: 2 },
   { prefix: "/api/history", cost: 1 },
-  // Reads each signature back from the chain: one RPC call apiece.
   { prefix: "/api/trades/record", cost: 6 },
   { prefix: "/api/trades", cost: 1 },
   { prefix: "/api/traders", cost: 2 },
   { prefix: "/api/price-truth", cost: 2 },
-  // Served from cache or the local database.
   { prefix: "/api/assets", cost: 2 },
   { prefix: "/api/market", cost: 1 },
   { prefix: "/api/indexes", cost: 1 },
   { prefix: "/api/strategies", cost: 1 },
   { prefix: "/api/leaderboard", cost: 1 },
-  // Signing in verifies a signature; the rest are single-row reads and
-  // writes against the local database.
   { prefix: "/api/session", cost: 4 },
-  // A picture upload is a write of up to 256KB; a picture read is a
-  // single-row read a browser then keeps.
   { prefix: "/api/profile/avatar", cost: 6 },
   { prefix: "/api/avatars", cost: 1 },
   { prefix: "/api/profile", cost: 1 },
@@ -85,7 +64,6 @@ function clientKey(c: Context): string {
   return peerAddress(c);
 }
 
-/** The peer's socket address. Under Bun's `export default { fetch }`, Hono's `c.env` is the Bun Server. */
 function peerAddress(c: Context): string {
   const server = c.env as { requestIP?: (request: Request) => { address?: string } | null };
   try {
@@ -117,7 +95,6 @@ export function throttle(options: ThrottleOptions = {}) {
       for (const [existing, bucket] of buckets) {
         if (now - bucket.lastRefill > 60_000) buckets.delete(existing);
       }
-      // Still full of active clients: evict the least recently seen.
       while (buckets.size >= maxClients) {
         const oldest = buckets.keys().next();
         if (oldest.done) break;

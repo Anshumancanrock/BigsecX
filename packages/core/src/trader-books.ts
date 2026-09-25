@@ -8,36 +8,29 @@ import { believableCost } from "./trader-pnl.ts";
 
 export interface TimedTrade {
   readonly symbol: string;
-  /** Signed share change. Positive is a buy. */
   readonly uiAmount: number;
-  /** Signed USD value. Positive is money spent. Null when unpriced. */
   readonly valueUsd: number | null;
   readonly slot: number;
-  /** Unix seconds; null when the node did not report it. */
   readonly blockTime: number | null;
 }
 
 export interface SymbolBook {
   readonly symbol: string;
-  /** Shares held, by the trades seen. */
   readonly uiAmount: number;
   readonly boughtUsd: number;
   readonly soldUsd: number;
-  /** Money put in less money taken out, for this company alone. */
   readonly netInvestedUsd: number;
   /**
    * False when a trade had no believable cost, or when shares were sold
    * that were never seen bought. Either way the money figures are partial.
    */
   readonly complete: boolean;
-  /** Back to nothing after holding some. */
   readonly closed: boolean;
   readonly trades: number;
   readonly firstAt: number | null;
   readonly lastAt: number | null;
 }
 
-/** Below this a share count is rounding, not a position. */
 const DUST = 1e-9;
 
 export function symbolBooks(
@@ -109,20 +102,11 @@ export function symbolBooks(
   }));
 }
 
-/**
- * How long this wallet keeps what it buys, on average, in seconds.
- *
- * A hold runs from a position rising above zero until it returns to zero, or
- * to `nowSeconds` if still open; top-ups and trims do not start a new hold.
- * Null when there is no hold to measure: no buys seen, or none with a time.
- */
 export function averageHoldSeconds(trades: readonly TimedTrade[], nowSeconds: number): number | null {
   const quantity = new Map<string, number>();
-  // Undefined while flat; null when the hold began at an unknown time.
   const openedAt = new Map<string, number | null>();
   const holds: number[] = [];
 
-  // Net each slot first, as in `symbolBooks`: order within a slot is unknown.
   for (const group of bySlot(trades)) {
     const symbol = group[0]!.symbol;
     const at = group.find((t) => t.blockTime !== null)?.blockTime ?? null;
@@ -146,7 +130,6 @@ export function averageHoldSeconds(trades: readonly TimedTrade[], nowSeconds: nu
   return holds.reduce((sum, h) => sum + h, 0) / holds.length;
 }
 
-/** Trades grouped by company and slot, slots in order. */
 function bySlot(trades: readonly TimedTrade[]): TimedTrade[][] {
   const groups = new Map<string, TimedTrade[]>();
   for (const trade of trades) {

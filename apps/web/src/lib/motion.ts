@@ -3,12 +3,6 @@ import { useEffect, useRef, useState } from "react";
 export const reducedMotion = (): boolean =>
   typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/* ------------------------------------------------------------- counting */
-
-/**
- * Animates a number toward its target: from zero on first render, then from
- * the current value. Formatting is left to the caller.
- */
 export function useCountUp(target: number | null, duration = 800): number | null {
   const [shown, setShown] = useState<number | null>(() =>
     target === null ? null : reducedMotion() ? target : 0,

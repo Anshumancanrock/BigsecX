@@ -1,14 +1,7 @@
-/**
- * Client for the PreStocks issuer API. `/api/stats` is undocumented but public,
- * and is the only long history for this market: cumulative daily volume and
- * weekly holder counts per symbol.
- */
-
 import { Cache, RateLimiter, getJson } from "./http.ts";
 
 const BASE = "https://prestocks.com";
 
-/** One row of /api/prestocks. */
 export interface IssuerToken {
   readonly name: string;
   readonly symbol: string;
@@ -17,17 +10,14 @@ export interface IssuerToken {
   readonly external_url: string;
   /** The Token-2022 mint. */
   readonly contract_address: string;
-  /** Issuer mark price per UI share. */
   readonly markPrice: number | null;
   readonly markValuation: number | null;
-  /** Issuer's view of the traded price per UI share. */
   readonly tokenPrice: number | null;
   readonly impliedValuation: number | null;
   /** Supply in UI (multiplier-adjusted) shares. */
   readonly supply: number | null;
 }
 
-/** /api/stats. Volume rows are CUMULATIVE, not daily. */
 export interface IssuerStats {
   readonly volume: readonly ({ readonly date: string } & Record<string, number>)[];
   readonly holders: readonly ({ readonly week: string } & Record<string, number>)[];
@@ -69,10 +59,6 @@ export class PreStocksClient {
   }
 }
 
-/**
- * Differences the cumulative volume series into per-day volume. A negative
- * delta (the issuer restating history) is clamped to zero.
- */
 export function dailyVolume(
   stats: IssuerStats,
 ): readonly { readonly date: string; readonly bySymbol: Readonly<Record<string, number>> }[] {
@@ -92,7 +78,6 @@ export function dailyVolume(
   return out;
 }
 
-/** Daily volume for one symbol, oldest first. */
 export function volumeSeries(
   stats: IssuerStats,
   symbol: string,
@@ -104,7 +89,6 @@ export function volumeSeries(
     .map((row) => ({ date: row.date, usd: row.bySymbol[symbol] ?? 0 }));
 }
 
-/** Weekly holder count for one symbol, oldest first. */
 export function holderSeries(
   stats: IssuerStats,
   symbol: string,
@@ -124,7 +108,6 @@ export function latestDailyVolume(stats: IssuerStats): Readonly<Record<string, n
   return daily[daily.length - 2]?.bySymbol ?? daily[daily.length - 1]?.bySymbol ?? {};
 }
 
-/** Latest holder count per symbol. */
 export function latestHolders(stats: IssuerStats): Readonly<Record<string, number>> {
   const row = stats.holders[stats.holders.length - 1];
   if (!row) return {};
@@ -133,7 +116,6 @@ export function latestHolders(stats: IssuerStats): Readonly<Record<string, numbe
   return out;
 }
 
-/** Week-over-week holder growth, as a fraction, per symbol. */
 export function holderGrowth(stats: IssuerStats): Readonly<Record<string, number | null>> {
   const rows = stats.holders;
   const latest = rows[rows.length - 1];
@@ -143,7 +125,6 @@ export function holderGrowth(stats: IssuerStats): Readonly<Record<string, number
   for (const symbol of stats.holderSymbols) {
     const now = latest?.[symbol] ?? 0;
     const before = previous?.[symbol] ?? 0;
-    // Growth from zero holders is undefined, not infinite.
     growth[symbol] = before > 0 ? now / before - 1 : null;
   }
   return growth;

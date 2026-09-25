@@ -22,7 +22,6 @@ const post = (a: App, path: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 
-/** Sign in as a wallet, the way the client does: one signature, one token. */
 async function signIn(a: App, wallet: TestWallet): Promise<string> {
   const body = { wallet: wallet.address };
   const res = await post(a, "/api/session", {
@@ -166,7 +165,6 @@ describe("profiles", () => {
     const bobToken = await signIn(a, bob);
     expect((await post(a, "/api/profile", { token: aliceToken, handle: "moon" })).status).toBe(200);
     expect((await post(a, "/api/profile", { token: bobToken, handle: "MOON" })).status).toBe(409);
-    // Keeping one's own handle is not a clash.
     expect((await post(a, "/api/profile", { token: aliceToken, handle: "moon", bio: "hi" })).status).toBe(200);
 
     const found = (await (await a.request("/api/handles/Moon")).json()) as { wallet: string };
@@ -199,7 +197,6 @@ describe("profiles", () => {
       uiAmount,
       valueUsd,
     });
-    // Bought, then sold two days later: one hold of two days.
     store.writeTrades([trade("s1", 1, 100, 1, 1_000_000), trade("s2", -1, -110, 2, 1_000_000 + 2 * 86_400)]);
     const body = await profileOf(a, alice.address);
     expect(body.activity.trades).toBe(2);
@@ -242,7 +239,6 @@ describe("follows", () => {
     const alice = new TestWallet();
     const token = await signIn(a, alice);
     expect((await post(a, "/api/follows", { token, followee: alice.address, follow: true })).status).toBe(400);
-    // Base58 and the right length, but not a 32-byte key.
     expect((await post(a, "/api/follows", { token, followee: "1".repeat(40), follow: true })).status).toBe(400);
     expect((await post(a, "/api/follows", { token, followee: "nope", follow: true })).status).toBe(400);
     expect((await post(a, "/api/follows", { token, followee: new TestWallet().address })).status).toBe(400);
@@ -261,7 +257,6 @@ describe("follows", () => {
     await post(a, "/api/follows", { token: viewerToken, followee: carol.address, follow: true });
     await post(a, "/api/follows", { token: viewerToken, followee: dave.address, follow: true });
     await post(a, "/api/follows", { token: await signIn(a, carol), followee: target.address, follow: true });
-    // Someone the viewer does not follow does not count.
     await post(a, "/api/follows", { token: await signIn(a, new TestWallet()), followee: target.address, follow: true });
 
     const body = await profileOf(a, target.address, viewer.address);
@@ -325,7 +320,6 @@ describe("hardening", () => {
     for (const handle of ["bigsec_support", "prestocks_official", "phantom_support", "openai", "SpaceX"]) {
       expect((await post(a, "/api/profile", { token, handle })).status).toBe(400);
     }
-    // A fan of a company is not the company.
     expect((await post(a, "/api/profile", { token, handle: "openai_fan" })).status).toBe(200);
   });
 
@@ -333,7 +327,6 @@ describe("hardening", () => {
     const { app: a } = app();
     const alice = new TestWallet();
     const token = await signIn(a, alice);
-    // Thirty-two emoji of several code points each fit a 32-character name.
     expect((await post(a, "/api/profile", { token, name: "👩\u200D💻".repeat(32) })).status).toBe(200);
     expect((await post(a, "/api/profile", { token, name: `a${"\u0301".repeat(31)}` })).status).toBe(400);
   });

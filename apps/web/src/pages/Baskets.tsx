@@ -1,8 +1,3 @@
-/**
- * Every basket: the system indexes, then community baskets. A null `weights`
- * is a valid state (a liquidity floor selected nothing), not an error.
- */
-
 import { api, type History, type IndexList, type StrategyDto } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
 import { ago, list, pct, shortAddress, weight } from "../lib/format.ts";
@@ -18,7 +13,6 @@ export function Baskets() {
   const indexes = useAsync<IndexList>((signal) => api.indexes(signal), [], { pollMs: 60_000 });
   const community = useAsync((signal) => api.strategies(signal), []);
   const fetched = useAsync<History>((signal) => api.history(365, signal), []);
-  // Each basket's figure follows the live prices between fetches (lib/live.ts).
   const history = { data: useLivePrices(fetched.data, useMarket()) };
   const nameOf = useCompanyName();
 
@@ -55,8 +49,6 @@ export function Baskets() {
               style={{ "--i": i } as React.CSSProperties}
               className="tile basket-tile cascade"
               key={index.id}
-              // Link to the current /baskets/ path; the legacy /indexes/ path still
-              // resolves but is not a navigation target.
               onClick={() => navigate(`/baskets/${index.id}`)}
             >
               <BasketCover id={index.id} weights={index.weights} />
@@ -131,10 +123,6 @@ export function Baskets() {
   );
 }
 
-/**
- * The basket's return over the available price history, the same figure its
- * own page leads with. The line keeps its height while the history loads.
- */
 function BasketGrowth({
   history,
   weights,

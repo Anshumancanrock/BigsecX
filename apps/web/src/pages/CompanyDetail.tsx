@@ -1,8 +1,3 @@
-/**
- * A company page: price chart, what the token represents, the issuer's
- * on-chain powers over it, and the trade panel.
- */
-
 import { Ticking } from "../components/Ticker.tsx";
 import { api, type IndexList, type Market, type Portfolio, type PositionResponse } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
@@ -194,7 +189,6 @@ export function CompanyDetail({
   );
 }
 
-/** The directory's verified tick, beside the company's name. */
 export function VerifiedMark() {
   return (
     <svg className="verified" width="22" height="22" viewBox="0 0 24 24" role="img" aria-label="Verified token">

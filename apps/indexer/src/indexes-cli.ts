@@ -1,8 +1,3 @@
-/**
- * Builds every index from live market data and prices one for execution against
- * live quotes: an end-to-end check from mint state to a depth-checked plan.
- */
-
 import {
   INDEX_DEFINITIONS,
   buildIndex,
@@ -26,8 +21,6 @@ const snapshot = await takeSnapshot(rpc, jupiter);
 const inputs: IndexInput[] = snapshot.tokens.map((t) => ({
   symbol: t.token.symbol,
   sectors: t.token.sectors,
-  // The market's valuation of the company (UI supply times price), which a
-  // valuation-weighted index tracks.
   impliedValuationUsd: t.marketUsd === null ? null : t.marketUsd * t.supplyUi,
   liquidityUsd: t.liquidityUsd,
   basis: t.basis,
@@ -51,7 +44,6 @@ for (const definition of INDEX_DEFINITIONS) {
   console.log(`  ${weights.map((w) => `${w.symbol} ${pct(w.weight)}`).join("   ")}`);
 }
 
-// Price one index for execution.
 const definition = definitionById(priceIndexId);
 if (!definition) {
   console.error(`\nUnknown index "${priceIndexId}"`);

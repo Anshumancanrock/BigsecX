@@ -11,7 +11,6 @@
 export interface SplitTransaction {
   readonly signatureCount: number;
   readonly signatures: Uint8Array;
-  /** Everything a signature actually signs. */
   readonly message: Uint8Array;
 }
 
@@ -42,8 +41,6 @@ export function splitTransaction(bytes: Uint8Array): SplitTransaction {
 
 export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
-  // Not constant time, and it does not need to be: both sides are public
-  // and the comparison decides whether to submit, not whether to trust.
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 }

@@ -7,7 +7,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import { smoothPath } from "../../lib/series.ts";
 
 export interface ValuePoint {
-  /** Milliseconds. */
   readonly t: number;
   readonly v: number;
 }
@@ -23,7 +22,6 @@ export function ValueChart({
   up: boolean;
   height?: number;
   onScrub?: (point: ValuePoint | null) => void;
-  /** Said in place of the line when there is none. */
   empty?: React.ReactNode;
 }) {
   const id = useId().replace(/:/g, "");
@@ -67,9 +65,6 @@ export function ValueChart({
   const values = points.map((p) => p.v);
   const min = Math.min(...values);
   const max = Math.max(...values);
-  // At least a few percent of the value tall: thin markets tick up and down
-  // by fractions of a percent every hour, and a line scaled to that noise
-  // alone draws a calm day as a seismograph.
   const floor = Math.abs(max) * 0.03;
   const spread = max - min;
   const span = Math.max(spread, floor) || 1;
@@ -100,7 +95,6 @@ export function ValueChart({
   };
 
   const point = active === null ? null : points[active]!;
-  // Redrawn for a new range, not for each new price at its end.
   const drawKey = `${points.length}-${Math.round(t0 / 3_600_000)}`;
 
   return (

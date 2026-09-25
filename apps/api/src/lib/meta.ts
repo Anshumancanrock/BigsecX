@@ -1,16 +1,9 @@
-/**
- * Per-company logo, holder count and daily volume from Jupiter's keyless token
- * directory. One request covers every mint; the result is cached for ten
- * minutes and served stale while it refreshes.
- */
-
 import { UNIVERSE } from "@ps/core";
 import { Cache } from "@ps/market";
 
 export interface TokenMeta {
   readonly iconUrl: string | null;
   readonly holders: number | null;
-  /** Bought plus sold over the last day, in USD, as the directory counts it. */
   readonly volume24hUsd: number | null;
   readonly traders24h: number | null;
   readonly verified: boolean;
@@ -30,7 +23,6 @@ interface DirectoryEntry {
 
 const finite = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
 
-/** An https URL or null: the value ends up in an <img src>, and directory entries are untrusted. */
 function safeIcon(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   try {
@@ -41,7 +33,6 @@ function safeIcon(raw: unknown): string | null {
   }
 }
 
-/** Parse the directory's answer into facts per symbol. Exported for tests. */
 export function parseDirectory(entries: readonly DirectoryEntry[]): Map<string, TokenMeta> {
   const bySymbol = new Map<string, TokenMeta>();
   for (const token of UNIVERSE) {
@@ -60,7 +51,6 @@ export function parseDirectory(entries: readonly DirectoryEntry[]): Map<string, 
   return bySymbol;
 }
 
-/** A cached loader for the directory facts, keyed by symbol. */
 export function tokenMeta(fetchImpl: typeof fetch = fetch): () => Promise<Map<string, TokenMeta>> {
   const cache = new Cache(1);
   const load = async () => {

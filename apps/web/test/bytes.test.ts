@@ -32,7 +32,6 @@ describe("bytes", () => {
       const bytes = crypto.getRandomValues(new Uint8Array(64));
       expect(toBase58(bytes)).toBe(encodeBase58(bytes));
     }
-    // Leading zeros are the classic divergence.
     const leading = new Uint8Array(64);
     leading[63] = 9;
     expect(toBase58(leading)).toBe(encodeBase58(leading));

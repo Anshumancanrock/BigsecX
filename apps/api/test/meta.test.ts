@@ -23,7 +23,6 @@ describe("token directory", () => {
       traders24h: 42,
       verified: true,
     });
-    // A mint missing from the directory is absent from the result.
     expect(facts.has("SPACEX")).toBe(false);
   });
 
@@ -43,7 +42,7 @@ describe("hourly table", () => {
     }) as unknown as Parameters<typeof intradayTable>[1];
 
   test("aligns to the hour, carries a quiet hour forward, and ends on the live price", () => {
-    const now = 10 * 3600 + 1200; // twenty minutes past the tenth hour
+    const now = 10 * 3600 + 1200;
     const closes = { OPENAI: { [8 * 3600]: 100, [10 * 3600]: 110 } };
     const table = intradayTable(closes, snapshot(now, 115), 3);
     expect(table.times).toEqual([8 * 3600, 9 * 3600, 10 * 3600, now]);

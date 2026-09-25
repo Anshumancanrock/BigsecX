@@ -1,8 +1,3 @@
-/**
- * Phone navigation: a floating bar with five tabs. The profile tab shows the
- * connected wallet's picture.
- */
-
 import { go } from "../lib/router.ts";
 import { useWallet } from "../features/wallet/WalletContext.tsx";
 import { Face } from "../features/people/Face.tsx";
@@ -29,7 +24,6 @@ export function TabBar({ path }: { path: string }) {
           path.startsWith(`${tab.href}/`) ||
           (tab.also as readonly string[]).some((a) => path === a || path.startsWith(`${a}/`)) ||
           (tab.href === "/portfolio" && mine !== null && path === mine) ||
-          // A company page is reached from home and search; it lights home.
           (tab.href === "/dashboard" && (path.startsWith("/companies") || path === "/learn"));
         const Icon = tab.icon;
         return (

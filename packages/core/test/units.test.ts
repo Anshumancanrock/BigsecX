@@ -8,21 +8,19 @@ import {
   type ScaledUiAmountConfig,
 } from "../src/units.ts";
 
-/** OPENAI mint config as read from mainnet. */
 const OPENAI: ScaledUiAmountConfig = {
   multiplier: 1,
   newMultiplier: 1.4861347,
   newMultiplierEffectiveTimestamp: 1784305800,
 };
 
-/** SPACEX mint: a 5:1 split, already in force. */
 const SPACEX: ScaledUiAmountConfig = {
   multiplier: 1,
   newMultiplier: 5,
   newMultiplierEffectiveTimestamp: 1781065800,
 };
 
-const NOW = 1789814825; // 2026-09-19, after both effective timestamps
+const NOW = 1789814825;
 
 describe("currentMultiplier", () => {
   // Vectors transcribed from the `multiplier_choice` test in
@@ -84,7 +82,6 @@ describe("rawToUi", () => {
 describe("uiToRaw", () => {
   test("round-trips the live OPENAI supply", () => {
     const raw = uiToRaw(rawToUi(1901899847455n, 9, OPENAI, NOW), 9, OPENAI, NOW);
-    // Truncation costs at most one base unit, which is 1e-9 of a share.
     expect(Number(1901899847455n - raw)).toBeLessThanOrEqual(1);
   });
 
@@ -105,14 +102,11 @@ describe("uiToRaw", () => {
 
 describe("rawPriceToUiPrice", () => {
   test("corrects the OPENAI price a naive Jupiter read produces", () => {
-    // $1000 USDC quoted 585525247 raw base units, i.e. $1707.87 per raw token.
-    // The issuer's own token price at that moment was $1135.02.
     const rawPrice = 1000 / (585525247 / 1e9);
     expect(rawPrice).toBeCloseTo(1707.87, 1);
 
     const uiPrice = rawPriceToUiPrice(rawPrice, OPENAI, NOW);
     expect(uiPrice).toBeCloseTo(1149.19, 1);
-    // Within spread of the issuer price, whereas the raw figure is 50% off.
     expect(Math.abs(uiPrice / 1135.02 - 1)).toBeLessThan(0.02);
   });
 

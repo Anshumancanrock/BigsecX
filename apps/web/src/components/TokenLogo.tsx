@@ -1,8 +1,3 @@
-/**
- * A company logo with a Solana badge. Falls back to the two-letter mark while
- * the directory URL is missing or the image fails to load.
- */
-
 import { useId, useState } from "react";
 import { markOf } from "../lib/format.ts";
 import { useMarket } from "../lib/market.ts";
@@ -36,7 +31,6 @@ export function TokenLogo({ symbol, size = 40, badge = true }: { symbol: string;
   );
 }
 
-/** The Solana mark: three slanted bars in its purple-to-green gradient. */
 export function SolanaBadge({ size = 14 }: { size?: number }) {
   const id = useId().replace(/:/g, "");
   return (

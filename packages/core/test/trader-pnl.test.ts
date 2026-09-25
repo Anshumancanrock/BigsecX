@@ -11,7 +11,6 @@ const trade = (
 
 describe("computeTraderPnl", () => {
   test("an open position marks to market against its cost", () => {
-    // Bought 1 OPENAI for $1,000; it now marks at $1,100.
     const pnl = computeTraderPnl("w", [trade("OPENAI", 1, 1_000, 10)], prices);
     expect(pnl.netInvestedUsd).toBe(1_000);
     expect(pnl.markValueUsd).toBe(1_100);
@@ -34,7 +33,6 @@ describe("computeTraderPnl", () => {
   });
 
   test("a closed round trip books the realised profit", () => {
-    // Bought at $1,000, sold at $1,200. No position left.
     const pnl = computeTraderPnl(
       "w",
       [trade("OPENAI", 1, 1_000, 10), trade("OPENAI", -1, -1_200, 20)],
@@ -66,7 +64,6 @@ describe("computeTraderPnl", () => {
       ],
       prices,
     );
-    // Realised +200 on OPENAI, unrealised +200 on SPACEX (10 x 120 - 1000).
     expect(pnl.pnlUsd).toBeCloseTo(400, 9);
   });
 
@@ -75,15 +72,12 @@ describe("computeTraderPnl", () => {
     // free money and must not be ranked.
     const pnl = computeTraderPnl("w", [trade("OPENAI", -1, -1_200, 10)], prices);
     expect(pnl.coverageComplete).toBe(false);
-    // The unexplained sale leaves a negative position that marks like a short;
-    // the figure is meaningless, and the coverage flag keeps it off the board.
     expect(pnl.positions).toEqual([{ symbol: "OPENAI", uiAmount: -1 }]);
     // Nothing was ever committed, so no return is claimed.
     expect(pnl.returnFraction).toBeNull();
   });
 
   test("order matters for the coverage check", () => {
-    // Buy then sell is covered; the same trades reversed are not.
     const covered = computeTraderPnl(
       "w",
       [trade("OPENAI", 1, 1_000, 10), trade("OPENAI", -1, -1_100, 20)],
@@ -172,21 +166,17 @@ describe("buildLeaderboard", () => {
 
 describe("a cost that cannot be believed", () => {
   test("a buy recorded as receiving money is not a profit", () => {
-    // A mainnet case: a wallet gained 0.0004 OPENAI in a transaction that also
-    // paid it $92.63 for something else.
     const pnl = computeTraderPnl("w", [trade("OPENAI", 0.0004, -92.63, 10)], prices);
     expect(pnl.coverageComplete).toBe(false);
     expect(pnl.volumeUsd).toBe(0);
   });
 
   test("an implied price far from today's is not believed", () => {
-    // $400 for 0.01 OPENAI is $40,000 a token against $1,100.
     const pnl = computeTraderPnl("w", [trade("OPENAI", 0.01, 400, 10)], prices);
     expect(pnl.coverageComplete).toBe(false);
   });
 
   test("an ordinary trade with a wide spread still counts", () => {
-    // 30% over the mark is a thin market, not an attribution error.
     const pnl = computeTraderPnl("w", [trade("OPENAI", 1, 1_430, 10)], prices);
     expect(pnl.coverageComplete).toBe(true);
     expect(pnl.netInvestedUsd).toBe(1_430);

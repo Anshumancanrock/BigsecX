@@ -45,14 +45,12 @@ export function PhoneScreen({
 }: {
   frames: ReadonlyMap<Timeframe, Frame>;
   holdings: readonly PhoneHolding[];
-  /** False while the phone is off screen: the ticking stops. */
   active: boolean;
 }) {
   const [timeframe, setTimeframe] = useState<Timeframe>("1M");
   const frame = frames.get(timeframe) ?? [...frames.values()][0]!;
   const [live, setLive] = useState(() => ({ balance: frame.balance, points: frame.points }));
 
-  // A new timeframe, or new data, starts from its own frame.
   useEffect(() => {
     setLive({ balance: frame.balance, points: frame.points });
   }, [frame]);
@@ -188,7 +186,6 @@ function StatusBar() {
   );
 }
 
-/** A number whose changed digits pop in; see `popDigits`. */
 function PopDigits({ value, className = "" }: { value: string; className?: string }) {
   const previous = useRef<Digit[] | null>(null);
   const nextKey = useRef(0);
@@ -210,14 +207,6 @@ function PopDigits({ value, className = "" }: { value: string; className?: strin
   );
 }
 
-/**
- * The portfolio line.
- *
- * On a tick the points arrive shifted by one. The group holding the line is
- * drawn at its new position and animated from one step to the right back to
- * zero, which reads as the line scrolling left; the dot is animated from its
- * old height to its new one over the same time.
- */
 function Chart({ points, range }: { points: readonly number[]; range: Frame["range"] }) {
   const line = useRef<SVGGElement>(null);
   const dot = useRef<SVGGElement>(null);
@@ -228,7 +217,6 @@ function Chart({ points, range }: { points: readonly number[]; range: Frame["ran
     const before = previous.current;
     previous.current = points;
     if (before === points || before.length !== points.length || reducedMotion()) return;
-    // Only a tick scrolls; a new timeframe simply replaces the line.
     if (before[1] !== points[0]) return;
     const timing = { duration: TICK_MS, easing: "linear" };
     line.current?.animate([{ transform: `translateX(${step}px)` }, { transform: "translateX(0px)" }], timing);

@@ -33,11 +33,9 @@ export function TradeLauncher({
   label: string;
   title: string;
   prompt: string;
-  /** Built once the amount is known; `owner` comes from the connected wallet. */
   makeRequest: (owner: string, amountUsd: number) => BuildRequest;
   className?: string;
   onSettled?: () => void;
-  /** A basket's weights, to say what it takes to buy every company in it. */
   weights?: readonly Weight[] | null | undefined;
 }) {
   const wallet = useWallet();
@@ -65,7 +63,6 @@ export function TradeLauncher({
       .then((next) => setCash(next))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        // Unknown is not zero. The build still checks, so say nothing more.
         setCashFailed(true);
       });
     return () => controller.abort();
@@ -216,7 +213,6 @@ export function TradeLauncher({
             </>
           )}
 
-          {/* Said once, before anyone spends anything. */}
           <p className="note" style={{ marginTop: 16, color: "hsl(var(--fg-faint))" }}>
             This is not stock: it is a token whose price tracks the company, set by a small market. Prices move, and
             the issuer keeps some powers over it.{" "}

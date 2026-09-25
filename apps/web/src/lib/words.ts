@@ -1,9 +1,3 @@
-/**
- * User-facing wording for protocol concepts. Screens use plain words and keep
- * the exact figure one tap away.
- */
-
-/** How a basket picks and weights what it holds. */
 export const SCHEME_WORDS: Readonly<Record<string, string>> = {
   valuation: "Bigger companies get more",
   equal: "Split evenly",
@@ -17,10 +11,6 @@ export function schemeWords(scheme: string | undefined): string {
   return SCHEME_WORDS[scheme] ?? scheme.replace(/-/g, " ");
 }
 
-/**
- * The price gap in plain words. `basis` is (market - mark) / mark; positive
- * means the market trades above the issuer's mark.
- */
 export function priceGapWords(basis: number | null): { label: string; tone: "up" | "down" | "muted" } {
   if (basis === null || !Number.isFinite(basis)) return { label: "No official price", tone: "muted" };
   const pct = Math.abs(basis * 100);
@@ -37,7 +27,6 @@ export function liquidityWords(usd: number): { label: string; tone: "up" | "down
   return { label: "Harder to sell: thin market", tone: "down" };
 }
 
-/** A fee in basis points, as a percentage: "1%", "0.5%". */
 export function feePercent(bps: number): string {
   return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
 }
@@ -115,7 +104,6 @@ export const WHAT_THIS_IS =
   "cannot invest in until they go public. You buy them with USDC, they land in your own wallet, and you " +
   "can sell them whenever the market has a buyer.";
 
-/** Said once, before anyone spends anything. */
 export const THE_HONEST_CAVEAT =
   "This is not stock. It is a token whose issuer says it tracks a company's value, and whose price is set " +
   "by a small market rather than by an exchange. Prices move, selling can be slow, and the issuer keeps " +

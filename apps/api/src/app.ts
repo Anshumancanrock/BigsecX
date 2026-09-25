@@ -1,9 +1,3 @@
-/**
- * The HTTP API. Nothing here holds a key: write routes return unsigned
- * transactions for the wallet to sign. Services are injected so tests can
- * exercise every route against fakes.
- */
-
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Services } from "./context.ts";
@@ -45,7 +39,6 @@ export function createApp(services: Services): Hono {
 
   app.use("/api/*", async (c, next) => {
     await next();
-    // Bodies echo caller-supplied strings such as strategy names.
     c.header("x-content-type-options", "nosniff");
     c.header("referrer-policy", "no-referrer");
     // Responses are wallet-specific unless a route sets its own policy (profile pictures do).
@@ -65,7 +58,6 @@ export function createApp(services: Services): Hono {
     return next();
   });
 
-  // Weighted per route: a build costs the upstream quota far more than a cached read.
   app.use("/*", throttle());
 
   registerAssetRoutes(app, services, market);
@@ -84,7 +76,6 @@ export function createApp(services: Services): Hono {
   registerMirrorRoutes(app, services, tradingMarket);
 
   app.onError((error, c) => {
-    // Malformed requests get the reason; anything else is logged, not echoed.
     if (error instanceof BadRequest) return c.json({ error: error.message }, 400);
     if (error instanceof Unauthorized) return c.json({ error: error.message }, 401);
     console.error("request failed:", error);

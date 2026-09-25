@@ -12,8 +12,6 @@ await mock.module("@ps/market", () => {
   return {
     ...actual,
     fetchSwapInstructions: async () => {
-      // SetComputeUnitPrice is discriminator 0x03 followed by a
-      // little-endian u64; the packer reads the fee straight out of it.
       const price = Buffer.alloc(9);
       price[0] = 0x03;
       price.writeBigUInt64LE(50_000n, 1);

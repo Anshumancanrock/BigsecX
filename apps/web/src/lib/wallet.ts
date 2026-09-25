@@ -47,8 +47,6 @@ interface SignMessageFeature {
   ): Promise<{ signedMessage: Uint8Array; signature: Uint8Array }[]>;
 }
 
-/* ------------------------------------------------------------- discovery */
-
 const found = new Map<string, StandardWallet>();
 const listeners = new Set<() => void>();
 
@@ -59,7 +57,6 @@ function announce(): void {
 function register(...wallets: StandardWallet[]): () => void {
   let added = false;
   for (const wallet of wallets) {
-    // Solana-capable only: the same standard carries Ethereum wallets.
     if (!wallet.chains.some((chain) => chain.startsWith("solana:"))) continue;
     if (found.has(wallet.name)) continue;
     found.set(wallet.name, wallet);
@@ -71,7 +68,6 @@ function register(...wallets: StandardWallet[]): () => void {
 
 let started = false;
 
-/** Begin discovery. Safe to call repeatedly; only the first call does work. */
 export function startDiscovery(): void {
   if (started || typeof window === "undefined") return;
   started = true;
@@ -116,8 +112,6 @@ export function hasLegacyOnlyWallet(): boolean {
   return Boolean(w["solana"] ?? w["phantom"]?.["solana"] ?? w["solflare"] ?? w["backpack"]);
 }
 
-/* ------------------------------------------------------------- connection */
-
 export class WalletError extends Error {
   constructor(message: string, cause?: unknown) {
     super(message);
@@ -138,12 +132,9 @@ export function isUserRejection(error: unknown): boolean {
 export interface Connection {
   readonly walletName: string;
   readonly address: string;
-  /** Sign every transaction in one approval. Returns base64, ready to submit. */
   signAll(transactionsBase64: readonly string[]): Promise<string[]>;
-  /** Signs arbitrary bytes, to prove wallet ownership to the API. */
   signMessage(message: string): Promise<Uint8Array>;
   disconnect(): Promise<void>;
-  /** Fires when the wallet switches account or locks. */
   onChange(listener: (address: string | null) => void): () => void;
 }
 
@@ -151,7 +142,6 @@ function feature<T>(wallet: StandardWallet, name: string): T | null {
   return (wallet.features[name] as T | undefined) ?? null;
 }
 
-/** Prefer mainnet; fall back to whatever Solana chain the account offers. */
 function chainFor(account: StandardAccount): string {
   return account.chains.includes(SOLANA_MAINNET)
     ? SOLANA_MAINNET
@@ -203,7 +193,6 @@ export async function connect(
     eventsFeature.on("change", (properties) => {
       if (!properties.accounts) return;
       const next = properties.accounts[0];
-      // An empty accounts array means locked or disconnected, not unchanged.
       account = next ?? account;
       for (const listener of changeListeners) listener(next ? next.address : null);
     });
@@ -286,8 +275,6 @@ export async function connect(
 
     async disconnect() {
       changeListeners.clear();
-      // Not every wallet implements it, and a wallet that does not is still
-      // disconnected as far as this app is concerned.
       await disconnectFeature?.disconnect().catch(() => {});
     },
 

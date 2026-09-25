@@ -18,7 +18,6 @@ import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
 const API_PORT = Number(process.env["API_PORT"] ?? 3111);
-// PORT is what hosting platforms assign; the site is the public process.
 const WEB_PORT = Number(process.env["WEB_PORT"] ?? process.env["PORT"] ?? 4000);
 const API_ORIGIN = `http://localhost:${API_PORT}`;
 
@@ -28,7 +27,6 @@ function label(name: string): string {
   return `\x1b[${COLOURS[name] ?? "37"}m${name.padEnd(7)}\x1b[0m│`;
 }
 
-/** Copies a child's output to stdout, one labelled line at a time. */
 async function pipe(name: string, stream: ReadableStream<Uint8Array>): Promise<void> {
   const decoder = new TextDecoder();
   let carry = "";
@@ -41,7 +39,6 @@ async function pipe(name: string, stream: ReadableStream<Uint8Array>): Promise<v
   if (carry) console.log(`${label(name)} ${carry}`);
 }
 
-/** Refuse to start on a port something else already holds. */
 async function assertFree(port: number, what: string): Promise<void> {
   try {
     await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(800) });
@@ -72,8 +69,6 @@ async function waitFor(url: string, timeoutMs: number): Promise<boolean> {
 await assertFree(API_PORT, "api");
 await assertFree(WEB_PORT, "web");
 
-// ---- 1. build the web app ------------------------------------------------
-// SKIP_BUILD=1 serves a bundle built earlier, e.g. in a Docker build step.
 if (process.env["SKIP_BUILD"] !== "1") {
   const build = Bun.spawn(["bun", "run", "build.ts"], {
     cwd: `${ROOT}/apps/web`,
@@ -88,7 +83,6 @@ if (process.env["SKIP_BUILD"] !== "1") {
   }
 }
 
-// ---- 2. start the three processes -----------------------------------------
 const children = [
   {
     name: "api",
@@ -98,8 +92,6 @@ const children = [
   {
     name: "indexer",
     cmd: ["bun", "run", "apps/indexer/src/index.ts"],
-    // The indexer makes hundreds of calls a pass; its own endpoint keeps them
-    // off the API's rate limit.
     env: process.env["INDEXER_RPC_URL"] ? { SOLANA_RPC_URL: process.env["INDEXER_RPC_URL"] } : {},
   },
   {
@@ -124,7 +116,6 @@ function stopAll(code: number): void {
   if (stopping) return;
   stopping = true;
   for (const { child } of children) child.kill();
-  // Give them a moment to exit cleanly, then leave.
   setTimeout(() => process.exit(code), 1_500);
 }
 
@@ -139,7 +130,6 @@ for (const { name, child } of children) {
   });
 }
 
-// ---- 3. say where to go -----------------------------------------------------
 const apiUp = await waitFor(`${API_ORIGIN}/health`, 30_000);
 const webUp = apiUp && (await waitFor(`http://localhost:${WEB_PORT}/`, 30_000));
 if (apiUp && webUp) {
