@@ -10,14 +10,16 @@
  *   SOLANA_RPC_URL     RPC endpoint
  *   INDEXER_RPC_URL    separate RPC endpoint for the indexer
  *   JUPITER_API_KEY    use Jupiter's keyed tier
- *   API_PORT, WEB_PORT
+ *   API_PORT, WEB_PORT (WEB_PORT falls back to PORT)
+ *   SKIP_BUILD=1      serve an existing apps/web/.build instead of rebuilding
  */
 
 import { resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
 const API_PORT = Number(process.env["API_PORT"] ?? 3111);
-const WEB_PORT = Number(process.env["WEB_PORT"] ?? 4000);
+// PORT is what hosting platforms assign; the site is the public process.
+const WEB_PORT = Number(process.env["WEB_PORT"] ?? process.env["PORT"] ?? 4000);
 const API_ORIGIN = `http://localhost:${API_PORT}`;
 
 const COLOURS: Record<string, string> = { build: "36", api: "35", indexer: "33", web: "32" };
@@ -71,7 +73,8 @@ await assertFree(API_PORT, "api");
 await assertFree(WEB_PORT, "web");
 
 // ---- 1. build the web app ------------------------------------------------
-{
+// SKIP_BUILD=1 serves a bundle built earlier, e.g. in a Docker build step.
+if (process.env["SKIP_BUILD"] !== "1") {
   const build = Bun.spawn(["bun", "run", "build.ts"], {
     cwd: `${ROOT}/apps/web`,
     stdout: "pipe",
