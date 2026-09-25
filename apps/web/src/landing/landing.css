@@ -688,6 +688,243 @@
   max-width: 26ch;
 }
 
+/* ------------------------------------------------------------ highlights */
+
+.highlights {
+  --chart-up: var(--up);
+  --chart-down: var(--down);
+}
+
+.highlights h2 span {
+  color: hsl(var(--fg-muted));
+}
+
+.hl-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 1.7vw, 26px);
+}
+
+.hl-figure {
+  display: grid;
+  place-items: center;
+  height: clamp(260px, 24vw, 300px);
+  padding: 22px;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: hsl(var(--card));
+}
+
+.hl-index {
+  margin-top: 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: hsl(var(--fg-muted));
+}
+
+.hl h3 {
+  margin-top: 8px;
+  font-size: clamp(18px, 1.5vw, 21px);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.hl-text {
+  max-width: 36ch;
+  margin-top: 8px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: hsl(var(--fg-muted));
+}
+
+.hl-link {
+  display: inline-block;
+  margin-top: 14px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid currentColor;
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+/* The white card each illustration sits on. */
+.hl-panel {
+  width: min(100%, 320px);
+  padding: 6px 16px;
+  border-radius: 16px;
+  background: hsl(0 0% 100%);
+  box-shadow:
+    0 1px 2px hsl(0 0% 0% / 0.05),
+    0 14px 32px -14px hsl(0 0% 0% / 0.2);
+}
+
+.hl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+}
+
+.hl-row + .hl-row {
+  border-top: 1px solid hsl(var(--line));
+}
+
+.hl-row.ghost::before {
+  content: "";
+  width: 100%;
+  height: 14px;
+  border-radius: 7px;
+  background: hsl(var(--card));
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.hl-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hl-name small {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: hsl(var(--fg-muted));
+}
+
+.hl-spark {
+  flex: 0 0 72px;
+}
+
+.hl-spark .sparkline {
+  display: block;
+  width: 100%;
+}
+
+.hl-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.hl-price small,
+.hl-step small {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.highlights .up {
+  color: hsl(var(--up));
+}
+
+.highlights .down {
+  color: hsl(var(--down));
+}
+
+.highlights .muted {
+  color: hsl(var(--fg-muted));
+}
+
+/* Second, first and third across, the winner raised; each in its metal. */
+.hl-podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 8px;
+  width: min(100%, 340px);
+}
+
+.hl-step {
+  --metal: hsl(214 15% 70%);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 8px 12px;
+  border-top: 3px solid var(--metal);
+  border-radius: 14px;
+  background: hsl(0 0% 100%);
+  box-shadow:
+    0 1px 2px hsl(0 0% 0% / 0.05),
+    0 14px 32px -14px hsl(0 0% 0% / 0.2);
+  text-align: center;
+}
+
+.hl-step.gold {
+  --metal: hsl(44 90% 55%);
+
+  order: 2;
+  padding-bottom: 30px;
+}
+
+.hl-step.silver {
+  order: 1;
+}
+
+.hl-step.bronze {
+  --metal: hsl(24 70% 55%);
+
+  order: 3;
+}
+
+.hl-step b {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hl-step.open {
+  border-top-style: dashed;
+  box-shadow: none;
+  background: hsl(0 0% 100% / 0.6);
+}
+
+.hl-open-face {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px dashed hsl(var(--fg-muted));
+  border-radius: 50%;
+  font-size: 15px;
+  color: hsl(var(--fg-muted));
+}
+
+.hl-step.ghost {
+  height: 150px;
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.hl-step.gold.ghost {
+  height: 176px;
+}
+
+@media (max-width: 900px) {
+  .hl-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hl-row.ghost::before,
+  .hl-step.ghost {
+    animation: none;
+  }
+}
+
 /* ----------------------------------------------------------- closing cta */
 
 .closer {
