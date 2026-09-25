@@ -1,15 +1,10 @@
 /**
- * Shapes returned to clients.
- *
- * Deliberately separate from the internal types. A response format is a
- * contract with a frontend; letting it track internal refactors by accident
- * breaks callers for no reason.
- *
- * Nulls are preserved rather than coerced. A missing mark price means the
- * issuer published none, and a UI needs to render that as unknown rather than
- * as zero or as fair value.
+ * Response shapes, kept apart from internal types so a refactor does not change
+ * the API contract. Nulls are preserved: a missing mark price means the issuer
+ * published none, which a client must show as unknown rather than zero.
  */
 
+import type { TokenMeta } from "./meta.ts";
 import type { MarketSnapshot, TokenView } from "@ps/market";
 
 export interface TokenDto {
@@ -55,18 +50,40 @@ export function toTokenDto(view: TokenView): TokenDto {
   };
 }
 
-export function toMarketDto(snapshot: MarketSnapshot) {
+/**
+ * The /api/market response.
+ *
+ * @param change24h 24-hour change per symbol in percent, from recorded prices.
+ *   Replaces the aggregator's figure, which swings widely on markets this thin.
+ */
+export function toMarketDto(
+  snapshot: MarketSnapshot,
+  change24h: ReadonlyMap<string, number> = new Map(),
+  /** Logo, holders and the day's volume per symbol; absent fields are null. */
+  meta: ReadonlyMap<string, TokenMeta> = new Map(),
+) {
   return {
     takenAt: snapshot.takenAt.toISOString(),
     epoch: snapshot.epoch,
-    tokens: snapshot.tokens.map(toTokenDto),
+    tokens: snapshot.tokens.map((view) => {
+      const dto = toTokenDto(view);
+      const own = change24h.get(view.token.symbol);
+      const facts = meta.get(view.token.symbol);
+      return {
+        ...dto,
+        ...(own === undefined ? {} : { change24hPct: own }),
+        iconUrl: facts?.iconUrl ?? null,
+        holders: facts?.holders ?? null,
+        volume24hUsd: facts?.volume24hUsd ?? null,
+        traders24h: facts?.traders24h ?? null,
+        verified: facts?.verified ?? false,
+      };
+    }),
     totalLiquidityUsd: snapshot.totalLiquidityUsd,
     pendingFeeChange: snapshot.pendingFeeChange,
     degraded: snapshot.degraded,
     priceFeedError: snapshot.priceFeedError,
-    // Stated on every market response rather than buried in documentation.
-    // These are not our powers, but a user trading through us is exposed to
-    // them and has no other way to learn of them from this API.
+    // Issuer powers every holder is exposed to, stated on every market response.
     disclosures: [
       "Each mint has a permanent delegate that can transfer holders' tokens without consent.",
       "Each mint has a freeze authority that can immobilise any account.",
