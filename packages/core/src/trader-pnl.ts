@@ -1,30 +1,8 @@
 /**
- * Profit and loss reconstructed from observed trades.
- *
- * This replaces an earlier holdings-difference approach that could not tell a
- * deposit from a good trade. Every indexed trade carries both the signed share
- * change and its USD value, so cost basis is directly observable and the
- * result is an actual profit figure rather than a proxy for one.
- *
- * Accounting, stated plainly because a leaderboard that hides its method is
- * not trustworthy:
- *
- *   netInvested = sum of signed trade values. A buy spends (positive), a sell
- *                 returns (negative). A wallet that has sold more than it
- *                 bought has a negative number here.
- *   position    = sum of signed share changes, per symbol.
- *   markValue   = position valued at the current price.
- *   pnl         = markValue - netInvested
- *
- * That identity holds whether a position was closed, is still open, or both,
- * so realised and unrealised profit need no separate treatment.
- *
- * The honest caveat, which callers must surface: this only sees trades since
- * indexing began. A wallet holding a position bought earlier shows its later
- * trades against a mark value that includes shares this never priced, so its
- * figure is wrong until the whole position turns over. `coverage` reports
- * whether the wallet's reconstructed position ever went negative, which is the
- * signature of a pre-existing holding being sold.
+ * Profit and loss from observed trades: pnl = markValue - netInvested, where
+ * netInvested sums signed trade values (buys positive) and markValue prices the
+ * net position now; this holds for open and closed positions alike. Only trades
+ * since indexing began are seen; `coverageComplete` flags unreliable figures.
  */
 
 export interface TradeRecord {
@@ -44,11 +22,8 @@ export interface TraderPnl {
   readonly volumeUsd: number;
   readonly netInvestedUsd: number;
   /**
-   * The most capital the wallet ever had committed at once.
-   *
-   * This, not the closing balance, is the denominator for return. After a
-   * round trip `netInvestedUsd` collapses to the profit or loss itself, so
-   * dividing by it reports every losing trade as exactly -100%.
+   * The most capital committed at once, and the denominator for return: after
+   * a round trip `netInvestedUsd` collapses to the profit or loss itself.
    */
   readonly peakInvestedUsd: number;
   readonly markValueUsd: number;
@@ -57,11 +32,35 @@ export interface TraderPnl {
   readonly returnFraction: number | null;
   readonly positions: readonly { readonly symbol: string; readonly uiAmount: number }[];
   /**
-   * False when this wallet's profit figure cannot be trusted, either because
-   * it sold shares acquired before indexing began, or because one of its
-   * trades had no observable cost.
+   * False when the profit figure cannot be trusted: the wallet sold shares
+   * acquired before indexing began, or a trade had no believable cost.
    */
   readonly coverageComplete: boolean;
+}
+
+/**
+ * How far a trade's implied price may sit from today's before its cost is
+ * treated as unknown rather than believed.
+ */
+const MAX_PRICE_RATIO = 4;
+
+/**
+ * Whether a trade's recorded cost can be believed.
+ *
+ * The indexer attributes a transaction's cash to the token leg it found, which
+ * is wrong when the transaction also moved other assets. A buy must cost money,
+ * a sale must return it, and the implied price must be within MAX_PRICE_RATIO
+ * of today's. A failing trade keeps its shares but loses its cost.
+ */
+export function believableCost(
+  trade: Pick<TradeRecord, "uiAmount" | "valueUsd">,
+  priceUsd: number | undefined,
+): boolean {
+  if (trade.valueUsd === null || trade.uiAmount === 0) return false;
+  if (Math.sign(trade.valueUsd) !== Math.sign(trade.uiAmount)) return false;
+  if (priceUsd === undefined || priceUsd <= 0) return true;
+  const implied = Math.abs(trade.valueUsd / trade.uiAmount);
+  return implied <= priceUsd * MAX_PRICE_RATIO && implied >= priceUsd / MAX_PRICE_RATIO;
 }
 
 export function computeTraderPnl(
@@ -77,8 +76,7 @@ export function computeTraderPnl(
   let volumeUsd = 0;
   let unpriced = false;
 
-  // Trades must be applied in execution order for the running-minimum check
-  // to mean anything.
+  // The running-minimum check needs trades in execution order.
   for (const trade of [...trades].sort((a, b) => a.slot - b.slot)) {
     const next = (position.get(trade.symbol) ?? 0) + trade.uiAmount;
     position.set(trade.symbol, next);
@@ -86,11 +84,10 @@ export function computeTraderPnl(
     const lowest = runningMinimum.get(trade.symbol);
     if (lowest === undefined || next < lowest) runningMinimum.set(trade.symbol, next);
 
-    if (trade.valueUsd === null) {
-      // The shares moved but the cost did not: a SOL-routed swap or a plain
-      // transfer. Counting the shares in mark value while counting nothing in
-      // cost would manufacture profit out of a deposit, so the wallet is
-      // marked untrustworthy instead.
+    if (trade.valueUsd === null || !believableCost(trade, priceBySymbol.get(trade.symbol))) {
+      // Shares moved without a credible cost (an unpriced swap, a transfer, or
+      // cash from another leg). Marking the shares with no cost would turn a
+      // deposit into profit, so the wallet is flagged instead.
       unpriced = true;
       continue;
     }
@@ -114,9 +111,7 @@ export function computeTraderPnl(
     !unpriced && [...runningMinimum.values()].every((low) => low >= -1e-9);
 
   const pnlUsd = markValueUsd - netInvestedUsd;
-  // Return is profit over the most that was ever committed, not over what is
-  // left committed. A wallet that only ever sold committed nothing and so has
-  // no meaningful return.
+  // A wallet that only ever sold committed nothing, so it has no return.
   const atRisk = peakInvestedUsd;
 
   return {
@@ -138,9 +133,8 @@ export interface LeaderboardOptions {
   readonly minVolumeUsd?: number;
   readonly limit?: number;
   /**
-   * Drop wallets whose cost basis is incomplete. On by default: a wallet that
-   * sold a pre-existing bag shows an enormous fake profit and would top the
-   * board.
+   * Drop wallets whose cost basis is incomplete. On by default, since selling a
+   * pre-existing bag shows as a large fake profit.
    */
   readonly requireCoverage?: boolean;
   readonly sortBy?: "pnl" | "return" | "volume";

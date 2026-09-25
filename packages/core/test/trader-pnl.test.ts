@@ -71,13 +71,12 @@ describe("computeTraderPnl", () => {
   });
 
   test("flags a wallet that sold a bag it held before indexing began", () => {
-    // Only a sell is observed: the buy happened before we were watching, so
-    // this looks like free money and must not be ranked.
+    // Only a sell is observed; the buy predates indexing, so this looks like
+    // free money and must not be ranked.
     const pnl = computeTraderPnl("w", [trade("OPENAI", -1, -1_200, 10)], prices);
     expect(pnl.coverageComplete).toBe(false);
-    // The unexplained sale leaves a negative position, which marks like a
-    // short. The number is not meaningful, which is exactly why the coverage
-    // flag exists to keep this wallet off the board.
+    // The unexplained sale leaves a negative position that marks like a short;
+    // the figure is meaningless, and the coverage flag keeps it off the board.
     expect(pnl.positions).toEqual([{ symbol: "OPENAI", uiAmount: -1 }]);
     // Nothing was ever committed, so no return is claimed.
     expect(pnl.returnFraction).toBeNull();
@@ -168,5 +167,37 @@ describe("buildLeaderboard", () => {
       Array.from({ length: 40 }, (_, i) => [`w${i}`, [trade("OPENAI", 10, 9_000 + i, 1)]] as const),
     );
     expect(buildLeaderboard(many, priced, { limit: 5 })).toHaveLength(5);
+  });
+});
+
+describe("a cost that cannot be believed", () => {
+  test("a buy recorded as receiving money is not a profit", () => {
+    // A mainnet case: a wallet gained 0.0004 OPENAI in a transaction that also
+    // paid it $92.63 for something else.
+    const pnl = computeTraderPnl("w", [trade("OPENAI", 0.0004, -92.63, 10)], prices);
+    expect(pnl.coverageComplete).toBe(false);
+    expect(pnl.volumeUsd).toBe(0);
+  });
+
+  test("an implied price far from today's is not believed", () => {
+    // $400 for 0.01 OPENAI is $40,000 a token against $1,100.
+    const pnl = computeTraderPnl("w", [trade("OPENAI", 0.01, 400, 10)], prices);
+    expect(pnl.coverageComplete).toBe(false);
+  });
+
+  test("an ordinary trade with a wide spread still counts", () => {
+    // 30% over the mark is a thin market, not an attribution error.
+    const pnl = computeTraderPnl("w", [trade("OPENAI", 1, 1_430, 10)], prices);
+    expect(pnl.coverageComplete).toBe(true);
+    expect(pnl.netInvestedUsd).toBe(1_430);
+  });
+
+  test("such a wallet is kept off the leaderboard", () => {
+    const board = buildLeaderboard(
+      new Map([["w", [trade("OPENAI", 0.0004, -92.63, 10)]]]),
+      prices,
+      { minVolumeUsd: 0 },
+    );
+    expect(board).toHaveLength(0);
   });
 });
