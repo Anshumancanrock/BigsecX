@@ -1,0 +1,1587 @@
+/*
+ * Landing page: a full-viewport mint hero with a floating pill nav, a press
+ * bar, a prose block that fades from black to grey, then two feature sections
+ * (three tall cards with captions below them, then one full-width card).
+ */
+
+/* ------------------------------------------------------------------- nav */
+
+.nav {
+  /* Absolute, not fixed: the pill belongs to the hero and scrolls away with it
+     instead of overlapping every section below. */
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* 58px tall; the mark sits closer to the edge than the buttons do. */
+  padding: 8px 8px 8px 13px;
+  border-radius: 40px;
+  /* Solid rather than frosted: the nav is fixed, so a backdrop blur was
+     recomputed on every frame of every scroll, and at 90% black it showed
+     nothing anyway. */
+  background: rgb(0 0 0 / 0.92);
+  color: #fff;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.16);
+  max-width: calc(100vw - 32px);
+}
+
+.nav-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #fff;
+  color: #000;
+  flex: none;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.nav-link {
+  padding: 14px 15px;
+  border-radius: var(--r-pill);
+  font-size: 16px;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  color: hsl(0 0% 100% / 0.92);
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-link:hover {
+  background: hsl(0 0% 100% / 0.1);
+  color: #fff;
+}
+
+.nav-cta {
+  margin-left: 5px;
+  padding: 12px 21px;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: #000;
+  font-size: 16px;
+  line-height: 1.1;
+  font-weight: 400;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.nav-cta:hover {
+  background: hsl(var(--mint));
+}
+
+/* ------------------------------------------------------------------ hero */
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: hidden;
+  /* The mint field is a soft vertical wash, lighter at the centre. */
+  background: linear-gradient(175deg, hsl(149 82% 86%) 0%, hsl(149 78% 82%) 55%, hsl(150 62% 87%) 100%);
+}
+
+/*
+ * The concentric arcs: a repeating radial gradient centred far below the
+ * fold, so the rings need no image.
+ */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: repeating-radial-gradient(
+    circle at 50% 80%,
+    hsl(0 0% 100% / 0) 0 150px,
+    hsl(0 0% 100% / 0.13) 150px 320px
+  );
+  pointer-events: none;
+}
+
+.btn-dark {
+  padding: 15px 24px;
+  border-radius: var(--r-pill);
+  background: #000;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 400;
+  white-space: nowrap;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.btn-dark:hover {
+  background: hsl(0 0% 15%);
+}
+
+.btn-dark:active {
+  transform: scale(0.98);
+}
+
+/* ------------------------------------------------------------ press strip */
+
+.press {
+  border-bottom: 1px solid hsl(var(--line));
+  background: hsl(var(--surface));
+}
+
+.press-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(24px, 6vw, 72px);
+  padding: 22px var(--gutter);
+  max-width: var(--maxw);
+  margin: 0 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.press-row::-webkit-scrollbar {
+  display: none;
+}
+
+.press-label {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: none;
+}
+
+.press-item {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex: none;
+  opacity: 0.85;
+}
+
+/* ---------------------------------------------------------- copy trading */
+
+/*
+ * The copy-trading section: a heading row, then a warm panel sized by the
+ * headline block in its middle. Nine cards orbit around the headline; the six
+ * behind it are blurred (their own blur plus the headline's backdrop blur)
+ * and the three in front are sharp. Phones show four, pushed half off the
+ * edges, on smaller orbits.
+ */
+.tr {
+  padding-top: 80px;
+  font-family: Satoshi, var(--font-sans);
+  font-size: 16px;
+  line-height: 24px;
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tr-head {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tr-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.tr-eyebrow-box {
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgb(26 26 26 / 0.5);
+}
+
+.tr-title {
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+}
+
+.tr-title span {
+  display: block;
+}
+
+.tr-muted {
+  color: rgb(0 0 0 / 0.5);
+}
+
+.tr-panel {
+  position: relative;
+  margin-top: 56px;
+  overflow: hidden;
+  background: #f2efea;
+}
+
+.tr-pod {
+  position: absolute;
+  z-index: 0;
+}
+
+.tr-pod.sharp {
+  z-index: 20;
+}
+
+/*
+ * The blur sits on the card inside the moving layer, not on the pod around
+ * it: blurring the pod redraws the blur every frame of the orbit, while on
+ * the card it is drawn once and moved as a layer.
+ */
+.tr-pod:not(.sharp) .tr-card {
+  filter: blur(2px);
+}
+
+/* Off screen, the cards stop drifting. */
+.tr:not(.live) .tr-orbit {
+  animation-play-state: paused;
+}
+
+.tr-pod-1 {
+  top: 1%;
+  left: -24px;
+}
+.tr-pod-2 {
+  top: 4%;
+  right: -32px;
+}
+.tr-pod-3 {
+  bottom: 4%;
+  left: -32px;
+}
+.tr-pod-4 {
+  right: -24px;
+  bottom: 1%;
+}
+.tr-pod-5,
+.tr-pod-6,
+.tr-pod-7,
+.tr-pod-8,
+.tr-pod-9 {
+  display: none;
+}
+
+/* Round a circle once a period, turning back as it goes so the card itself
+   never rotates: it drifts, it does not spin. */
+.tr-orbit {
+  animation: tr-orbit var(--pod-dur, 32s) linear infinite;
+  will-change: transform;
+}
+
+.tr-orbit.reverse {
+  animation-direction: reverse;
+}
+
+@keyframes tr-orbit {
+  from {
+    transform: rotate(0turn) translateX(calc(var(--pod-r, 26px) * var(--pod-scale, 1))) rotate(0turn);
+  }
+  to {
+    transform: rotate(1turn) translateX(calc(var(--pod-r, 26px) * var(--pod-scale, 1))) rotate(-1turn);
+  }
+}
+
+@media (max-width: 767px) {
+  .tr-orbit {
+    --pod-scale: 0.38;
+  }
+}
+
+/* Nearly opaque rather than frosted: a backdrop blur under a moving card is
+   recomputed every frame, and over this flat panel it showed nothing. */
+.tr-card {
+  padding: 12px 16px;
+  background: rgb(250 250 247 / 0.94);
+  box-shadow:
+    0 1px 3px 0 rgb(0 0 0 / 0.1),
+    0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+.tr-pod:not(.sharp) .tr-card {
+  opacity: 0.8;
+}
+
+.tr-card-body {
+  width: 224px;
+}
+
+.tr-card-top,
+.tr-card-foot {
+  display: flex;
+  align-items: center;
+}
+
+.tr-card-top {
+  gap: 8px;
+}
+
+.tr-card-foot {
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tr-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.tr-handle,
+.tr-note,
+.tr-symbol {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tr-handle {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.tr-ago,
+.tr-size {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 15px;
+  color: rgb(0 0 0 / 0.5);
+}
+
+.tr-ago {
+  margin-left: auto;
+}
+
+.tr-note {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 19.5px;
+  letter-spacing: -0.025em;
+}
+
+.tr-side {
+  flex: none;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.tr-side.buy {
+  background: rgb(88 198 105 / 0.15);
+  color: #58c669;
+}
+
+.tr-side.sell {
+  background: rgb(255 69 58 / 0.1);
+  color: #ff453a;
+}
+
+.tr-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 700;
+}
+
+.tr-symbol {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.tr-change {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tr-change.up {
+  color: #58c669;
+}
+
+.tr-change.down {
+  color: #ff453a;
+}
+
+.tr-centre {
+  position: relative;
+  z-index: 10;
+  padding: 128px 24px;
+  text-align: center;
+}
+
+.tr-headline {
+  font-size: 48px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.tr-lede {
+  max-width: 448px;
+  margin: 16px auto 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-wrap: balance;
+  color: rgb(0 0 0 / 0.5);
+}
+
+@media (min-width: 640px) {
+  .tr-headline {
+    font-size: 60px;
+  }
+}
+
+@media (min-width: 768px) {
+  .tr-pod:not(.sharp) .tr-card {
+    filter: blur(3px);
+  }
+  .tr-card-body {
+    width: 256px;
+  }
+  .tr-pod-1 {
+    top: 22%;
+    left: 8%;
+  }
+  .tr-pod-2 {
+    top: 16%;
+    right: 6%;
+  }
+  .tr-pod-3 {
+    bottom: 26%;
+    left: 4%;
+  }
+  .tr-pod-4 {
+    right: 8%;
+    bottom: 20%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .tr {
+    padding-top: 112px;
+  }
+  .tr-head {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .tr-title {
+    max-width: 576px;
+    font-size: 40px;
+    text-align: right;
+  }
+  .tr-centre {
+    padding: 176px 24px;
+  }
+  .tr-headline {
+    font-size: 72px;
+  }
+  .tr-pod-5 {
+    display: block;
+    top: 7%;
+    left: 26%;
+  }
+  .tr-pod-6 {
+    display: block;
+    top: 8%;
+    right: 26%;
+  }
+  .tr-pod-9 {
+    display: block;
+    bottom: 8%;
+    left: 38%;
+  }
+}
+
+@media (min-width: 1280px) {
+  .tr-pod-7 {
+    display: block;
+    top: 48%;
+    left: 4%;
+  }
+  .tr-pod-8 {
+    display: block;
+    top: 46%;
+    right: 4%;
+  }
+}
+
+.tr-head,
+.tr-panel {
+  transform: translateY(16px);
+  transition: transform 0.6s ease;
+}
+
+.tr-panel {
+  transition-delay: 0.1s;
+}
+
+.tr.in .tr-head,
+.tr.in .tr-panel {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tr-orbit {
+    animation: none;
+  }
+  .tr-head,
+  .tr-panel {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ----------------------------------------------------------------- prose */
+
+.prose {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(32px, 7vw, 108px);
+  padding: clamp(72px, 10vw, 132px) 0;
+}
+
+.prose p {
+  font-size: clamp(20px, 2.25vw, 32px);
+  line-height: 1.2;
+  letter-spacing: -0.05em;
+  /* The body is grey and the emphasised clause black; the black clauses sit at
+     the start of the left column and the end of the right, pulling the eye across. */
+  color: hsl(var(--fg-muted));
+}
+
+.prose b {
+  font-weight: inherit;
+  color: hsl(var(--fg));
+}
+
+/* -------------------------------------------------------------- features */
+
+.section {
+  padding-bottom: clamp(64px, 9vw, 116px);
+}
+
+.section h2 {
+  font-size: clamp(32px, 4.5vw, 64px);
+  margin-bottom: clamp(28px, 4vw, 46px);
+}
+
+.section.center {
+  text-align: center;
+}
+
+.section.center h2 {
+  position: relative;
+  z-index: 1;
+  padding: clamp(60px, 9vw, 116px) 0;
+  margin-bottom: clamp(12px, 2vw, 24px);
+}
+
+/* Huge overlapping hairline circles behind the centred heading. */
+.rings {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rings span {
+  position: absolute;
+  width: min(430px, 44vw);
+  aspect-ratio: 1;
+  border: 1px solid hsl(var(--line));
+  border-radius: 50%;
+}
+
+.rings span:nth-child(1) { transform: translateX(-46%); }
+.rings span:nth-child(3) { transform: translateX(46%); }
+
+.ring-wrap {
+  position: relative;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 1.7vw, 26px);
+}
+
+.card-figure {
+  height: clamp(210px, 21vw, 272px);
+  border-radius: var(--r-md);
+  background: hsl(var(--card));
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  overflow: hidden;
+}
+
+.card-caption {
+  margin-top: 18px;
+  font-size: clamp(16px, 1.4vw, 20px);
+  line-height: 1.18;
+  letter-spacing: -0.05em;
+  max-width: 26ch;
+}
+
+/* The full-width card that closes each feature section. */
+.card-wide {
+  margin-top: clamp(14px, 1.7vw, 26px);
+  border-radius: var(--r-md);
+  background: hsl(var(--card));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 5vw, 64px);
+  padding: clamp(28px, 4vw, 44px);
+  min-height: 210px;
+  flex-wrap: wrap;
+  text-align: left;
+}
+
+.card-wide > .fig {
+  width: auto;
+  flex: 0 1 380px;
+}
+
+.card-wide p {
+  font-size: clamp(17px, 1.55vw, 22px);
+  line-height: 1.18;
+  letter-spacing: -0.05em;
+  max-width: 26ch;
+}
+
+/* ----------------------------------------------------------- closing cta */
+
+.closer {
+  text-align: center;
+  padding: clamp(80px, 12vw, 172px) 0 clamp(48px, 7vw, 92px);
+}
+
+.closer h2 {
+  font-size: clamp(36px, 5vw, 72px);
+  line-height: 1.25;
+  margin-bottom: 40px;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.foot {
+  border-top: 1px solid hsl(var(--line));
+  padding: 48px 0 64px;
+}
+
+.foot-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.foot-cols {
+  display: flex;
+  gap: clamp(36px, 7vw, 92px);
+  flex-wrap: wrap;
+}
+
+.foot-col h4 {
+  font-size: 13px;
+  font-weight: 500;
+  color: hsl(var(--fg-muted));
+  letter-spacing: 0;
+  margin-bottom: 14px;
+}
+
+.foot-col a {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.foot-col a:hover {
+  color: hsl(var(--olive));
+}
+
+.foot-social {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* ----------------------------------------------------------- responsive */
+
+@media (max-width: 900px) {
+  .prose,
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nav-links {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- figures */
+
+.fig {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.fig-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fig-key {
+  flex: none;
+  width: 86px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: hsl(var(--fg-muted));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fig-key.wide {
+  width: auto;
+  flex: 1;
+}
+
+.fig-bar {
+  flex: 1;
+  height: 9px;
+  border-radius: var(--r-pill);
+  background: hsl(var(--fg) / 0.07);
+  overflow: hidden;
+}
+
+.fig-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: hsl(var(--olive));
+}
+
+.fig-val {
+  flex: none;
+  font-size: 13px;
+  text-align: right;
+  min-width: 66px;
+}
+
+.fig-note {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: hsl(var(--fg-muted));
+}
+
+.fig-huge {
+  font-size: clamp(46px, 5.6vw, 68px);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.fig-unit {
+  font-size: 15px;
+  color: hsl(var(--fg-muted));
+}
+
+.fig-fee,
+.fig-custody {
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+}
+
+.fig-movers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+
+.mover {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13.5px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid hsl(var(--line));
+}
+
+/* Presence dots: filled means the issuer holds that power over your tokens. */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: hsl(var(--fg) / 0.15);
+}
+
+.dot.on {
+  background: hsl(var(--down));
+}
+
+.dot.off {
+  background: hsl(var(--up));
+}
+
+.custody-chain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.custody-node {
+  padding: 9px 14px;
+  border-radius: var(--r-pill);
+  background: hsl(var(--fg) / 0.07);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.custody-node.ghost {
+  background: none;
+  border: 1px dashed hsl(var(--fg) / 0.24);
+  color: hsl(var(--fg-muted));
+}
+
+.custody-link {
+  width: 1px;
+  height: 15px;
+  background: hsl(var(--fg) / 0.24);
+}
+
+.stack {
+  display: flex;
+  width: min(360px, 42vw);
+  height: 15px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: hsl(var(--fg) / 0.07);
+}
+
+.stack i {
+  display: block;
+  height: 100%;
+  background: hsl(var(--olive));
+  border-right: 1.5px solid hsl(var(--card));
+}
+
+.stack i:last-child {
+  border-right: 0;
+}
+
+.stack-empty {
+  width: 100%;
+  background: hsl(var(--fg) / 0.07);
+}
+
+.stack-keys {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: hsl(var(--fg-muted));
+}
+
+.stack-keys b {
+  font-weight: 500;
+  color: hsl(var(--fg));
+}
+
+/* A skeleton that reads as "loading", not as "zero". */
+.skeleton .fig-bar i {
+  background: hsl(var(--fg) / 0.12);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+/* ------------------------------------------------------------ phone hero */
+
+/*
+ * The hero content, stacked and centred under the nav: headline, phone, one
+ * line and one button. 76px headline at 1.04 leading and -0.05em tracking,
+ * a 400px window onto the phone whose last 80px fade out, set in Satoshi.
+ */
+.phone-hero {
+  position: relative;
+  z-index: 2;
+  padding: 132px var(--gutter) 64px;
+  text-align: center;
+  font-family: Satoshi, var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.phone-hero h1 {
+  max-width: 48rem;
+  margin: 0 auto;
+  font-size: 48px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: #1a1a1a;
+}
+
+@media (min-width: 640px) {
+  .phone-hero h1 {
+    font-size: 60px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .phone-hero {
+    padding-top: 140px;
+  }
+  .phone-hero h1 {
+    font-size: 76px;
+    line-height: 1.04;
+  }
+}
+
+/*
+ * The 400px window onto the phone, 24px under the headline, with 14px of
+ * headroom and extra width so the phone can lean without being clipped.
+ * Masked rather than overlaid, so the fade shows the mint behind it.
+ */
+.phone-stage {
+  position: relative;
+  width: min(446px, 100%);
+  height: 414px;
+  margin: 10px auto 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 80px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 80px), transparent);
+}
+
+.phone-gl,
+.phone-css {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+/* Carries the transform that puts the screen on the glass. */
+.phone-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.phone-sub {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: rgb(0 0 0 / 0.5);
+}
+
+.phone-marks {
+  display: inline-flex;
+  margin-right: 4px;
+  vertical-align: text-bottom;
+}
+
+.phone-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px hsl(149 78% 84%);
+}
+
+/* Letters overlap by 4px, less than logos would: a letter with a covered edge
+   stops reading as itself. */
+.phone-mark + .phone-mark {
+  margin-left: -4px;
+}
+
+.phone-sub-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  border-radius: 50%;
+  vertical-align: text-bottom;
+}
+
+.phone-sub-badge.up {
+  background: rgb(88 198 105 / 0.15);
+  color: #58c669;
+}
+
+.phone-sub-badge.down {
+  background: rgb(255 69 58 / 0.1);
+  color: #ff453a;
+}
+
+.phone-cta {
+  margin-top: 24px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: #1a1a1a;
+  color: #fafaf7;
+  font-family: Satoshi, var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  transition: opacity 0.2s;
+}
+
+.phone-cta:hover {
+  opacity: 0.8;
+}
+
+/* Everything rises 16px into place on arrival, a beat apart. */
+.phone-hero .rise {
+  animation: phone-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.phone-hero .rise:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.phone-hero .rise:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.phone-hero .rise:nth-child(4) {
+  animation-delay: 0.24s;
+}
+
+@keyframes phone-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --------------------------------------------------------- phone screen */
+
+/* The screen at its design size. The 3D scene or the flat frame scales it. */
+.ps-root {
+  position: relative;
+  width: 390px;
+  height: 845px;
+  overflow: hidden;
+  border-radius: 58.96px;
+  background: #fff;
+  color: #111;
+  font-family: Satoshi, var(--font-sans);
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.ps-app {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ps-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #111;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ps-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 24px 0;
+}
+
+.ps-tabs-row {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ps-tab {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: rgb(0 0 0 / 0.25);
+}
+
+.ps-tab.on {
+  color: #111;
+}
+
+.ps-avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.07);
+  font-size: 17px;
+  font-weight: 600;
+  color: #111;
+}
+
+.ps-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-top: 8px;
+}
+
+.ps-balance-block {
+  padding: 8px 24px 0;
+}
+
+.ps-balance {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: #111;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-cents {
+  color: rgb(0 0 0 / 0.35);
+}
+
+.ps-change {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-change.down,
+.ps-row-change.down {
+  color: #ff453a;
+}
+
+.ps-change.up,
+.ps-row-change.up {
+  color: #58c669;
+}
+
+.ps-pills {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 24px;
+}
+
+.ps-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgb(0 0 0 / 0.35);
+}
+
+/* The selected timeframe's glass thumb. */
+.ps-pill.on {
+  color: #fff;
+  background: #1e1e20;
+  box-shadow:
+    inset 0 1px #ffffff2e,
+    0 2px 8px #14141440;
+}
+
+.ps-chart {
+  margin-top: 4px;
+}
+
+.ps-chart svg {
+  display: block;
+  overflow: visible;
+}
+
+.ps-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 20px 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  color: #edf3f4;
+  background: linear-gradient(135deg, #07161a, #123038);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+}
+
+.ps-card-mark {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.ps-card-text {
+  padding-right: 24px;
+}
+
+.ps-card-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ps-card-body {
+  font-size: 13.5px;
+  line-height: 1.375;
+  color: rgb(237 243 244 / 0.7);
+}
+
+.ps-card-dots {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ps-card-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.25);
+}
+
+.ps-card-dots span.on {
+  width: 14px;
+  background: rgb(255 255 255 / 0.8);
+}
+
+.ps-card-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 18px;
+  color: rgb(255 255 255 / 0.4);
+}
+
+.ps-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 0 24px;
+}
+
+.ps-section-head div {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+}
+
+.ps-section-head span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111;
+}
+
+.ps-rows {
+  margin-top: 4px;
+  padding: 0 24px;
+}
+
+.ps-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  padding: 10px 8px;
+  border-radius: 12px;
+}
+
+.ps-logo {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  font-size: 18.5px;
+  font-weight: 700;
+}
+
+.ps-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ps-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111;
+}
+
+.ps-badge {
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #58c669;
+  background: rgb(88 198 105 / 0.1);
+}
+
+.ps-row-sub {
+  font-size: 14px;
+  color: rgb(0 0 0 / 0.4);
+}
+
+.ps-row-right {
+  text-align: right;
+}
+
+.ps-row-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-row-change {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-buttons {
+  position: absolute;
+  right: 24px;
+  bottom: 28px;
+  left: 24px;
+  display: flex;
+  gap: 16px;
+}
+
+/* Glass button. */
+.ps-glass-button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  background: #202022;
+  box-shadow:
+    inset 0 1px #ffffff38,
+    inset 0 -1px #00000059,
+    inset 0 0 0 1px #ffffff0d,
+    0 4px 12px #1414164d;
+}
+
+.ps-home {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  z-index: 50;
+  width: 130px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.85);
+  transform: translateX(-50%);
+}
+
+.ps-island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  z-index: 20;
+  width: 125px;
+  height: 37px;
+  margin-left: -62.5px;
+  border-radius: 999px;
+  background: #000;
+}
+
+.ps-island span {
+  position: absolute;
+  top: 12.5px;
+  left: 90px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #23304f 0%, #0a0d16 55%, #050508 100%);
+}
+
+/* Changed digits pop in from below, blurred, a beat apart. */
+.t-digit-group {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+/* No standing will-change: it kept a layer alive for every digit on the
+   phone between ticks. The browser promotes a digit while it animates. */
+.t-digit {
+  display: inline-block;
+}
+
+.t-digit-group.is-animating .t-digit {
+  animation: t-digit-pop-in 0.5s cubic-bezier(0.34, 1.45, 0.64, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* Rise and fade only; a blur here would run every changed digit through a
+   filter on every tick. */
+@keyframes t-digit-pop-in {
+  0% {
+    transform: translate(0, 8px);
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translate(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-digit-group.is-animating .t-digit,
+  .phone-hero .rise {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------- flat phone, without WebGL */
+
+.flat-phone {
+  position: relative;
+  width: min(340px, 100%);
+  margin: 14px auto 0;
+  padding-inline: 3px;
+}
+
+.flat-ring {
+  position: relative;
+  padding: 0.8%;
+  border-radius: 60px;
+  background: linear-gradient(145deg, #dcdce2 0%, #9d9da4 20%, #4b4b51 48%, #83838a 74%, #d2d2d8 100%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.55);
+}
+
+.flat-button {
+  position: absolute;
+  width: 4px;
+  border-radius: 3px;
+}
+
+.flat-button.left {
+  left: -3px;
+  background: linear-gradient(to right, #84848b, #4d4d53 55%, #2c2c31);
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.flat-button.right {
+  right: -3px;
+  background: linear-gradient(to left, #84848b, #4d4d53 55%, #2c2c31);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+}
+
+.flat-bezel {
+  padding: 3.3841%;
+  border-radius: 57px;
+  background: #0b0b0b;
+}
+
+.flat-screen {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 9 / 19.5;
+  border-radius: 46px;
+  background: #fff;
+}
+
+.flat-screen > .ps-root {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 0;
+  transform: scale(var(--s, 1));
+  transform-origin: top left;
+}
