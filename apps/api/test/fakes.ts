@@ -1,17 +1,12 @@
 /**
- * Fake services for API tests.
- *
- * These stand in for mainnet and the aggregator so every route -- especially
- * the refusal paths -- can be exercised without a network. Hand-fuzzing a
- * running server reaches the happy path and a few 400s; it cannot reliably
- * reproduce an upstream failure, an empty database, or a wallet with exactly
- * the wrong balance.
+ * Fake services for the API tests, standing in for mainnet and the aggregator
+ * so every route, especially the refusal paths, runs without a network.
  */
 
 import { ALL_MINTS, UNIVERSE, type PreStock } from "@ps/core";
 import { Keypair } from "@solana/web3.js";
 import { PythClient } from "@ps/market";
-import { bodyDigest, canonicalMessage } from "../src/auth.ts";
+import { bodyDigest, canonicalMessage } from "../src/lib/auth.ts";
 import type { Services } from "../src/context.ts";
 import { Store } from "@ps/db";
 
@@ -89,10 +84,37 @@ export interface FakeOptions {
   /** Make the price feed fail, to exercise degraded paths. */
   readonly pricesThrow?: boolean;
   readonly priceUsd?: Readonly<Record<string, number>>;
+  /** Indices of transactions whose sendTransaction call should fail. */
+  readonly sendFailsAt?: readonly number[];
+  /** What getSignatureStatuses reports, keyed by signature. */
+  readonly statuses?: Readonly<
+    Record<string, { slot: number; confirmationStatus: string | null; err: unknown } | null>
+  >;
+  readonly blockHeight?: number;
+  /** Indices whose simulateTransaction should report a program error. */
+  readonly simFailsAt?: readonly number[];
+  /** Per-symbol price impact the fake router reports, as a fraction. */
+  readonly priceImpact?: Readonly<Record<string, number>>;
+  /**
+   * Per-symbol impact that grows with size, as a fraction per dollar: a thin
+   * pool where a smaller order really is cheaper. Without it the impact is the
+   * same at every size, which models a spread floor.
+   */
+  readonly impactPerUsd?: Readonly<Record<string, number>>;
+  /** Balances held OUTSIDE the associated account, per symbol, in raw units. */
+  readonly stray?: Readonly<Record<string, readonly bigint[]>>;
+  readonly quoteThrows?: boolean;
+  /** How many slots the current epoch has left; the fake mints change fee at the next one. */
+  readonly slotsLeftInEpoch?: number;
+  /** What getTransaction returns, by signature; absent is null, as for a node that has none. */
+  readonly transactions?: Readonly<Record<string, unknown>>;
+  /** Signatures answered null for this many asks first, as a node a moment behind would. */
+  readonly lateTransactions?: Readonly<Record<string, number>>;
 }
 
 export function fakeRpc(options: FakeOptions = {}) {
   const calls: string[] = [];
+  const transactionAsks = new Map<string, number>();
   return {
     calls,
     epoch: async () => FAKE_EPOCH,
@@ -100,7 +122,12 @@ export function fakeRpc(options: FakeOptions = {}) {
     call: async <T>(method: string, params: unknown[] = []): Promise<T> => {
       calls.push(method);
 
-      if (method === "getEpochInfo") return { epoch: FAKE_EPOCH } as T;
+      if (method === "getEpochInfo") {
+        // Early in the epoch unless a test puts the cluster near its end.
+        const slotsInEpoch = 432_000;
+        const slotsLeft = options.slotsLeftInEpoch ?? 400_000;
+        return { epoch: FAKE_EPOCH, slotIndex: slotsInEpoch - slotsLeft, slotsInEpoch } as T;
+      }
 
       if (method === "getBalance") {
         // Default to a funded wallet so fee checks do not dominate every
@@ -165,6 +192,69 @@ export function fakeRpc(options: FakeOptions = {}) {
         } as T;
       }
 
+      if (method === "sendTransaction") {
+        // Count sends so a test can assert the relay fanned out rather than
+        // serialised, and fail the ones the test asked to fail.
+        const ordinal = calls.filter((c) => c === "sendTransaction").length - 1;
+        if (options.sendFailsAt?.includes(ordinal)) {
+          throw new Error("Blockhash not found");
+        }
+        return `fakeSig${ordinal}` as T;
+      }
+
+      if (method === "getSignatureStatuses") {
+        const signatures = params[0] as string[];
+        return {
+          value: signatures.map((signature) => options.statuses?.[signature] ?? null),
+        } as T;
+      }
+
+      if (method === "getTokenAccountsByOwner") {
+        // Every Token-2022 account the owner has, other than the ATAs,
+        // which are what getMultipleAccounts above already answers for.
+        const value: unknown[] = [];
+        let n = 0;
+        for (const [symbol, amounts] of Object.entries(options.stray ?? {})) {
+          const token = UNIVERSE.find((t) => t.symbol === symbol);
+          if (!token) continue;
+          const filter = params[1] as { mint?: string } | undefined;
+          if (filter?.mint && filter.mint !== token.mint) continue;
+          for (const amount of amounts) {
+            value.push({
+              pubkey: `Stray${symbol}${n++}`.padEnd(44, "1"),
+              account: { data: { parsed: { info: { mint: token.mint, tokenAmount: { amount: String(amount) } } } } },
+            });
+          }
+        }
+        return { value } as T;
+      }
+
+      if (method === "simulateTransaction") {
+        const ordinal = calls.filter((c) => c === "simulateTransaction").length - 1;
+        if (options.simFailsAt?.includes(ordinal)) {
+          return {
+            value: {
+              err: { InstructionError: [2, { Custom: 6001 }] },
+              logs: ["Program log: before", "Program log: slippage", "Program failed"],
+              unitsConsumed: 1_234,
+            },
+          } as T;
+        }
+        return { value: { err: null, logs: [], unitsConsumed: 50_000 + ordinal } } as T;
+      }
+
+      if (method === "getBlockHeight") {
+        return (options.blockHeight ?? 426_629_000) as T;
+      }
+
+      if (method === "getTransaction") {
+        const signature = params[0] as string;
+        const asked = (transactionAsks.get(signature) ?? 0) + 1;
+        transactionAsks.set(signature, asked);
+        if (asked <= (options.lateTransactions?.[signature] ?? 0)) return null as T;
+        return (options.transactions?.[signature] ?? null) as T;
+      }
+
       throw new Error(`fakeRpc: unexpected method ${method}`);
     },
   };
@@ -190,8 +280,54 @@ export function fakeJupiter(options: FakeOptions = {}) {
       }
       return out;
     },
-    quote: async () => {
-      throw new Error("fakeJupiter: quote should not be reached in these tests");
+    /**
+     * A quote priced off the same fake prices, with configurable impact so a test
+     * can drive a leg into the resize and defer branches.
+     */
+    quote: async (request: {
+      inputMint: string;
+      outputMint: string;
+      amount: bigint;
+      maxAccounts?: number;
+    }) => {
+      if (options.quoteThrows) throw new Error("jupiter: HTTP 429");
+
+      const usdcMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+      const buying = request.inputMint === usdcMint;
+      const token = UNIVERSE.find((t) => t.mint === (buying ? request.outputMint : request.inputMint));
+      if (!token) throw new Error("fakeJupiter: unknown mint");
+
+      const usd = options.priceUsd?.[token.symbol] ?? 100;
+      const multiplier = MULTIPLIERS[token.symbol] ?? 1;
+      const sizeUsd = buying
+        ? Number(request.amount) / 1e6
+        : (Number(request.amount) / 10 ** token.decimals) * multiplier * usd;
+      const perUsd = options.impactPerUsd?.[token.symbol];
+      const impact = perUsd !== undefined ? perUsd * sizeUsd : (options.priceImpact?.[token.symbol] ?? 0.001);
+
+      // A buy spends USDC and receives raw token; a sell does the reverse.
+      const outAmount = buying
+        ? BigInt(
+            Math.round(
+              ((Number(request.amount) / 1e6 / usd) * (1 - impact) / multiplier) * 10 ** token.decimals,
+            ),
+          )
+        : BigInt(
+            Math.round(
+              (Number(request.amount) / 10 ** token.decimals) * multiplier * usd * (1 - impact) * 1e6,
+            ),
+          );
+
+      return {
+        inputMint: request.inputMint,
+        outputMint: request.outputMint,
+        inAmount: String(request.amount),
+        outAmount: String(outAmount > 0n ? outAmount : 1n),
+        otherAmountThreshold: String(outAmount),
+        priceImpactPct: String(impact),
+        routePlan: [{ swapInfo: { ammKey: "fakeAmm", label: "Fake" }, percent: 100 }],
+        slippageBps: 150,
+      };
     },
   };
 }
@@ -242,6 +378,8 @@ export function makeServices(options: FakeOptions = {}): Services & { store: Sto
     // routes fall back to the issuer mark.
     pyth: new PythClient(options.pythApiKey),
     store,
+    // The token directory is a network call; tests get an empty one.
+    tokenMeta: async () => new Map(),
   };
 }
 
