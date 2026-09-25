@@ -1,9 +1,6 @@
 /**
- * Build every thematic index from live market data and price one of them for
- * execution against real quotes.
- *
- * This is the end-to-end check for the write path: universe -> mint state ->
- * prices -> index weights -> rebalance orders -> depth-checked execution plan.
+ * Builds every index from live market data and prices one for execution against
+ * live quotes: an end-to-end check from mint state to a depth-checked plan.
  */
 
 import {
@@ -29,8 +26,8 @@ const snapshot = await takeSnapshot(rpc, jupiter);
 const inputs: IndexInput[] = snapshot.tokens.map((t) => ({
   symbol: t.token.symbol,
   sectors: t.token.sectors,
-  // Implied valuation is the market's view of the company, which is what a
-  // valuation-weighted index should track: supply in UI shares times price.
+  // The market's valuation of the company (UI supply times price), which a
+  // valuation-weighted index tracks.
   impliedValuationUsd: t.marketUsd === null ? null : t.marketUsd * t.supplyUi,
   liquidityUsd: t.liquidityUsd,
   basis: t.basis,

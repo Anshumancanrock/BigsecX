@@ -1,7 +1,6 @@
 /**
- * Print a market snapshot. Doubles as the smoke test for the whole read path:
- * if this prints sane numbers, RPC, mint parsing, scaling, fee selection and
- * the price feed are all wired correctly.
+ * Prints a market snapshot. A smoke test for the read path: RPC, mint parsing,
+ * scaling, fee selection and the price feed.
  */
 
 import { Rpc } from "@ps/chain";

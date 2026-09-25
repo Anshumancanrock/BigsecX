@@ -1,10 +1,6 @@
 /**
- * Build a real mirror bundle for a wallet and simulate every transaction
- * against mainnet.
- *
- * Nothing is signed or sent. Simulation is the honest end-to-end check: it
- * runs the exact bytes a wallet would sign, against real account state, and
- * reports whether they would land.
+ * Builds a mirror bundle for a wallet and simulates each transaction, as the
+ * wallet would sign it, against mainnet. Nothing is signed or sent.
  */
 
 import { INDEX_DEFINITIONS, buildIndex, definitionById, planRebalance, type IndexInput } from "@ps/core";
