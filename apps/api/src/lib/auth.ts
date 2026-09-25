@@ -1,36 +1,13 @@
 /**
- * Wallet authentication for routes that write state a user owns.
- *
- * Before this, a caller simply asserted its own address. That is not a
- * missing feature, it is impersonation: anyone could publish a basket
- * attributed to any wallet, and on a product whose whole premise is ranking
- * traders by verified record, a forged authorship destroys the record.
- *
- * The scheme is the standard one. The client signs a canonical message with
- * the wallet it claims to be, and the server verifies the signature against
- * that public key. Ed25519 is what Solana keys are, and Bun verifies it
- * natively, so this needs no dependency.
- *
- * Two properties beyond "the signature checks out":
- *
- *   Freshness. The message carries a timestamp and is rejected outside a
- *   short window, so a signature captured from one request cannot be replayed
- *   indefinitely.
- *
- *   Binding. The message names the action, the resource AND a digest of the
- *   request body, so a signature authorising one edit cannot be lifted onto
- *   a different one, nor replayed with different content. Without the
- *   digest a captured signature was an arbitrary write primitive: one
- *   legitimate signature could be resent with any body for five minutes,
- *   publishing baskets under the victim's wallet and rewriting their own.
- *
- *   Single use. A signature is recorded when accepted and refused on repeat,
- *   so identical content cannot be submitted twice either.
+ * Ed25519 wallet signatures for routes that write state a wallet owns. A
+ * signed message is time-limited, bound to the action, the resource and a
+ * digest of the request body, and accepted only once.
  */
 
+import { decodeBase58 as sharedDecodeBase58 } from "@ps/chain";
 import { BadRequest } from "./validate.ts";
 
-/** How far a signed message's timestamp may be from ours. */
+/** Maximum age of a signed message's timestamp. */
 export const SIGNATURE_WINDOW_MS = 5 * 60_000;
 /** Forward allowance for a client clock running fast. */
 export const CLOCK_SKEW_MS = 30_000;
@@ -52,12 +29,18 @@ export interface SignedAction {
 }
 
 /**
- * The exact bytes a client must sign.
- *
- * Kept as one function so the server and any client derive the identical
- * string. A mismatch here fails closed -- verification simply fails -- but it
- * fails confusingly, so there is only one definition.
+ * Refuse control characters in a message field. The message is
+ * newline-delimited, so a newline in a field could inject extra lines, such as
+ * a second `wallet:`.
  */
+function rejectDelimiters(value: string, field: string): string {
+  if (/[\r\n\u0000-\u001F\u007F]/.test(value)) {
+    throw new BadRequest(`${field} must not contain control characters`);
+  }
+  return value;
+}
+
+/** The exact message a client signs. The single definition, so server and clients cannot diverge. */
 export function canonicalMessage(args: {
   readonly action: string;
   readonly resource: string;
@@ -68,8 +51,8 @@ export function canonicalMessage(args: {
 }): string {
   return [
     "prestocks.basket",
-    `action:${args.action}`,
-    `resource:${args.resource}`,
+    `action:${rejectDelimiters(args.action, "action")}`,
+    `resource:${rejectDelimiters(args.resource, "resource")}`,
     `wallet:${args.wallet}`,
     `issuedAt:${args.issuedAt}`,
     `body:${args.bodyDigest ?? ""}`,
@@ -77,10 +60,8 @@ export function canonicalMessage(args: {
 }
 
 /**
- * Stable digest of a request body.
- *
- * Keys are sorted so two encoders of the same object agree, and the proof
- * fields are removed because they cannot be part of what they attest to.
+ * Hex SHA-256 of a request body, with keys sorted and the proof fields
+ * (signature, issuedAt) removed.
  */
 export async function bodyDigest(body: Record<string, unknown>): Promise<string> {
   const canonical = (value: unknown): unknown => {
@@ -102,10 +83,8 @@ export async function bodyDigest(body: Record<string, unknown>): Promise<string>
 }
 
 /**
- * Signatures already accepted, by their own value.
- *
- * Bounded by the freshness window: anything older than the window can never
- * be accepted again anyway, so it is swept rather than retained.
+ * Accepted signatures and their issuedAt. Entries older than the window are
+ * swept, since they would be refused anyway.
  */
 const consumed = new Map<string, number>();
 
@@ -119,26 +98,13 @@ function consume(signature: string, issuedAt: number, now: number): void {
   consumed.set(signature, issuedAt);
 }
 
-const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
-/** Decode a base58 Solana address to its 32 raw bytes. */
+/** Decode a base58 address, reporting a malformed one as a 400 rather than a 500. */
 function decodeBase58(value: string): Uint8Array<ArrayBuffer> {
-  let big = 0n;
-  for (const character of value) {
-    const index = BASE58.indexOf(character);
-    if (index < 0) throw new BadRequest("wallet is not valid base58");
-    big = big * 58n + BigInt(index);
-  }
-
-  const bytes: number[] = [];
-  while (big > 0n) {
-    bytes.unshift(Number(big % 256n));
-    big /= 256n;
-  }
-  // Each leading '1' encodes a leading zero byte.
-  for (const character of value) {
-    if (character !== "1") break;
-    bytes.unshift(0);
+  let bytes: Uint8Array;
+  try {
+    bytes = sharedDecodeBase58(value);
+  } catch {
+    throw new BadRequest("wallet is not valid base58");
   }
   const out = new Uint8Array(new ArrayBuffer(bytes.length));
   out.set(bytes);
@@ -157,12 +123,7 @@ function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/**
- * Verify that `wallet` signed this action, recently.
- *
- * Throws Unauthorized on any failure, with a reason that does not reveal
- * which check failed beyond what the caller already knows.
- */
+/** Verify that `wallet` signed this action recently. Throws Unauthorized on any failure. */
 export async function verifySignedAction(
   signed: SignedAction,
   args: {
@@ -177,9 +138,8 @@ export async function verifySignedAction(
   if (!Number.isFinite(signed.issuedAt)) {
     throw new Unauthorized("issuedAt must be a timestamp in milliseconds");
   }
-  // Asymmetric on purpose. A small forward allowance covers a client clock
-  // running fast; allowing the full window in both directions would let a
-  // future-dated signature live for ten minutes rather than five.
+  // Asymmetric: allowing the full window forward would let a future-dated
+  // signature live twice as long.
   if (signed.issuedAt - now > CLOCK_SKEW_MS) {
     throw new Unauthorized("issuedAt is in the future; check the client clock");
   }
@@ -216,20 +176,28 @@ export async function verifySignedAction(
   if (!valid) {
     throw new Unauthorized("signature does not match this wallet, action and body");
   }
-  consume(signed.signature, signed.issuedAt, now);
+  // Keyed on the decoded bytes: atob accepts several spellings of one
+  // signature (padding stripped, surrounding whitespace), and each would
+  // otherwise get its own single-use entry.
+  consume(canonicalSignatureKey(signature), signed.issuedAt, now);
+}
+
+/** Hex of the signature bytes, so every base64 spelling maps to one key. */
+function canonicalSignatureKey(signature: Uint8Array): string {
+  let out = "";
+  for (const byte of signature) out += byte.toString(16).padStart(2, "0");
+  return out;
 }
 
 /**
- * Pull a signed action out of a request body.
- *
- * Authentication can be disabled with REQUIRE_WALLET_SIGNATURE=0 for local
- * development. It defaults to on: a deployment that forgets to configure it
- * should be secure, not open.
+ * Whether wallet signatures are enforced. On unless REQUIRE_WALLET_SIGNATURE=0,
+ * which is for local development only.
  */
 export function signatureRequired(): boolean {
   return process.env["REQUIRE_WALLET_SIGNATURE"] !== "0";
 }
 
+/** Verify the signature and issuedAt carried in a request body for this action. */
 export async function authorize(
   body: Record<string, unknown>,
   args: { readonly action: string; readonly resource: string; readonly wallet: string },
