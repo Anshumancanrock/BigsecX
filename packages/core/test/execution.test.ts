@@ -18,7 +18,7 @@ describe("judgeLeg", () => {
   });
 
   test("resizes a leg whose impact is too high", () => {
-    // Measured: $10k of SPACEX came back at 6.7% impact.
+    // From a real quote: $10k of SPACEX at 6.7% impact.
     const verdict = judgeLeg({ symbol: "SPACEX", usd: 10_000, priceImpact: 0.067, ...deep });
     expect(verdict.kind).toBe("resize");
     if (verdict.kind !== "resize") throw new Error("unreachable");
@@ -28,7 +28,7 @@ describe("judgeLeg", () => {
   });
 
   test("defers a leg no viable size can clear", () => {
-    // Measured: $50k of NEURALINK came back at 56.8% impact.
+    // From a real quote: $50k of NEURALINK at 56.8% impact.
     const verdict = judgeLeg(
       { symbol: "NEURALINK", usd: 50_000, priceImpact: 0.568, ...deep },
       { ...DEFAULT_LIMITS, minTicketUsd: 20_000 },
@@ -47,7 +47,7 @@ describe("judgeLeg", () => {
     expect(verdict.kind).toBe("resize");
     if (verdict.kind !== "resize") throw new Error("unreachable");
     expect(verdict.usd).toBeCloseTo(9_772.6, 1);
-    expect(verdict.reason).toContain("depth");
+    expect(verdict.reason).toContain("on offer");
   });
 
   test("the depth cap is checked before the impact estimate", () => {
@@ -64,9 +64,9 @@ describe("judgeLeg", () => {
 });
 
 describe("transferFeeCostUsd", () => {
-  // The fee is assessed on the GROSS the pool sends, and the aggregator quotes
-  // the NET, so recovering the fee means grossing up. A mainnet simulation
-  // pinned the arithmetic: gross 488,641,136, fee 2,443,206, net 486,197,930.
+  // The fee is assessed on the gross the pool sends, so it is recovered from
+  // the net by grossing up. Figures from a mainnet simulation: gross
+  // 488,641,136, fee 2,443,206, net 486,197,930.
   test("recovers the fee observed in the mainnet simulation", () => {
     const net = 486_197_930;
     const fee = transferFeeCostUsd(net, 50);
@@ -110,8 +110,7 @@ describe("summarize", () => {
   });
 
   test("does not add the transfer fee on top of realized cost", () => {
-    // The quote is already net of the fee. Counting it again would push the
-    // total to 30 + fees; it must stay at the measured 30.
+    // The measured cost already contains the fee, so the total stays at 30.
     const plan = summarize([leg(1_000, 0.005, 0.01), leg(1_000, 0.005, 0.02)], []);
     expect(plan.totalTransferFeeUsd).toBeGreaterThan(0);
     expect(plan.totalCostUsd).toBeCloseTo(30, 9);
@@ -160,23 +159,15 @@ describe("capWeights invariants", () => {
 });
 
 describe("slippageBpsFor", () => {
-  /**
-   * A single global tolerance cannot work in this market. These pools carry
-   * bid-ask spread floors of two to four percent and move within seconds of
-   * a quote: a bundle built and simulated seven seconds apart landed two of
-   * six legs at a flat 100 bps and six of six at 300. Setting one number
-   * high enough for the worst pool also hands the deepest pool far more room
-   * than it needs, so the tolerance follows the impact each leg measured.
-   */
   test("a deep pool gets the floor and no more", () => {
     expect(slippageBpsFor(0.0005)).toBe(158);
     expect(slippageBpsFor(0)).toBe(150);
   });
 
   test("a thin pool gets room proportional to what it cost", () => {
-    // NEURALINK measured 4.41% impact on a real quote.
+    // Impacts from real quotes: NEURALINK 4.41%.
     expect(slippageBpsFor(0.0441)).toBe(812);
-    // FIGUREAI measured 3.06%.
+    // FIGUREAI 3.06%.
     expect(slippageBpsFor(0.0306)).toBe(609);
   });
 
@@ -192,8 +183,8 @@ describe("slippageBpsFor", () => {
   });
 
   test("the caller's tolerance is a floor, never a ceiling", () => {
-    // A user asking for more room gets it; one asking for less still gets
-    // enough for the pool, rather than a revert after they have signed.
+    // A higher floor is honoured; a lower one still leaves enough room for the
+    // pool, avoiding a revert after signing.
     expect(slippageBpsFor(0.0441, { floorBps: 500 })).toBeGreaterThanOrEqual(500);
     expect(slippageBpsFor(0.0441, { floorBps: 10 })).toBeGreaterThan(600);
   });
