@@ -75,9 +75,8 @@ export function PhoneScreen({
         <div className="ps-tabs">
           <div className="ps-tabs-row">
             <span className="ps-tab">Feed</span>
-            <span className="ps-tab on">Wealth</span>
-            <span className="ps-tab">Cash</span>
-            <span className="ps-tab">Social</span>
+            <span className="ps-tab on">Pre-stocks</span>
+            <span className="ps-tab">Basket</span>
           </div>
           <span className="ps-avatar">B</span>
         </div>
