@@ -1,22 +1,12 @@
 /**
- * Landing page. Every figure on it is live: feature figures and index weights
- * come from the market snapshot, and the hero phone draws the Everything
- * basket's real history; only the sub-second ticking is animation.
+ * Landing page. Every figure on it is live: prices and traders come from the
+ * API, and the hero phone draws the Everything basket's real history; only
+ * the sub-second ticking is animation.
  */
 
 import { api, type IndexList, type Market } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
 import { navigate } from "../lib/router.ts";
-import { list } from "../lib/format.ts";
-import {
-  BasisFigure,
-  ControlFigure,
-  CustodyFigure,
-  DepthFigure,
-  FeeFigure,
-  MoversFigure,
-  WeightsFigure,
-} from "./Figures.tsx";
 import { CustodySection } from "./Custody.tsx";
 import { FaqSection } from "./Faq.tsx";
 import { HighlightsSection } from "./Highlights.tsx";
@@ -37,7 +27,6 @@ export function Landing() {
   const indexes = useAsync<IndexList>((signal) => api.indexes(signal), []);
 
   const snapshot = market.data;
-  const flagship = list(indexes.data?.indexes).find((i) => i.id === "pre8") ?? list(indexes.data?.indexes)[0] ?? null;
 
   return (
     <div className="landing">
@@ -51,70 +40,6 @@ export function Landing() {
         <HighlightsSection market={snapshot} />
         <TradersSection />
         <CustodySection market={snapshot} />
-
-        <section className="prose">
-          <p>
-            <b>For most of its life, the only way to own a piece of SpaceX was to be an insider or a
-            fund.</b> OpenAI and Anthropic may never list at all. The companies defining the next
-            decade are owned by funds and insiders, and everyone else waits for an IPO that keeps
-            not arriving.
-          </p>
-          <p>
-            These are tokens that track those companies, and you can buy them today with about
-            thirty dollars. One company on its own, or a ready-made basket of them, in a single
-            approval. <b>They land in your own wallet, and we never hold your money or your keys.</b>
-          </p>
-        </section>
-
-        <section className="section">
-          <h2>Priced before you sign.</h2>
-          <div className="cards">
-            <Card caption="You see the exact price, and the exact fee, before you approve anything. No surprises after.">
-              <DepthFigure market={snapshot} />
-            </Card>
-            <Card caption="Every cost is included in the number you are shown — the fee, the spread, all of it.">
-              <FeeFigure market={snapshot} />
-            </Card>
-            <Card caption="The tokens land in your own wallet. We never hold your money, and we never hold a key.">
-              <CustodyFigure />
-            </Card>
-          </div>
-          <div className="card-wide">
-            <WeightsFigure weights={flagship?.weights ?? null} />
-            <p>
-              Buy one company on its own, or a ready-made basket — the AI labs, space and defence,
-              prediction markets. Or build your own mix and share it.
-            </p>
-          </div>
-        </section>
-
-        <section className="section center">
-          <div className="ring-wrap">
-            <div className="rings" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-            <h2>The market, as it actually trades.</h2>
-          </div>
-          <div className="cards">
-            <Card caption="What the issuer says a company is worth, next to what the market will actually pay for it.">
-              <BasisFigure market={snapshot} />
-            </Card>
-            <Card caption="Prices are checked live, every time — never guessed from a stale table.">
-              <MoversFigure market={snapshot} />
-            </Card>
-            <Card caption="What the issuer can do to your tokens is spelled out on every company page.">
-              <ControlFigure market={snapshot} />
-            </Card>
-          </div>
-          <div className="card-wide">
-            <p>
-              The things an issuer would rather you scrolled past. We put them on the company page,
-              in plain words, before you buy.
-            </p>
-          </div>
-        </section>
 
         <FaqSection market={snapshot} />
 
@@ -165,15 +90,6 @@ function BuiltOn() {
         <span className="press-item">PreStocks</span>
         <span className="press-item">Jupiter</span>
       </div>
-    </div>
-  );
-}
-
-function Card({ children, caption }: { children: React.ReactNode; caption: string }) {
-  return (
-    <div>
-      <div className="card-figure">{children}</div>
-      <p className="card-caption">{caption}</p>
     </div>
   );
 }
