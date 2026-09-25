@@ -987,21 +987,53 @@ body:has(.app.is-desk) {
   white-space: nowrap;
 }
 
-/* The prices, in a row that scrolls sideways when it does not fit. */
+/* The prices loop right to left, fading out at both edges; hovering holds them. */
 .ex-strip {
-  display: grid;
-  grid-auto-columns: minmax(176px, 1fr);
-  grid-auto-flow: column;
-  gap: 10px;
-  margin: -12px 0 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  margin: -16px 0 -4px;
+  padding: 4px 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 72px, #000 calc(100% - 72px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 72px, #000 calc(100% - 72px), transparent);
 }
 
-.ex-strip::-webkit-scrollbar {
-  display: none;
+.ex-strip-track {
+  display: flex;
+  gap: 10px;
+  width: max-content;
+  animation: ex-strip 42s linear infinite;
+  will-change: transform;
+}
+
+.ex-strip:hover .ex-strip-track,
+.ex-strip:focus-within .ex-strip-track {
+  animation-play-state: paused;
+}
+
+.ex-strip-track .ex-tick {
+  flex: none;
+  width: 204px;
+}
+
+/* Two copies of the row: moving by one copy and one gap loops without a seam. */
+@keyframes ex-strip {
+  to {
+    transform: translateX(calc(-50% - 5px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ex-strip {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .ex-strip-track {
+    animation: none;
+  }
+
+  .ex-tick.copy {
+    display: none;
+  }
 }
 
 .ex-strip.ghost {

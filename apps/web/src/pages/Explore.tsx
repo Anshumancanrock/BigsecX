@@ -196,31 +196,44 @@ export function Explore({ market }: { market: Market | null }) {
 /* ---------------------------------------------------------- the prices */
 
 /** Every company's price, in a strip that scrolls sideways. */
+/** Every company's price, looping right to left; the second copy fills the seam. */
 function PriceStrip({ tokens }: { tokens: readonly MarketToken[] }) {
   if (tokens.length === 0) return <div className="ex-strip ghost" />;
-  return (
-    <div className="ex-strip" aria-label="Prices">
-      {tokens.map((t) => {
-        const move = t.change24hPct;
-        const up = (move ?? 0) >= 0;
-        const page = `/companies/${t.symbol.toLowerCase()}`;
-        return (
-          <a key={t.symbol} className="ex-tick" href={page} onClick={go(page)}>
-            <TokenLogo symbol={t.symbol} size={28} badge={false} />
-            <span className="ex-tick-body">
-              <b>{t.name}</b>
-              <span className="ex-tick-line">
-                <span className="num">
-                  <Ticking value={t.marketUsd} format={price} />
-                </span>
-                <span className={`num ${move == null ? "muted" : up ? "up" : "down"}`}>
-                  {move == null ? "—" : `${up ? "+" : ""}${move.toFixed(2)}%`}
-                </span>
+  const row = (copy: number) =>
+    tokens.map((t) => {
+      const move = t.change24hPct;
+      const up = (move ?? 0) >= 0;
+      const page = `/companies/${t.symbol.toLowerCase()}`;
+      return (
+        <a
+          key={`${copy}-${t.symbol}`}
+          className={copy === 0 ? "ex-tick" : "ex-tick copy"}
+          href={page}
+          onClick={go(page)}
+          tabIndex={copy === 0 ? undefined : -1}
+          aria-hidden={copy === 0 ? undefined : true}
+        >
+          <TokenLogo symbol={t.symbol} size={28} badge={false} />
+          <span className="ex-tick-body">
+            <b>{t.name}</b>
+            <span className="ex-tick-line">
+              <span className="num">
+                <Ticking value={t.marketUsd} format={price} />
+              </span>
+              <span className={`num ${move == null ? "muted" : up ? "up" : "down"}`}>
+                {move == null ? "—" : `${up ? "+" : ""}${move.toFixed(2)}%`}
               </span>
             </span>
-          </a>
-        );
-      })}
+          </span>
+        </a>
+      );
+    });
+  return (
+    <div className="ex-strip" aria-label="Prices">
+      <div className="ex-strip-track">
+        {row(0)}
+        {row(1)}
+      </div>
     </div>
   );
 }
