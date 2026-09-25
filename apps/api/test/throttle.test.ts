@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
-import { throttle } from "../src/throttle.ts";
+import { throttle } from "../src/lib/throttle.ts";
 
 // Forwarded headers are honoured only behind a declared proxy, so these
 // tests declare one. Without it every caller keys to the socket address,

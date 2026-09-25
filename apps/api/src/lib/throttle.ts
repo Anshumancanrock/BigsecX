@@ -1,15 +1,7 @@
 /**
- * Inbound rate limiting.
- *
- * Every quote and instruction build spends the deployment's upstream budget,
- * and that budget is small: the keyless Jupiter tier reports a remaining
- * quota in single digits while one eight-leg basket needs sixteen calls. An
- * unauthenticated build endpoint with no throttle is therefore not merely a
- * denial of service against us, it is a way for anyone to exhaust the quota
- * the demo runs on.
- *
- * Costs differ by orders of magnitude, so requests are weighted rather than
- * counted: a cached market read is nearly free, a build is not.
+ * Per-client token-bucket rate limiting. Requests are weighted by upstream
+ * cost: a cached market read is nearly free, while a build spends the
+ * deployment's small shared Jupiter quota on every leg.
  */
 
 import type { Context, Next } from "hono";
@@ -34,11 +26,23 @@ const COSTS: readonly { readonly prefix: string; readonly cost: number }[] = [
   // Builds quote every leg and then fetch instructions for each.
   { prefix: "/api/mirror/build", cost: 40 },
   { prefix: "/api/copy/build", cost: 40 },
+  { prefix: "/api/exit/build", cost: 40 },
+  // One RPC call per transaction, but an outbound relay, so dearer than a read.
+  { prefix: "/api/submit", cost: 10 },
+  // The same RPC cost as a submit, priced lower to encourage simulating first.
+  { prefix: "/api/simulate", cost: 6 },
+  { prefix: "/api/confirm", cost: 2 },
   // Plans quote every leg.
   { prefix: "/api/mirror/plan", cost: 20 },
+  { prefix: "/api/exit/plan", cost: 20 },
   { prefix: "/api/copy/preview", cost: 8 },
   // Chain reads, but no aggregator traffic.
   { prefix: "/api/portfolio", cost: 4 },
+  { prefix: "/api/cash", cost: 2 },
+  { prefix: "/api/history", cost: 1 },
+  // Reads each signature back from the chain: one RPC call apiece.
+  { prefix: "/api/trades/record", cost: 6 },
+  { prefix: "/api/trades", cost: 1 },
   { prefix: "/api/traders", cost: 2 },
   { prefix: "/api/price-truth", cost: 2 },
   // Served from cache or the local database.
@@ -47,6 +51,17 @@ const COSTS: readonly { readonly prefix: string; readonly cost: number }[] = [
   { prefix: "/api/indexes", cost: 1 },
   { prefix: "/api/strategies", cost: 1 },
   { prefix: "/api/leaderboard", cost: 1 },
+  // Signing in verifies a signature; the rest are single-row reads and
+  // writes against the local database.
+  { prefix: "/api/session", cost: 4 },
+  // A picture upload is a write of up to 256KB; a picture read is a
+  // single-row read a browser then keeps.
+  { prefix: "/api/profile/avatar", cost: 6 },
+  { prefix: "/api/avatars", cost: 1 },
+  { prefix: "/api/profile", cost: 1 },
+  { prefix: "/api/follows", cost: 2 },
+  { prefix: "/api/handles", cost: 1 },
+  { prefix: "/api/feed", cost: 1 },
   { prefix: "/health", cost: 0 },
 ];
 
@@ -56,17 +71,9 @@ function costOf(path: string, fallback: number): number {
 }
 
 /**
- * Identify the caller.
- *
- * The socket address is the fallback and the default. Trusting a forwarded
- * header unconditionally lets any caller pick its own bucket, and falling
- * back to a constant is worse still: with no proxy in front -- which is how
- * this runs locally and during a demo -- every client shared one bucket, so
- * the fourth independent visitor was refused because of the first three.
- *
- * Forwarded headers are honoured only behind TRUST_PROXY=1, which is a
- * deployment fact the deployment states rather than something a request
- * asserts about itself.
+ * The caller's bucket key: the socket address, or the forwarded client address
+ * when TRUST_PROXY=1. Forwarded headers are otherwise ignored, since trusting
+ * them lets a caller choose its own bucket.
  */
 function clientKey(c: Context): string {
   if (process.env["TRUST_PROXY"] === "1") {
@@ -78,13 +85,7 @@ function clientKey(c: Context): string {
   return peerAddress(c);
 }
 
-/**
- * The peer's socket address.
- *
- * Under Bun's `export default { fetch }` binding, Hono's `c.env` IS the
- * Server object, so `requestIP` is reached directly on it rather than
- * through a wrapper.
- */
+/** The peer's socket address. Under Bun's `export default { fetch }`, Hono's `c.env` is the Bun Server. */
 function peerAddress(c: Context): string {
   const server = c.env as { requestIP?: (request: Request) => { address?: string } | null };
   try {
@@ -94,6 +95,7 @@ function peerAddress(c: Context): string {
   }
 }
 
+/** Middleware that charges each request its route's cost and answers 429 when the client's bucket is empty. */
 export function throttle(options: ThrottleOptions = {}) {
   const capacity = options.capacity ?? 120;
   const refillPerSecond = options.refillPerSecond ?? 20;
@@ -109,9 +111,8 @@ export function throttle(options: ThrottleOptions = {}) {
     const key = clientKey(c);
     const now = Date.now();
 
-    // Bound the map, without ever letting a request through unmetered.
-    // Failing open under pressure hands an attacker the bypass: fill the map
-    // with distinct addresses and every subsequent request is free.
+    // Bound the map by evicting clients, never by letting a request through
+    // unmetered.
     if (!buckets.has(key) && buckets.size >= maxClients) {
       for (const [existing, bucket] of buckets) {
         if (now - bucket.lastRefill > 60_000) buckets.delete(existing);
@@ -125,9 +126,8 @@ export function throttle(options: ThrottleOptions = {}) {
     }
 
     const bucket = buckets.get(key) ?? { tokens: capacity, lastRefill: now };
-    // Map preserves insertion order and set() on an existing key keeps its
-    // original position, so the hot path deletes first to make order mean
-    // recency for the eviction above.
+    // Delete and re-insert so the Map's insertion order tracks recency for the
+    // eviction above.
     buckets.delete(key);
     bucket.tokens = Math.min(
       capacity,
