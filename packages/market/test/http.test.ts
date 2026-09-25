@@ -25,8 +25,6 @@ describe("Cache", () => {
   });
 
   test("single-flights concurrent misses into one upstream call", async () => {
-    // The reason this exists: fifty page loads must produce one request, not
-    // fifty, against an upstream that rate limits in single digits.
     const cache = new Cache();
     let calls = 0;
     const load = async () => {
@@ -46,8 +44,47 @@ describe("Cache", () => {
     const value = await cache.fetch<string>("k", 1, async () => {
       throw new Error("upstream down");
     });
-    // A slightly old mark price beats an empty screen during a demo.
     expect(value).toBe("fresh");
+  });
+
+  test("revalidating in the background returns the old value at once and reloads behind it", async () => {
+    const cache = new Cache();
+    await cache.fetch("k", 1, async () => "old", 60_000);
+    await new Promise((r) => setTimeout(r, 5));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let calls = 0;
+    const slow = async () => {
+      calls++;
+      await gate;
+      return "new";
+    };
+    // Expired: both callers get the old value without waiting on the reload,
+    // and the reload is shared between them.
+    expect(await cache.fetch("k", 10_000, slow, 60_000, { revalidateInBackground: true })).toBe("old");
+    expect(await cache.fetch("k", 10_000, slow, 60_000, { revalidateInBackground: true })).toBe("old");
+    expect(calls).toBe(1);
+    release();
+    await new Promise((r) => setTimeout(r, 5));
+    expect(await cache.fetch("k", 10_000, slow, 60_000, { revalidateInBackground: true })).toBe("new");
+    expect(calls).toBe(1);
+  });
+
+  test("a failed background reload keeps the old value and raises nothing", async () => {
+    const cache = new Cache();
+    await cache.fetch("k", 1, async () => "old", 60_000);
+    await new Promise((r) => setTimeout(r, 5));
+    const failing = async (): Promise<string> => {
+      throw new Error("upstream down");
+    };
+    expect(await cache.fetch("k", 1, failing, 60_000, { revalidateInBackground: true })).toBe("old");
+    await new Promise((r) => setTimeout(r, 5));
+    expect(await cache.fetch("k", 1, failing, 60_000, { revalidateInBackground: true })).toBe("old");
+  });
+
+  test("revalidating in the background still waits when there is nothing to serve", async () => {
+    const cache = new Cache();
+    expect(await cache.fetch("cold", 1_000, async () => "v", 1_000, { revalidateInBackground: true })).toBe("v");
   });
 
   test("propagates the failure when there is nothing stale to serve", async () => {

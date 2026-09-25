@@ -1,15 +1,10 @@
 /**
- * Shared HTTP plumbing for upstream market data.
- *
- * Both upstreams we depend on are strict about request volume, and we found out
- * the hard way: prestocks.com/api/prestocks returns 429 under light polling,
- * and lite-api.jup.ag advertises a remaining quota in single digits
- * (`x-ratelimit-remaining: 4`). So every outbound call goes through a token
- * bucket, and every cache miss is single-flighted -- fifty concurrent page
- * loads must produce one upstream request, not fifty.
+ * HTTP plumbing for upstream market data. The upstreams rate limit tightly
+ * (prestocks.com returns 429 under light polling), so every call goes through a
+ * token bucket and concurrent cache misses share a single request.
  */
 
-/** Simple token bucket. Refills continuously rather than in fixed windows. */
+/** Token bucket that refills continuously rather than in fixed windows. */
 export class RateLimiter {
   #tokens: number;
   #lastRefill = Date.now();
@@ -49,11 +44,10 @@ interface CacheEntry<T> {
 }
 
 /**
- * Cache with single-flight and stale-on-error.
- *
- * Stale-on-error matters more than it looks: the issuer API is the only source
- * of mark prices, and a 429 during a demo should degrade to a slightly old
- * number with a visible timestamp, not to an empty screen.
+ * Cache with single-flight loading and stale-on-error, so a failing upstream
+ * degrades to a slightly old value instead of an error. With
+ * `revalidateInBackground`, an expired value is returned at once and reloaded
+ * behind it, so the first caller after expiry does not wait on the upstream.
  */
 export class Cache {
   readonly #entries = new Map<string, CacheEntry<unknown>>();
@@ -62,21 +56,15 @@ export class Cache {
 
   /**
    * @param maxEntries Bound on retained entries. Quote keys embed the trade
-   * amount, so an API serving arbitrary sizes mints a new key per request and
-   * an unbounded map would retain every one of them for the life of the
-   * process -- expired entries included, since expiry only triggers a refetch
-   * and never reclaims anything.
+   * amount, so the key space is unbounded, and expiry alone never frees an entry.
    */
   constructor(maxEntries = 2_000) {
     this.#maxEntries = maxEntries;
   }
 
   /**
-   * Evict oldest-first until the map is back within its bound.
-   *
-   * Map iterates in insertion order, so this is a first-in-first-out policy
-   * rather than a true LRU. For a cache whose entries expire in seconds the
-   * difference does not matter, and it avoids tracking access times.
+   * Evicts in insertion order until within bound. FIFO rather than LRU, which
+   * is adequate for entries that expire within seconds.
    */
   #evict(): void {
     if (this.#entries.size <= this.#maxEntries) return;
@@ -96,14 +84,29 @@ export class Cache {
     ttlMs: number,
     loader: () => Promise<T>,
     staleMs = ttlMs * 10,
+    options: { revalidateInBackground?: boolean } = {},
   ): Promise<T> {
     const now = Date.now();
     const entry = this.#entries.get(key) as CacheEntry<T> | undefined;
     if (entry && now < entry.expiresAt) return entry.value;
 
     const existing = this.#inFlight.get(key) as Promise<T> | undefined;
+    if (options.revalidateInBackground && entry && now < entry.staleUntil) {
+      // Nobody awaits this reload; on failure the old value stays for the next caller.
+      if (!existing) this.#load(key, ttlMs, staleMs, loader, entry).catch(() => undefined);
+      return entry.value;
+    }
     if (existing) return existing;
+    return this.#load(key, ttlMs, staleMs, loader, entry);
+  }
 
+  #load<T>(
+    key: string,
+    ttlMs: number,
+    staleMs: number,
+    loader: () => Promise<T>,
+    entry: CacheEntry<T> | undefined,
+  ): Promise<T> {
     const promise = loader()
       .then((value) => {
         this.#entries.set(key, {
@@ -147,7 +150,7 @@ export class UpstreamError extends Error {
   }
 }
 
-/** GET returning JSON, with retry on 429 and 5xx. */
+/** GET returning JSON, retrying on 429, 5xx and transport failures. */
 export async function getJson<T>(
   url: string,
   options: {
@@ -169,11 +172,8 @@ export async function getJson<T>(
     }
     await options.limiter?.acquire();
 
-    // The fetch has to sit inside the try. A dropped connection, a DNS
-    // failure or a timeout rejects rather than returning a status, and
-    // outside a catch that rejection escapes the retry loop entirely --
-    // making maxRetries cover only HTTP statuses, which is not where flaky
-    // conference wifi fails.
+    // Inside the try so network errors and timeouts, which reject instead of
+    // returning a status, are retried too.
     try {
       const response = await fetch(url, {
         headers: { accept: "application/json", ...options.headers },
