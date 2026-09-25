@@ -1,8 +1,17 @@
 node_modules/
 dist/
+.build/
+
+# Local state
+data/
 *.db
 *.db-wal
 *.db-shm
+
+# Environment
 .env
 .env.local
-data/
+
+# Editors
+.vscode/
+.idea/
