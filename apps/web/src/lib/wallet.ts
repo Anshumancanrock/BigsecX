@@ -6,7 +6,7 @@
  */
 
 import { toBase64, utf8 } from "./bytes.ts";
-import { sameBytes, splitTransaction } from "./vtx.ts";
+import { sameIntent, splitTransaction } from "./vtx.ts";
 
 const SOLANA_MAINNET = "solana:mainnet";
 
@@ -236,16 +236,15 @@ export async function connect(
       }
 
       /*
-       * Verify the wallet returned the transaction it was given. Only the
-       * signature section may differ; every byte of the message is compared, so a
-       * wallet or extension that swaps in a different transaction is caught before
-       * anything is submitted.
+       * Verify the wallet signed what it was given. Wallets may adjust the
+       * compute-budget (priority fee) and guard instructions; any other change
+       * means a different transaction, and nothing is submitted.
        */
       return signed.map((result, i) => {
         const sent = splitTransaction(fromBase64(transactionsBase64[i]!));
         const back = splitTransaction(result.signedTransaction);
 
-        if (!sameBytes(sent.message, back.message)) {
+        if (!sameIntent(sent.message, back.message)) {
           throw new WalletError(
             `${wallet.name} returned a different transaction than it was asked to sign. ` +
               "Nothing has been submitted. Do not retry until you trust this wallet.",

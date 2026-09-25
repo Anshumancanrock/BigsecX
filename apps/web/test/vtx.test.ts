@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { Keypair, SystemProgram, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
-import { sameBytes, splitTransaction } from "../src/lib/vtx.ts";
+import {
+  ComputeBudgetProgram,
+  Keypair,
+  SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
+  type PublicKey,
+  type TransactionInstruction,
+} from "@solana/web3.js";
+import { sameBytes, sameIntent, splitTransaction } from "../src/lib/vtx.ts";
 
 const BLOCKHASH = "9C62FZuEUbpZmFrqPQbNfBiPr5U1JcTBhCfKqGgSEg4m";
 
@@ -76,5 +84,36 @@ describe("splitTransaction", () => {
     expect(sameBytes(new Uint8Array([1, 2, 3]), new Uint8Array([1, 2, 4]))).toBe(false);
     expect(sameBytes(new Uint8Array([1, 2]), new Uint8Array([1, 2, 3]))).toBe(false);
     expect(sameBytes(new Uint8Array(), new Uint8Array())).toBe(true);
+  });
+});
+
+describe("sameIntent", () => {
+  const payer = Keypair.generate();
+  const to = Keypair.generate().publicKey;
+  const compile = (instructions: TransactionInstruction[], payerKey: PublicKey = payer.publicKey) =>
+    new Uint8Array(new TransactionMessage({ payerKey, recentBlockhash: BLOCKHASH, instructions }).compileToV0Message().serialize());
+  const transfer = (lamports = 1_000) => SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: to, lamports });
+  const price = (microLamports: number) => ComputeBudgetProgram.setComputeUnitPrice({ microLamports });
+
+  test("accepts a wallet that changes the priority fee", () => {
+    expect(sameIntent(compile([price(1_000), transfer()]), compile([price(50_000), transfer()]))).toBe(true);
+  });
+
+  test("accepts a wallet that adds compute-budget instructions", () => {
+    const signed = compile([ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }), price(5_000), transfer()]);
+    expect(sameIntent(compile([transfer()]), signed)).toBe(true);
+  });
+
+  test("refuses an added transfer", () => {
+    const extra = SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: Keypair.generate().publicKey, lamports: 5 });
+    expect(sameIntent(compile([transfer()]), compile([transfer(), extra]))).toBe(false);
+  });
+
+  test("refuses a changed amount", () => {
+    expect(sameIntent(compile([transfer(1_000)]), compile([transfer(2_000)]))).toBe(false);
+  });
+
+  test("refuses a different fee payer", () => {
+    expect(sameIntent(compile([transfer()]), compile([transfer()], Keypair.generate().publicKey))).toBe(false);
   });
 });
