@@ -1,0 +1,7 @@
+.git
+node_modules
+**/node_modules
+apps/web/.build
+data
+.env
+.env.local
