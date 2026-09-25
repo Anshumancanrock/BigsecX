@@ -1,11 +1,8 @@
 /**
- * The PreStocks universe and the thematic groupings we build indexes from.
- *
- * Mints are pinned here rather than discovered purely from the issuer API for
- * two reasons: the API is rate limited and occasionally returns a null price
- * field, and a trading app should never route to a mint it has not seen before
- * without a human adding it. `syncUniverse` reconciles this list against the
- * live API and reports drift instead of silently trusting either side.
+ * The PreStocks universe and the sectors indexes are built from. Mints are
+ * pinned rather than discovered from the issuer API, which is rate limited and
+ * sometimes returns null prices, so no mint is routed to until a human adds it.
+ * `diffUniverse` reports drift against the live listing.
  */
 
 /** A company theme. Indexes are built by selecting on these. */
@@ -33,10 +30,10 @@ export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 export const USDC_DECIMALS = 6;
 
 /**
- * Every authority on these mints is the same key. It can freeze accounts, pause
- * all transfers, claw back balances via the permanent delegate, and rewrite the
- * transfer fee. Users must be told this; it is a property of the asset, not of
- * our app, and no amount of non-custodial design removes it.
+ * The single key holding every authority on these mints: it can freeze
+ * accounts, pause all transfers, claw back balances via the permanent delegate
+ * and change the transfer fee. This is a property of the asset that users must
+ * be told about; a non-custodial app cannot remove it.
  */
 export const PRESTOCKS_AUTHORITY = "WV9PJN7XTmTLVwbutCLFxp8TyePee6Xq5mRq6Fti5Wc";
 
@@ -117,10 +114,8 @@ export function inSector(sector: Sector): readonly PreStock[] {
 export const ALL_MINTS: readonly string[] = UNIVERSE.map((t) => t.mint);
 
 /**
- * Compare the pinned universe against what the issuer currently lists.
- *
- * A new listing is an opportunity, a delisting is a risk, and either one should
- * reach a human rather than change routing behaviour on its own.
+ * Compare the pinned universe against what the issuer currently lists. Either
+ * kind of difference goes to a human; routing never changes on its own.
  */
 export function diffUniverse(
   liveMints: readonly { readonly symbol: string; readonly mint: string }[],

@@ -1,17 +1,8 @@
 /**
- * Price models for a PreStock.
- *
- * Two prices exist for every one of these tokens and they routinely disagree:
- *
- *   mark   -- the issuer's valuation of the underlying SPV exposure, published
- *             through the PreStocks API. It moves on funding rounds and
- *             secondary marks, not on trades.
- *   market -- what the token actually changes hands for on Solana DEXs.
- *
- * The gap between them is the most informative number in this market. It is
- * not an error to be smoothed away: with roughly $2.6M of total DEX liquidity
- * and no retail redemption path, the two can stay apart for weeks. On
- * 2026-09-19 SPACEX traded 20% below its mark and NEURALINK 24% above.
+ * Price models for a PreStock. Each token has a mark (the issuer's valuation of
+ * the underlying SPV exposure, moving on funding rounds rather than trades) and
+ * a market price on Solana DEXs. With thin liquidity and no retail redemption
+ * path the two can stay apart for weeks; their gap is the basis.
  */
 
 import { currentMultiplier, type ScaledUiAmountConfig } from "./units.ts";
@@ -31,9 +22,8 @@ export interface PriceSnapshot {
 /**
  * Premium (positive) or discount (negative) of market to mark, as a fraction.
  *
- * Returns null when the issuer has not published a mark, which happens -- the
- * API returns a null tokenPrice for some symbols. Callers must render the
- * absence rather than substituting zero, which would read as "fairly priced".
+ * Null when there is no mark (the issuer API returns a null tokenPrice for some
+ * symbols). Callers must show the absence; zero would read as fairly priced.
  */
 export function basis(snapshot: PriceSnapshot): number | null {
   if (snapshot.markUsd === null || snapshot.markUsd === 0) return null;
@@ -43,10 +33,8 @@ export function basis(snapshot: PriceSnapshot): number | null {
 export type BasisLabel = "deep-discount" | "discount" | "fair" | "premium" | "rich";
 
 /**
- * Bucket a basis for display.
- *
- * Thresholds are set against what this market actually does rather than
- * borrowed from equities: a 2% dislocation is noise here, 10% is a real signal.
+ * Bucket a basis for display. Thresholds suit this market rather than
+ * equities: a 2% dislocation is noise here, 10% is a real signal.
  */
 export function basisLabel(basisFraction: number | null): BasisLabel | null {
   if (basisFraction === null) return null;
@@ -60,10 +48,8 @@ export function basisLabel(basisFraction: number | null): BasisLabel | null {
 /**
  * Convert an aggregator quote into a price per UI share.
  *
- * `outAmount` from Jupiter is in raw base units and carries no knowledge of the
- * ScaledUiAmount multiplier, so this is the only correct way to turn a quote
- * into a number a user can read. Skipping the multiplier overstates OPENAI by
- * 49% and SPACEX by 400%.
+ * Jupiter's `outAmount` is in raw base units and ignores the ScaledUiAmount
+ * multiplier; skipping it overstates the price by that factor (5x for SPACEX).
  */
 export function quoteToUiPrice(args: {
   readonly inUsd: number;

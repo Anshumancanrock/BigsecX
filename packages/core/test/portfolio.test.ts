@@ -210,13 +210,8 @@ describe("planRebalance", () => {
   });
 
   test("tops up a portfolio that is already exactly at target", () => {
-    // Regression. The churn guard used to compare the held weight, a share of
-    // the CURRENT book, against the target weight, a share of the book after
-    // new capital lands. Those sit on different bases, so deployUsd never
-    // reached the test: a wallet already at target had a gap of exactly zero
-    // and every leg was discarded however much was being deployed. This is
-    // the top-up path, the most common repeat action a user has, and it
-    // surfaced as HTTP 400 "nothing to trade".
+    // The churn guard measures dollars against the target book, so new capital
+    // into an at-target wallet still produces trades.
     const plan = planRebalance({
       target,
       holdings: [
@@ -250,8 +245,8 @@ describe("planRebalance", () => {
   });
 
   test("still refuses to churn on drift when no capital is deployed", () => {
-    // The guard must survive the fix: sub-tolerance drift with no new money
-    // is still not worth a spread plus a transfer fee.
+    // Sub-tolerance drift with no new money is not worth a spread plus a
+    // transfer fee.
     const plan = planRebalance({
       target,
       holdings: [
@@ -268,8 +263,7 @@ describe("planRebalance", () => {
   });
 
   test("a tiny top-up is still skipped as churn", () => {
-    // Dollars are what the guard measures, so a trivial deposit does not
-    // force a trade just because new money arrived.
+    // The guard measures dollars, so a trivial deposit does not force a trade.
     const plan = planRebalance({
       target,
       holdings: [

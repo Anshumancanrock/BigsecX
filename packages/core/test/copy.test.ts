@@ -72,8 +72,8 @@ describe("previewCopy", () => {
   });
 
   test("copies faithfully by default, with no cap imposed", () => {
-    // Regression in spirit: a default cap silently handed the follower a
-    // different allocation than the leader they chose.
+    // A default cap would give the follower a different allocation than the
+    // leader's.
     const preview = previewCopy({
       leader: LEADER,
       leaderWeights: [
@@ -115,8 +115,8 @@ describe("previewCopy", () => {
   });
 
   test("an unsatisfiable cap is widened and explained, not failed", () => {
-    // Two positions cannot both sit under 40%. The follower can still act on
-    // the preview, so say what the tightest possible cap is.
+    // Two positions cannot both sit under 40%; the preview names the tightest
+    // possible cap instead of failing.
     const preview = previewCopy({
       leader: LEADER,
       leaderWeights: [
@@ -203,8 +203,7 @@ describe("validateCopyLimits", () => {
 
 describe("stopLossTriggered", () => {
   test("measures drawdown from the peak, not from entry", () => {
-    // Doubled then halved: flat on entry, but down 50% from the peak, and a
-    // drawdown limit is about the second number.
+    // Doubled then halved: flat on entry, but down 50% from the peak.
     const result = stopLossTriggered({
       peakValueUsd: 2_000,
       currentValueUsd: 1_000,
@@ -245,17 +244,9 @@ describe("stopLossTriggered", () => {
 
 describe("a copy preview is exactly what a rebalance will do", () => {
   /**
-   * The invariant behind copy trading, proven rather than assumed.
-   *
-   * Deploying capital with no existing holdings must produce one buy per
-   * target weight, each sized weight x capital. When that holds, the preview
-   * a follower approves and the orders the builder emits are the same thing
-   * by construction.
-   *
-   * It stopped holding once, when the builder also passed the follower's
-   * unrelated positions: the target became (existing + capital), and a
-   * follower was shown $600 and $400 while the bundle sold $5,000 of an
-   * untouched holding and bought $3,600 and $2,400.
+   * Deploying capital with no existing holdings yields one buy per target
+   * weight, sized weight x capital, so the approved preview is exactly what the
+   * builder emits. Passing the follower's unrelated holdings breaks this.
    */
   const prices = new Map([
     ["OPENAI", 100],
@@ -298,9 +289,8 @@ describe("a copy preview is exactly what a rebalance will do", () => {
   });
 
   test("unrelated holdings would break it, which is why none are passed", () => {
-    // Demonstrates the failure mode directly: the same target with the
-    // follower's other position included produces a sell and six times the
-    // notional.
+    // With the follower's other position included, the same target sells it
+    // and plans six times the notional.
     const preview = previewCopy({ leader: LEADER, leaderWeights, limits: limits() });
     const wrong = planRebalance({
       target: preview.targetWeights,

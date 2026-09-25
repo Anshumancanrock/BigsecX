@@ -1,16 +1,8 @@
 /**
- * The Portfolio primitive.
- *
- * A portfolio is nothing but a set of target weights over the universe. Who
- * authored those weights is metadata, not structure: a thematic index is a
- * portfolio a rule produced, a leaderboard trader is a portfolio a person
- * produced, and a user's own allocation is a portfolio they produced. Mirroring
- * is therefore one operation -- move my holdings toward those weights -- and
- * indexes, social copying and self-directed rebalancing are three surfaces over
- * it rather than three subsystems.
- *
- * Everything here is pure. Quotes and depth limits live in `execution.ts`,
- * which consumes the orders this module produces.
+ * The Portfolio primitive: a set of target weights over the universe. Indexes,
+ * traders and a user's own allocation are all portfolios, so mirroring any of
+ * them is one operation. Pure; quotes and depth limits live in `execution.ts`,
+ * which consumes the orders produced here.
  */
 
 export type PortfolioKind = "index" | "trader" | "user";
@@ -48,12 +40,8 @@ export interface RebalanceOrder {
 }
 
 /**
- * Drop non-positive weights and rescale the rest to sum to exactly 1.
- *
- * Callers routinely build weights from valuations or scores that do not sum to
- * anything in particular, so normalising is the entry point to everything else.
- * Throws rather than returning an empty portfolio: silently allocating nothing
- * is worse than failing loudly.
+ * Drop non-positive or non-finite weights and rescale the rest to sum to 1.
+ * Throws when none remain rather than returning an empty portfolio.
  */
 export function normalizeWeights(weights: readonly Weight[]): Weight[] {
   const positive = weights.filter((w) => w.weight > 0 && Number.isFinite(w.weight));
@@ -63,11 +51,8 @@ export function normalizeWeights(weights: readonly Weight[]): Weight[] {
 }
 
 /**
- * Cap any single position and redistribute the excess proportionally.
- *
- * Without a cap, valuation weighting puts most of the portfolio in one or two
- * names -- SpaceX and Anthropic alone carry the bulk of this universe's implied
- * valuation. Iterates because redistributing can push another name over the cap.
+ * Cap any single position and redistribute the excess proportionally. Iterates
+ * because redistributing can push another name over the cap.
  */
 export function capWeights(weights: readonly Weight[], maxWeight: number): Weight[] {
   if (maxWeight <= 0 || maxWeight > 1) throw new RangeError("capWeights: maxWeight must be in (0, 1]");
@@ -80,10 +65,8 @@ export function capWeights(weights: readonly Weight[], maxWeight: number): Weigh
     );
   }
 
-  // Each pass recomputes every uncapped weight from the ORIGINAL proportions
-  // against the weight left over after the capped names take their cap. An
-  // earlier version redistributed onto the previous pass's output, which let a
-  // name that had just been capped receive weight again and breach the cap.
+  // Each pass splits what the capped names leave among the rest in their
+  // original proportions, so a name capped earlier never regains weight.
   const capped = new Set<string>();
   for (let pass = 0; pass <= base.length; pass++) {
     const remaining = 1 - capped.size * maxWeight;
@@ -152,15 +135,11 @@ export interface RebalanceRequest {
    * target demands it.
    */
   readonly deployUsd?: number;
-  /**
-   * Skip legs smaller than this. Every leg pays a transfer fee plus spread, so
-   * a $3 rebalance destroys more value than the drift it corrects.
-   */
+  /** Skip legs smaller than this; every leg pays a transfer fee plus spread. */
   readonly minTicketUsd?: number;
   /**
-   * Leave a leg alone when the trade it needs is smaller than this fraction
-   * of the target portfolio value. Prevents churn on noise in a market this
-   * thin, where a rebalance costs spread plus a transfer fee.
+   * Leave a leg alone when its trade is smaller than this share of the target
+   * portfolio value, so noise does not cause churn.
    */
   readonly toleranceBps?: number;
   /** Sell positions that the target does not include. Defaults to true. */
@@ -174,22 +153,16 @@ export interface RebalancePlan {
   /** Legs dropped for being below `minTicketUsd` or inside tolerance. */
   readonly skipped: readonly { readonly symbol: string; readonly usd: number; readonly reason: string }[];
   /**
-   * Holdings that could not be valued.
-   *
-   * These contribute nothing to portfolio value, which means the plan treats
-   * them as worthless and will happily sell a priced name to buy more of a
-   * position the user already has plenty of. The caller must surface this
-   * rather than act on the plan.
+   * Holdings that could not be valued. The plan treats them as worthless, so
+   * the caller must surface them rather than act on the plan.
    */
   readonly unpricedHoldings: readonly string[];
 }
 
 /**
- * Turn a target allocation into the trades that reach it.
- *
- * Sells are emitted before buys. That ordering is not cosmetic: a rebalance
- * funded from existing positions must realise the USD before spending it, and
- * emitting the list in execution order means the caller can sign it as-is.
+ * Turn a target allocation into the trades that reach it, in execution order:
+ * sells first, so a rebalance funded from existing positions realises USD
+ * before spending it.
  */
 export function planRebalance(request: RebalanceRequest): RebalancePlan {
   const {
@@ -237,28 +210,19 @@ export function planRebalance(request: RebalanceRequest): RebalancePlan {
     const heldUsd = currentUsdBySymbol.get(symbol) ?? 0;
     const targetWeight = targetBySymbol.get(symbol) ?? 0;
 
-    // A position outside the target is either liquidated or left untouched.
     if (targetWeight === 0 && !liquidateUntargeted) continue;
 
     const wantUsd = targetWeight * targetValueUsd;
     const deltaUsd = wantUsd - heldUsd;
     if (deltaUsd === 0) continue;
 
-    // Weight of the existing position in the portfolio the plan is aiming
-    // at, so a top-up reads as a real move: putting $1,000 onto an at-target
-    // $1,000 book shows 0.25 -> 0.50 rather than 0.50 -> 0.50 beside a $500
-    // buy.
+    // A share of the target book, so a top-up reads as a real move: $1,000
+    // onto an at-target $1,000 book shows 0.25 to 0.50, not 0.50 to 0.50.
     const fromWeight = heldUsd / targetValueUsd;
 
-    // The churn guard is measured in dollars, not in weights.
-    //
-    // Comparing weights was wrong: the held weight is a share of the CURRENT
-    // book while the target weight is a share of the book AFTER new capital
-    // lands, so the two sit on different bases and `deployUsd` never reached
-    // the test. A wallet already at its target weights therefore had a gap of
-    // exactly zero and every leg was discarded, however much money the user
-    // had asked to deploy -- which is precisely the top-up case, the most
-    // common repeat action there is.
+    // The churn guard compares dollars, not weights: held and target weights
+    // sit on different bases once `deployUsd` is added, and comparing them
+    // would skip every leg of a top-up.
     if (Math.abs(deltaUsd) < tolerance * targetValueUsd && targetWeight > 0) {
       skipped.push({ symbol, usd: Math.abs(deltaUsd), reason: "within tolerance" });
       continue;
@@ -277,9 +241,8 @@ export function planRebalance(request: RebalanceRequest): RebalancePlan {
     });
   }
 
-  // Sells first so the buys they fund are covered; largest leg first within
-  // each side, because that is the one most likely to hit a depth limit and
-  // the caller may want to stop early.
+  // Sells first so the buys they fund are covered; within a side, largest
+  // first, as the leg most likely to hit a depth limit.
   orders.sort((a, b) =>
     a.side === b.side ? b.usd - a.usd : a.side === "sell" ? -1 : 1,
   );

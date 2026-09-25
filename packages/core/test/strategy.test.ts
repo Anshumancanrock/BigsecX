@@ -81,7 +81,6 @@ describe("buildStrategy", () => {
   });
 
   test("reports every problem at once", () => {
-    // One per round trip sends the author back repeatedly.
     const problems = problemsOf(() =>
       build({ name: "", constituents: [{ symbol: "NOPE", weight: -1 }] }),
     );
@@ -174,8 +173,7 @@ describe("buildStrategy", () => {
   });
 
   test("keeps the allocation the author asked for", () => {
-    // Regression. A default cap silently turned a 60/40 pair into 50/50 --
-    // the same silent mutation the minimum-weight floor exists to refuse.
+    // A default cap would turn this 60/40 pair into 50/50.
     const strategy = build({
       name: "Humanoid Revolution",
       creator: "WALLET1",
@@ -200,8 +198,8 @@ describe("buildStrategy", () => {
   });
 
   test("an explicit cap is enforced, never widened", () => {
-    // The author asked for 25%; three names cannot reach 100% under it, and
-    // silently raising the cap would ship an allocation they did not choose.
+    // Three names cannot reach 100% under the author's 25% cap, and the cap is
+    // not raised to fit.
     expect(
       problemsOf(() =>
         build({
@@ -304,8 +302,8 @@ describe("rebalanceIntervalMs", () => {
 
 describe("combinedExposure", () => {
   test("reveals concentration hidden across several baskets", () => {
-    // Two baskets, half the capital each, both heavy in OPENAI. The user
-    // believes they are diversified and is 60% in one name.
+    // Two baskets, half the capital each, both 60% OPENAI: the user is 60% in
+    // one name.
     const combined = combinedExposure([
       {
         shareOfCapital: 0.5,

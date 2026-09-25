@@ -8,7 +8,7 @@ import {
   type ScaledUiAmountConfig,
 } from "../src/units.ts";
 
-/** OPENAI mint, read from mainnet on 2026-09-19. */
+/** OPENAI mint config as read from mainnet. */
 const OPENAI: ScaledUiAmountConfig = {
   multiplier: 1,
   newMultiplier: 1.4861347,
@@ -55,7 +55,7 @@ describe("currentMultiplier", () => {
 describe("rawToUi", () => {
   test("reproduces the live OPENAI supply reported by the issuer API", () => {
     // Mint supply 1901899847455 raw at 9 decimals; the issuer reports 2826.48
-    // UI shares. Agreement here is what proves the multiplier is applied.
+    // UI shares, which only matches with the multiplier applied.
     const ui = rawToUi(1901899847455n, 9, OPENAI, NOW);
     expect(ui).toBeCloseTo(2826.479359227, 6);
   });
@@ -70,8 +70,8 @@ describe("rawToUi", () => {
   });
 
   test("truncates after scaling, not before", () => {
-    // 3 raw units at x1.5 is 4.5 scaled, which truncates to 4 -- not to 3x1.5
-    // rounded, and not to trunc(3)x1.5.
+    // 3 raw units at x1.5 scale to 4.5, which truncates to 4; truncating
+    // before scaling would give 4.5.
     const half: ScaledUiAmountConfig = { ...UNSCALED, multiplier: 1.5, newMultiplier: 1.5 };
     expect(rawToUi(3n, 0, half, NOW)).toBe(4);
   });

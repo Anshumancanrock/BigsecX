@@ -1,19 +1,8 @@
 /**
- * Raw <-> UI amount conversion for Token-2022 mints carrying the
- * ScaledUiAmount extension.
- *
- * PreStocks mints use this extension to apply share splits without moving
- * tokens: the on-chain balance stays put and the multiplier changes. A client
- * that ignores the multiplier reports balances and prices that are wrong by the
- * multiplier -- for SPACEX (x5) that is 400% too high.
- *
- * The arithmetic here is a deliberate port of
- * `spl-token-2022/interface/src/extension/scaled_ui_amount/mod.rs`. JavaScript
- * numbers are IEEE-754 doubles, the same representation Rust uses for the
- * multiplier and for the `amount as f64` cast, so the port is bit-exact --
- * including the precision loss above 2^53 that the on-chain code also has.
- * Do not "improve" this with decimal math: matching the chain matters more
- * than being more precise than the chain.
+ * Raw/UI conversion for Token-2022 ScaledUiAmount mints, which apply splits by
+ * changing a multiplier instead of moving tokens. Ported from
+ * `spl-token-2022/interface/src/extension/scaled_ui_amount/mod.rs`; it stays in
+ * f64 like the chain so results match bit for bit, including loss above 2^53.
  */
 
 /** On-chain ScaledUiAmount extension state, as returned by jsonParsed RPC. */
@@ -44,9 +33,8 @@ export function currentMultiplier(
 /**
  * Convert a raw base-unit amount to its UI value.
  *
- * Mirrors `amount_to_ui_amount`: scale first, truncate toward zero, and only
- * then divide by 10^decimals. Truncating after scaling (not before) is what
- * makes this agree with the chain.
+ * Mirrors `amount_to_ui_amount`: scale, truncate toward zero, then divide by
+ * 10^decimals. Truncating after scaling is what matches the chain.
  */
 export function rawToUi(
   raw: bigint,
@@ -87,12 +75,9 @@ export const UNSCALED: ScaledUiAmountConfig = {
 };
 
 /**
- * Price per UI share, given a price quoted per raw token.
- *
- * Jupiter's quote endpoint returns raw base units and ignores the multiplier
- * entirely, so a price derived straight from `outAmount` is a price per *raw*
- * token. Dividing by the multiplier converts it to the per-share price a user
- * expects to see.
+ * Price per UI share, given a price quoted per raw token. Jupiter quotes raw
+ * base units, so a price from `outAmount` is per raw token until divided by the
+ * multiplier.
  */
 export function rawPriceToUiPrice(
   rawPrice: number,

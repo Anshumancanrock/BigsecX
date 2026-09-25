@@ -1,18 +1,8 @@
 /**
- * Copy trading: mirroring a portfolio, not a transaction.
- *
- * The naive design copies each trade a leader makes. It is wrong in this
- * market. A leader spending $700 out of a $100,000 book has moved 0.7% of
- * their portfolio; a follower with $1,000 who copies the dollar amount has
- * moved 70% of theirs. Copying the *weights* makes the relationship
- * proportional at any size, and it also means a follower who joins late
- * arrives at the leader's current allocation rather than at whatever the
- * leader happened to do most recently.
- *
- * Nothing here holds funds. A preview produces target weights; the existing
- * rebalance and mirror machinery turns those into transactions the follower
- * signs. Stopping a copy therefore needs no on-chain action at all -- there
- * is no standing authority to revoke, because none was ever granted.
+ * Copy trading mirrors a leader's weights, not their trades, so a copy is
+ * proportional at any account size and a late follower gets the current
+ * allocation. A preview only yields target weights and the follower signs
+ * every transaction, so stopping a copy needs no on-chain action.
  */
 
 import { capWeights, normalizeWeights, type Weight } from "./portfolio.ts";
@@ -21,12 +11,7 @@ import { bySymbol } from "./universe.ts";
 export interface CopyLimits {
   /** Capital the follower is willing to commit, in USD. */
   readonly capitalUsd: number;
-  /**
-   * Fraction of that capital to deploy, 0 to 1.
-   *
-   * Below 1 the remainder stays in stablecoin, which is how a follower takes
-   * a smaller version of the same exposure rather than a different one.
-   */
+  /** Fraction of capital to deploy, in (0, 1]; the rest stays in stablecoin. */
   readonly copyRatio: number;
   /** No copied position may exceed this share of deployed capital. */
   readonly maxPositionWeight: number;
@@ -35,20 +20,14 @@ export interface CopyLimits {
   readonly excludeSymbols?: readonly string[];
   /**
    * Stop copying once the follower is down this fraction from their peak.
-   *
-   * Enforced by the caller against observed value; recorded here because it
-   * is part of the agreement the follower set up.
+   * Enforced by the caller against observed value.
    */
   readonly stopLossFraction?: number;
 }
 
 /**
- * Defaults that copy faithfully.
- *
- * The position cap defaults to no cap. "Copy" means copy: a follower who
- * picked a leader expects that leader's allocation, and a default cap would
- * quietly hand them a different one. A cap is a risk limit the follower
- * chooses, and when they do choose one the preview says where it bit.
+ * Defaults that copy faithfully. There is no position cap by default, since a
+ * default cap would silently give the follower a different allocation.
  */
 export const DEFAULT_COPY_LIMITS: Omit<CopyLimits, "capitalUsd"> = {
   copyRatio: 1,
@@ -123,10 +102,8 @@ export interface CopyPreview {
 /**
  * What a follower would hold if they started copying now.
  *
- * Exclusions are removed first and the remainder is renormalised, so
- * refusing one name redistributes into the rest rather than leaving the
- * follower partly in cash without having asked for it. The position cap is
- * then applied to what survives.
+ * Exclusions are removed and the rest renormalised, so a refused name is
+ * redistributed rather than left as cash; the position cap applies after that.
  */
 export function previewCopy(args: {
   readonly leader: string;
@@ -185,8 +162,8 @@ export function previewCopy(args: {
     );
   }
 
-  // A cap below an equal split cannot be satisfied, so widen it to one and
-  // say so rather than failing a preview the follower can still act on.
+  // A cap below an equal split cannot be met; widen it to 1/n and say so
+  // rather than fail a preview the follower can still act on.
   const feasibleCap = Math.max(args.limits.maxPositionWeight, 1 / kept.length);
   if (feasibleCap > args.limits.maxPositionWeight + 1e-12) {
     notes.push(
@@ -197,9 +174,8 @@ export function previewCopy(args: {
   const uncapped = normalizeWeights(kept);
   const targetWeights = capWeights(uncapped, feasibleCap);
 
-  // Name the positions the cap actually moved. A follower who set a limit
-  // should see where it changed what they are copying, not discover later
-  // that their allocation differs from the leader's.
+  // Name the positions the cap moved, so the follower sees where the copy
+  // differs from the leader.
   const capped = uncapped
     .filter((w) => {
       const after = targetWeights.find((t) => t.symbol === w.symbol)?.weight ?? w.weight;
@@ -234,11 +210,8 @@ export function previewCopy(args: {
 }
 
 /**
- * Whether a follower's stop-loss has been reached.
- *
- * Measured from the peak value observed, not from the starting value: a
- * follower who doubled and then halved is flat on entry but down 50% from
- * where they were, and a drawdown limit is about the second number.
+ * Whether a follower's stop-loss has been reached, measured as drawdown from
+ * the observed peak rather than from the starting value.
  */
 export function stopLossTriggered(args: {
   readonly peakValueUsd: number;

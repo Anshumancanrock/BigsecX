@@ -1,15 +1,7 @@
 /**
- * Strategies: portfolios somebody authored and can publish.
- *
- * A thematic index, a user's own basket and a portfolio someone copies are
- * the same object with different authors. Keeping one primitive means
- * weighting, drift, execution and performance are written once rather than
- * three times that drift apart.
- *
- * This module owns the rules a strategy must satisfy before it can be saved.
- * Validation lives here, in pure code, rather than at the API edge: the
- * indexer builds strategies too, and a rule enforced in only one caller is a
- * rule that eventually is not enforced.
+ * Strategies: portfolios somebody authored and can publish, and the rules one
+ * must satisfy before it is saved. Validation lives here rather than at the API
+ * edge because the indexer builds strategies too.
  */
 
 import { capWeights, normalizeWeights, type Portfolio, type Weight } from "./portfolio.ts";
@@ -18,11 +10,8 @@ import { UNIVERSE, bySymbol, type Sector } from "./universe.ts";
 export type RebalanceFrequency = "manual" | "daily" | "weekly" | "monthly";
 
 /**
- * Limits a strategy promises to keep.
- *
- * These are the author's commitments to whoever buys the basket, so they are
- * stored with the strategy and checked on every rebalance rather than applied
- * once at creation.
+ * Limits a strategy promises to keep, stored with it and checked on every
+ * rebalance rather than only at creation.
  */
 export interface Guardrails {
   /** No single position may exceed this fraction. */
@@ -36,15 +25,10 @@ export interface Guardrails {
 }
 
 /**
- * Defaults that constrain nothing about the allocation.
- *
- * Guardrails are the author's promises, so they are opt-in. A default cap
- * reshapes the basket silently: a 60/40 pair under a 40% cap comes back
- * 50/50, which is not what was asked for and is the same silent mutation the
- * minimum-weight floor is explicitly a rejection to avoid.
- *
- * `driftBps` is different and does have a default, because it governs when
- * to rebalance rather than what to hold. It changes no weight.
+ * Defaults that constrain nothing about the allocation: a default cap would
+ * silently reshape a basket (a 60/40 pair under a 40% cap becomes 50/50).
+ * `driftBps` has a real default because it sets when to rebalance, not what
+ * to hold.
  */
 export const DEFAULT_GUARDRAILS: Guardrails = {
   maxWeight: 1,
@@ -64,9 +48,8 @@ export interface StrategyDraft {
 
 export interface Strategy extends Portfolio {
   /**
-   * Narrower than Portfolio's kind: a strategy is authored, so it is either
-   * a system index or a user's own. A trader's live holdings are a portfolio
-   * but not a strategy, because nobody wrote them down as an intention.
+   * Narrower than Portfolio's kind: a trader's live holdings are a portfolio
+   * but not an authored strategy.
    */
   readonly kind: "index" | "user";
   readonly description: string;
@@ -93,12 +76,8 @@ export class StrategyInvalid extends Error {
 }
 
 /**
- * Fill in guardrails the author did not set.
- *
- * Only values the author actually supplied constrain the basket. An
- * explicitly chosen cap is enforced exactly and never widened to make a
- * basket fit: they asked for it, and raising it would ship an allocation
- * they did not agree to. If it is infeasible they are told so.
+ * Fill in guardrails the author did not set. An explicit cap is enforced
+ * exactly, never widened to make a basket fit; an infeasible one is reported.
  */
 function resolveGuardrails(partial: Partial<Guardrails> | undefined): Guardrails {
   return {
@@ -110,11 +89,8 @@ function resolveGuardrails(partial: Partial<Guardrails> | undefined): Guardrails
 }
 
 /**
- * Check guardrails are satisfiable before checking anything against them.
- *
- * A cap below an equal split, or a floor above one, describes a basket that
- * cannot exist. Reporting that as "position too large" would send the author
- * to adjust the wrong number.
+ * Check guardrails are valid and satisfiable before checking weights against
+ * them, so an impossible cap or floor is reported as such.
  */
 function guardrailProblems(rails: Guardrails, count: number): string[] {
   const problems: string[] = [];
@@ -165,12 +141,8 @@ export function sectorExposure(weights: readonly Weight[]): Map<Sector, number> 
 /**
  * Validate a draft and return the strategy it describes.
  *
- * Weights are normalised and then capped, so an author can express intent in
- * any units -- percentages, dollars, arbitrary scores -- and still get a
- * basket that sums to one and respects the cap.
- *
- * Throws with every problem at once. Returning only the first sends the
- * author round the loop once per mistake.
+ * Weights may be in any units (percentages, dollars, scores); they are
+ * normalised, then capped. Throws `StrategyInvalid` listing every problem.
  */
 export function buildStrategy(
   draft: StrategyDraft,
@@ -222,8 +194,8 @@ export function buildStrategy(
   );
   const weights = capWeights(normalized, rails.maxWeight);
 
-  // The floor is a rejection, not a correction: raising a position to meet it
-  // would silently change the allocation the author asked for.
+  // The floor rejects rather than corrects: raising a position to meet it
+  // would change the allocation the author asked for.
   const below = weights.filter((w) => w.weight < rails.minWeight - 1e-12);
   if (below.length > 0) {
     problems.push(
@@ -261,12 +233,9 @@ export function buildStrategy(
 }
 
 /**
- * Whether a holding has drifted far enough from target to be worth trading.
- *
- * Drift is measured in absolute weight, so a 3% threshold means three points
- * of the portfolio, not three percent of the position. Rebalancing on smaller
- * moves spends spread and transfer fee to correct noise -- which in a market
- * with roughly $2.6M of total depth costs more than the drift does.
+ * Whether any holding has drifted more than `driftBps` from target. Drift is
+ * absolute weight: 300 bps is three points of the portfolio, not 3% of the
+ * position.
  */
 export function driftExceeded(
   current: readonly Weight[],
@@ -303,11 +272,9 @@ export function rebalanceIntervalMs(frequency: RebalanceFrequency): number | nul
 }
 
 /**
- * Overlap between several strategies a user holds.
- *
- * Thematic baskets share constituents, so someone holding three of them is
- * usually far more concentrated than they believe. `weightByStrategy` is the
- * share of the user's total capital in each strategy.
+ * Combined exposure per symbol across the strategies a user holds, which often
+ * share constituents. `shareOfCapital` is each strategy's share of the user's
+ * capital.
  */
 export function combinedExposure(
   holdings: readonly { readonly weights: readonly Weight[]; readonly shareOfCapital: number }[],
