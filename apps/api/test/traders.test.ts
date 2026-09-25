@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createApp } from "../src/index.ts";
+import { createApp } from "../src/app.ts";
 import { makeServices } from "./fakes.ts";
 import type { Store } from "@ps/db";
 
@@ -91,14 +91,14 @@ describe("trader profile", () => {
 
   test("flags a record whose cost basis is incomplete", async () => {
     const { app: a, store } = app();
-    // A SOL-routed swap we could not price.
+    // A SOL-routed swap with no price.
     store.writeTrades([trade("OPENAI", 5, null, 10)]);
     const body = (await (await a.request(`/api/traders/${W}`)).json()) as {
       coverageComplete: boolean;
       caveats: string[];
     };
     expect(body.coverageComplete).toBe(false);
-    expect(body.caveats.join(" ")).toContain("unreliable");
+    expect(body.caveats.join(" ")).toContain("rough");
   });
 
   test("a wallet with no indexed trades is empty, not an error", async () => {
