@@ -11,8 +11,7 @@ const oracle = (priceUsd: number, confidenceUsd = 1, ageSeconds = 5): OraclePric
 
 describe("PythClient", () => {
   test("reports itself unavailable without a key", () => {
-    // Hermes rejects price reads with HTTP 401 and no key, so saying so
-    // beats every request failing.
+    // Hermes rejects keyless price reads with HTTP 401.
     expect(new PythClient(undefined).available).toBe(false);
     expect(new PythClient("").available).toBe(false);
     expect(new PythClient("k").available).toBe(true);
@@ -24,15 +23,12 @@ describe("PythClient", () => {
   });
 
   test("asks for nothing when no requested symbol is covered", async () => {
-    // Pyth carries three of the eight names; the rest must not produce a
-    // pointless request.
+    // Neither symbol has a Pyth feed, so no request is made.
     const prices = await new PythClient("key").prices(["KALSHI", "POLYMARKET"]);
     expect(prices.size).toBe(0);
   });
 
   test("feed ids are pinned, not resolved by search", () => {
-    // Resolving by substring would let a newly listed similar feed silently
-    // become the reference a price is judged against.
     expect(Object.keys(PYTH_FEED_IDS).sort()).toEqual(["ANTHROPIC", "OPENAI", "SPACEX"]);
     for (const id of Object.values(PYTH_FEED_IDS)) expect(id).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -40,8 +36,7 @@ describe("PythClient", () => {
 
 describe("priceTruth", () => {
   test("judges against the oracle when one exists", () => {
-    // Market 1200, oracle 1000: the token is rich against an independent
-    // reference, whatever the issuer says.
+    // Market 1200 against oracle 1000 is rich, although the mark (1190) is close.
     const truth = priceTruth({
       symbol: "OPENAI",
       marketUsd: 1_200,
@@ -68,8 +63,6 @@ describe("priceTruth", () => {
   });
 
   test("measures how far the two references disagree", () => {
-    // The number that matters when they do: the reference itself is
-    // uncertain, so a premium against either means less.
     const truth = priceTruth({
       symbol: "OPENAI",
       marketUsd: 1_000,

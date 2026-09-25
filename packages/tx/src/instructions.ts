@@ -1,15 +1,8 @@
 /**
- * Convert Jupiter's JSON instruction format into web3.js instructions, and
- * rebuild address lookup tables from the data Jupiter already sent.
- *
- * The lookup tables matter more than they look. A single-hop PreStocks swap
- * carries 29 accounts; at 32 bytes each that is 928 bytes of a 1232-byte
- * transaction before any instruction data. Lookup tables collapse each of
- * those to a one-byte index, which is the difference between fitting one swap
- * per transaction and fitting several.
- *
- * Jupiter returns `addressesByLookupTableAddress` inline, so the tables can be
- * reconstructed without an extra RPC round trip per table.
+ * Converts Jupiter's JSON instructions to web3.js and rebuilds lookup tables
+ * from the inline `addressesByLookupTableAddress`, with no RPC call per table.
+ * A single-hop PreStocks swap has 29 accounts (928 of the 1232 bytes as plain
+ * keys); a lookup table reduces each to a one-byte index.
  */
 
 import {
@@ -30,7 +23,7 @@ export interface JupiterInstruction {
   readonly data: string;
 }
 
-/** The subset of /swap-instructions we consume. */
+/** The fields of the /swap-instructions response used here. */
 export interface SwapInstructionsResponse {
   readonly tokenLedgerInstruction: JupiterInstruction | null;
   readonly computeBudgetInstructions: readonly JupiterInstruction[];
@@ -58,11 +51,9 @@ export function toInstruction(source: JupiterInstruction): TransactionInstructio
 }
 
 /**
- * Rebuild lookup tables from the inline address map.
- *
- * Only `key` and `state.addresses` are read when a message is compiled, so the
- * remaining state fields are filled with values that mark the table active:
- * a deactivation slot of u64::MAX means "never deactivated".
+ * Rebuilds lookup tables from the inline address map. Compilation reads only
+ * `key` and `state.addresses`; the other fields just mark the table active
+ * (a deactivation slot of u64::MAX means never deactivated).
  */
 export function lookupTablesFrom(
   response: SwapInstructionsResponse,
@@ -85,15 +76,9 @@ export function lookupTablesFrom(
 }
 
 /**
- * A stable identity for an instruction, used to drop duplicates.
- *
- * Only ever applied WITHIN a single transaction. Deduplicating across a whole
- * bundle is a trap: every sell leg emits the same "create the USDC destination
- * account" setup, so global dedup keeps it in the first leg's group and drops
- * it from the rest -- and those groups are packed into different
- * transactions. A wallet that does not already hold USDC would have the first
- * transaction create the account and every later one fail against an account
- * that does not exist yet.
+ * Identity of an instruction, for dropping duplicates within one transaction.
+ * Never dedupe across a bundle: each transaction needs its own setup (such as
+ * creating the USDC account), since an earlier transaction may not land.
  */
 export function instructionKey(source: JupiterInstruction): string {
   return [
@@ -103,14 +88,7 @@ export function instructionKey(source: JupiterInstruction): string {
   ].join("|");
 }
 
-/**
- * Drop repeated instructions from ONE transaction.
- *
- * Scope is the whole point. Legs that share a transaction often repeat the
- * same idempotent account creation and only need it once; legs in different
- * transactions each need their own copy, because a transaction cannot depend
- * on one that may not have landed.
- */
+/** Drops repeated instructions (typically account creations) within one transaction. */
 export function dedupeWithinTransaction(
   instructions: readonly TransactionInstruction[],
 ): TransactionInstruction[] {

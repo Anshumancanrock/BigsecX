@@ -1,10 +1,7 @@
 /**
- * Client for the PreStocks issuer API.
- *
- * Two endpoints exist. `/api/prestocks` is documented in the hackathon brief;
- * `/api/stats` is not documented anywhere but is public, returns 200, and
- * carries the only long history available for this market -- 412 days of
- * cumulative volume and 60 weeks of holder counts per symbol.
+ * Client for the PreStocks issuer API. `/api/stats` is undocumented but public,
+ * and is the only long history for this market: cumulative daily volume and
+ * weekly holder counts per symbol.
  */
 
 import { Cache, RateLimiter, getJson } from "./http.ts";
@@ -23,7 +20,7 @@ export interface IssuerToken {
   /** Issuer mark price per UI share. */
   readonly markPrice: number | null;
   readonly markValuation: number | null;
-  /** Issuer's view of the traded price per UI share. Can be null. */
+  /** Issuer's view of the traded price per UI share. */
   readonly tokenPrice: number | null;
   readonly impliedValuation: number | null;
   /** Supply in UI (multiplier-adjusted) shares. */
@@ -41,8 +38,8 @@ export interface IssuerStats {
 
 export class PreStocksClient {
   readonly #cache = new Cache();
-  // Measured: this endpoint 429s under even light polling, so stay well under
-  // one request per second and let the cache absorb the rest.
+  // Returns 429 under light polling: a burst of 3, then one request per 4 s,
+  // with the cache absorbing the rest.
   readonly #limiter = new RateLimiter(3, 0.25);
 
   constructor(private readonly tokensTtlMs = 60_000, private readonly statsTtlMs = 600_000) {}
@@ -73,11 +70,8 @@ export class PreStocksClient {
 }
 
 /**
- * Turn the cumulative volume series into per-day volume.
- *
- * The raw series only ever increases; subtracting consecutive rows recovers the
- * daily figure. A negative delta would mean the issuer restated history, so it
- * is clamped to zero rather than propagated as a negative volume.
+ * Differences the cumulative volume series into per-day volume. A negative
+ * delta (the issuer restating history) is clamped to zero.
  */
 export function dailyVolume(
   stats: IssuerStats,
@@ -98,12 +92,7 @@ export function dailyVolume(
   return out;
 }
 
-/**
- * Daily volume for one symbol, oldest first.
- *
- * Differenced from the cumulative series the issuer publishes, so the last
- * entry is the most recent complete day.
- */
+/** Daily volume for one symbol, oldest first. */
 export function volumeSeries(
   stats: IssuerStats,
   symbol: string,
@@ -127,10 +116,8 @@ export function holderSeries(
 }
 
 /**
- * The most recent complete day's volume per symbol.
- *
- * The issuer's newest row is the day in progress, so it is not comparable
- * with earlier full days; the one before it is.
+ * Volume per symbol for the most recent complete day. The issuer's newest row
+ * is the day in progress, so the one before it is used.
  */
 export function latestDailyVolume(stats: IssuerStats): Readonly<Record<string, number>> {
   const daily = dailyVolume(stats);
@@ -156,7 +143,7 @@ export function holderGrowth(stats: IssuerStats): Readonly<Record<string, number
   for (const symbol of stats.holderSymbols) {
     const now = latest?.[symbol] ?? 0;
     const before = previous?.[symbol] ?? 0;
-    // A symbol going from zero holders has undefined growth, not infinite.
+    // Growth from zero holders is undefined, not infinite.
     growth[symbol] = before > 0 ? now / before - 1 : null;
   }
   return growth;

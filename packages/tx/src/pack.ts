@@ -1,15 +1,7 @@
 /**
- * Pack swap instructions into as few versioned transactions as will hold them.
- *
- * A Solana transaction is capped at 1232 bytes on the wire. Jupiter routes are
- * account-heavy, so how many swaps fit is not something to guess: this packs
- * greedily and asks the compiler, adding one swap at a time and keeping the
- * last arrangement that actually serialized within budget.
- *
- * Fewer transactions is not merely tidier. Each one the user signs is another
- * dialog, another chance to abandon the flow, and another blockhash that can
- * expire -- and because they are separate transactions, a basket is not atomic.
- * Partial fills are a real outcome the caller has to handle.
+ * Packs swap instructions into as few 1232-byte versioned transactions as
+ * possible, compiling each candidate to measure it. The transactions are not
+ * atomic with each other, so a basket can fill partially.
  */
 
 import {
@@ -23,40 +15,27 @@ import {
 /** Hard wire limit for a Solana transaction packet. */
 export const PACKET_DATA_SIZE = 1232;
 
-/**
- * Bytes reserved for signatures that are not yet attached.
- *
- * The transaction is compiled unsigned, so the serialized form carries empty
- * signature slots. Budgeting 64 bytes per required signature plus the
- * shortvec length prefix keeps a transaction that fits here from overflowing
- * once the wallet signs it.
- */
+/** Signature bytes the wallet adds: 64 per required signer plus a one-byte length prefix. */
 function signatureOverhead(transaction: VersionedTransaction): number {
   return 1 + 64 * transaction.message.header.numRequiredSignatures;
 }
 
 export interface PackedTransaction {
   readonly transaction: VersionedTransaction;
-  /** Indices into the input group list that ended up in this transaction. */
+  /** Indices of the input groups in this transaction. */
   readonly groupIndices: readonly number[];
   readonly byteLength: number;
   /**
-   * The instructions and tables this transaction was built from.
-   *
-   * Returned so a caller can recompile it -- notably to set a compute budget
-   * that reflects how many swaps actually landed together, which is only known
-   * after packing.
+   * Instructions without the preamble, so the caller can recompile with a
+   * compute budget sized to the swaps packed together.
    */
   readonly instructions: readonly TransactionInstruction[];
   readonly lookupTables: readonly AddressLookupTableAccount[];
 }
 
 /**
- * One unit of work that must not be split across transactions.
- *
- * A swap and the setup it depends on -- creating the destination account, for
- * instance -- have to travel together, so the packer moves groups, not
- * individual instructions.
+ * Instructions that must share a transaction, such as a swap and the setup that
+ * creates its destination account.
  */
 export interface InstructionGroup {
   readonly instructions: readonly TransactionInstruction[];
@@ -64,10 +43,8 @@ export interface InstructionGroup {
 }
 
 /**
- * Compile a message and report its exact wire size.
- *
- * Exposed so a caller can test whether a single group will fit before
- * committing to it, which is what drives the retry ladder for oversized routes.
+ * Compiles a message and returns its exact wire size, or null if it does not
+ * compile. Used to test whether a route fits before committing to it.
  */
 export function compileAndMeasure(args: {
   readonly payer: PublicKey;
@@ -105,13 +82,8 @@ function shortVecSize(length: number): number {
 }
 
 /**
- * Exact wire size of a compiled v0 message.
- *
- * Neither `VersionedTransaction.serialize()` nor `MessageV0.serialize()` can be
- * used for this: both encode into a fixed 1232-byte buffer and throw once the
- * content passes it. A packer has to know how far over the limit a candidate
- * is in order to decide what to do about it, so the layout is measured
- * directly instead.
+ * Exact wire size of a compiled v0 message, computed from its layout because
+ * web3.js `serialize()` writes into a fixed 1232-byte buffer and throws past it.
  */
 function messageSize(message: VersionedTransaction["message"]): number {
   let size = 1; // version prefix byte
@@ -141,16 +113,8 @@ function measure(transaction: VersionedTransaction): number {
 }
 
 /**
- * Greedily pack groups into transactions.
- *
- * `preamble` instructions (compute budget, typically) are repeated in every
- * transaction, because each one is independently executed and independently
- * priced.
- *
- * A group that cannot fit even on its own is reported in `oversized` rather
- * than thrown: one unroutable leg should not destroy a basket. It is never
- * dropped silently, because a caller who believed the basket was complete
- * would be wrong about what they own.
+ * A group too large to fit even alone is reported in `oversized` instead of
+ * throwing, so the rest of the basket still ships.
  */
 export interface PackResult {
   readonly packed: readonly PackedTransaction[];
@@ -158,6 +122,10 @@ export interface PackResult {
   readonly oversized: readonly { readonly index: number; readonly bytes: number; readonly reason: string }[];
 }
 
+/**
+ * Greedily packs groups in order. `preamble` (typically the compute budget) is
+ * repeated in every transaction, since each executes and is priced on its own.
+ */
 export function packGroups(args: {
   readonly payer: PublicKey;
   readonly blockhash: string;
@@ -204,8 +172,7 @@ export function packGroups(args: {
       ]);
       bytes = measure(built);
     } catch {
-      // Compilation fails when the message exceeds the account-index limits,
-      // which is just another way of saying it does not fit.
+      // Compilation throws past the account-index limits; that also means it does not fit.
       built = null;
     }
 

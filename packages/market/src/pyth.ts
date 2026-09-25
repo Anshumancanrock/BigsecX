@@ -1,19 +1,7 @@
 /**
- * Pyth as an independent reference price.
- *
- * PreStocks already publishes a mark, but that mark is the issuer's own
- * valuation of its own SPV. Pyth publishes a price for the same private
- * companies from an unrelated source, which turns a two-way comparison --
- * "the issuer says X, the market says Y" -- into a three-way one where the
- * issuer is no longer the only reference. For an asset whose value cannot be
- * checked against a public exchange, that second opinion is the whole point.
- *
- * Coverage is partial and that is a fact about Pyth, not a bug here: of the
- * eight PreStocks names, Pyth carries OpenAI, Anthropic and SpaceX.
- *
- * Hermes now rejects price reads without a key (HTTP 401) while leaving feed
- * discovery open, so this client degrades to reporting no oracle rather than
- * failing a request.
+ * Pyth as a reference price independent of the issuer's own mark. Of the eight
+ * PreStocks names, Pyth covers OpenAI, Anthropic and SpaceX. Hermes rejects
+ * price reads without an API key (HTTP 401), so without one no oracle is reported.
  */
 
 import { Cache, RateLimiter, getJson } from "./http.ts";
@@ -21,11 +9,8 @@ import { Cache, RateLimiter, getJson } from "./http.ts";
 const HERMES = "https://hermes.pyth.network";
 
 /**
- * Feed ids for the PreStocks names Pyth covers.
- *
- * Pinned rather than discovered at runtime: a price feed is a thing money
- * moves against, and resolving one by substring search would let a newly
- * listed feed with a similar name silently become the reference.
+ * Feed ids for the PreStocks names Pyth covers. Pinned rather than searched by
+ * name, so a newly listed feed with a similar name cannot become the reference.
  */
 export const PYTH_FEED_IDS: Readonly<Record<string, string>> = {
   OPENAI: "96d4bb23a3db78fdb72b3a03ce80ead686096f324319166534d9a27c0519c483",
@@ -36,12 +21,7 @@ export const PYTH_FEED_IDS: Readonly<Record<string, string>> = {
 export interface OraclePrice {
   readonly symbol: string;
   readonly priceUsd: number;
-  /**
-   * Pyth's own uncertainty band, in USD.
-   *
-   * Worth showing: a price with a wide band is a price the publishers
-   * disagree about, and for a private company that is common and meaningful.
-   */
+  /** Pyth's confidence interval in USD; wide when publishers disagree. */
   readonly confidenceUsd: number;
   readonly publishedAt: Date;
 }
@@ -66,11 +46,8 @@ export class PythClient {
   }
 
   /**
-   * Oracle prices for whichever requested symbols Pyth covers.
-   *
-   * Returns an empty map rather than throwing when unavailable. An oracle is
-   * a second opinion here, not the price anything trades at, so losing it
-   * should cost a column on a page and nothing else.
+   * Oracle prices for the requested symbols Pyth covers. Returns an empty map
+   * instead of throwing: the oracle is a reference only, never a trade price.
    */
   async prices(symbols: readonly string[], ttlMs = 10_000): Promise<Map<string, OraclePrice>> {
     const covered = symbols.filter((s) => PYTH_FEED_IDS[s] !== undefined);
@@ -129,21 +106,16 @@ export interface PriceTruth {
   /** Market against the oracle, as a fraction. */
   readonly basisToOracle: number | null;
   /**
-   * How far the issuer and the oracle disagree.
-   *
-   * The interesting number when they do: the token can only be mispriced
-   * relative to a reference, and two references that disagree tell a user
-   * the reference itself is uncertain.
+   * Issuer mark against the oracle, as a fraction. A wide spread means the
+   * reference itself is uncertain.
    */
   readonly referenceSpread: number | null;
   readonly verdict: PriceTruthVerdict;
 }
 
 /**
- * Compare a token against every reference available for it.
- *
- * The verdict prefers the oracle when present, because the issuer marking
- * its own book is the weaker of the two references.
+ * Compares a token's market price with the issuer mark and the oracle. The
+ * verdict uses the oracle when present, since the issuer marks its own book.
  */
 export function priceTruth(args: {
   readonly symbol: string;
@@ -151,7 +123,7 @@ export function priceTruth(args: {
   readonly markUsd: number | null;
   readonly oracle: OraclePrice | undefined;
   readonly now: Date;
-  /** Beyond this, call it aligned rather than mispriced. */
+  /** Basis within this fraction either way counts as aligned. */
   readonly toleranceFraction?: number;
 }): PriceTruth {
   const tolerance = args.toleranceFraction ?? 0.02;
