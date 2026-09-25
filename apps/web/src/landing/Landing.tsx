@@ -25,6 +25,9 @@ export function Landing() {
       <header className="hero">
         <Nav />
         <PhoneHero market={snapshot} indexes={indexes.data} />
+        <a className="hero-wordmark" href="/" onClick={link("/")} aria-label="Bigsec home">
+          BIGSEC
+        </a>
       </header>
       <BuiltOn />
 
@@ -90,9 +93,9 @@ function Footer() {
   return (
     <footer className="foot">
       <div className="wrap foot-grid">
-        <div className="foot-social">
-          <Mark size={22} />
-        </div>
+        <a className="foot-wordmark" href="/" onClick={link("/")} aria-label="Bigsec home">
+          BIGSEC
+        </a>
         <div className="foot-cols">
           <div className="foot-col">
             <h4>Buy</h4>

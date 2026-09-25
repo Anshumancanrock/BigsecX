@@ -83,6 +83,35 @@
   background: linear-gradient(175deg, hsl(149 82% 86%) 0%, hsl(149 78% 82%) 55%, hsl(150 62% 87%) 100%);
 }
 
+/* The wordmark in the header row, left of the centred nav and level with it. */
+.hero-wordmark {
+  position: absolute;
+  top: 41px;
+  left: calc(max(0px, (100vw - var(--maxw)) / 2) + var(--gutter));
+  z-index: 1;
+  font-family: Syncopate, var(--font-sans);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: #0a0a0a;
+}
+
+@media (max-width: 720px) {
+  .hero-wordmark {
+    top: 44px;
+    left: 18px;
+    font-size: 18px;
+  }
+
+  /* Wordmark on the left, nav pill on the right. */
+  .nav {
+    left: auto;
+    right: 16px;
+    transform: none;
+  }
+}
+
 /*
  * The concentric arcs: a repeating radial gradient centred far below the
  * fold, so the rings need no image.
@@ -1227,10 +1256,21 @@
   color: hsl(var(--olive));
 }
 
-.foot-social {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
+/* The wordmark: wide geometric caps, set large at the foot of the page. */
+.foot-wordmark {
+  align-self: flex-end;
+  font-family: Syncopate, var(--font-sans);
+  font-size: clamp(36px, 5.4vw, 76px);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: 0.03em;
+  color: #0a0a0a;
+}
+
+@media (max-width: 900px) {
+  .foot-wordmark {
+    order: 1;
+  }
 }
 
 @media (max-width: 900px) {
