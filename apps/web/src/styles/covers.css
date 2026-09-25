@@ -1,0 +1,104 @@
+/*
+ * Basket covers and the cards around them. The cover is the same photograph
+ * on phone and desktop; each stylesheet sets only the card.
+ */
+
+.basket-cover {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  overflow: hidden;
+  background: hsl(150 30% 92%);
+}
+
+.basket-cover img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s var(--ease-out, ease-out);
+}
+
+/* A soft shade at the foot and a hairline, so a light photo does not melt into the card. */
+.basket-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0) 62%, rgb(0 0 0 / 0.1));
+  box-shadow: inset 0 -1px 0 hsl(0 0% 0% / 0.07);
+  pointer-events: none;
+}
+
+/* A slow push in on the picture when the card is pointed at. */
+@media (hover: hover) {
+  .basket-tile:hover .basket-cover img,
+  .ex-basket:hover .basket-cover img {
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .basket-cover img {
+    transition: none;
+  }
+
+  .basket-tile:hover .basket-cover img,
+  .ex-basket:hover .basket-cover img {
+    transform: none;
+  }
+}
+
+/* The cover across the top of the card, flush with its edges; the words under it. */
+.tile.basket-tile {
+  justify-content: flex-start;
+  gap: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.basket-tile .basket-cover {
+  flex: none;
+}
+
+.basket-body {
+  display: block;
+  padding: 16px 18px 0;
+}
+
+.basket-desc {
+  display: block;
+  max-width: 44ch;
+  margin-top: 8px;
+}
+
+.basket-foot {
+  display: block;
+  width: 100%;
+  margin-top: auto;
+  padding: 14px 18px 18px;
+}
+
+/* A basket's own page: the cover beside what it is. */
+.basket-hero {
+  display: grid;
+  gap: 14px;
+  margin: -6px 0 22px;
+}
+
+.basket-hero .basket-cover {
+  aspect-ratio: 2 / 1;
+  border-radius: 20px;
+}
+
+.basket-hero .lede {
+  margin: 0;
+}
+
+.basket-hero-meta {
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: hsl(var(--fg-muted));
+}
