@@ -1,7 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - bigsec
+name: Build and deploy to Azure Web App - bigsec
 
 on:
   push:
@@ -10,44 +7,43 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      id-token: write # Azure login via OIDC
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '26.x'
+          bun-version: 1.3.14
 
-      - name: npm install, build, and test
+      - name: Install and build
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          # Hoisted: a flat node_modules survives zipping; Bun's default links do not.
+          bun install --frozen-lockfile --linker hoisted
+          cd apps/web && bun run build
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: .
+      # App Service's Node image has no Bun: the binary ships with the app, and
+      # startup.sh runs the stack against the site built above.
+      - name: Package
+        run: |
+          mkdir -p bin
+          cp "$(command -v bun)" bin/bun
+          cat > startup.sh <<'EOF'
+          #!/bin/sh
+          set -e
+          cp /home/site/wwwroot/bin/bun /tmp/bun
+          chmod +x /tmp/bun
+          cd /home/site/wwwroot
+          export PATH="/tmp:$PATH" SKIP_BUILD=1
+          export DATABASE_PATH="${DATABASE_PATH:-/tmp/bigsec/prestocks.db}"
+          exec bun run start
+          EOF
+          zip -qr ../release.zip . -x '.git/*'
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -55,11 +51,10 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A2264DAFEE294864AD93518016233FF6 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_AF6F5A8B73864DF79C2EF7AB9CDC8D43 }}
 
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
+      - name: Deploy
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'bigsec'
-          slot-name: 'Production'
-          package: .
-          
+          app-name: bigsec
+          slot-name: Production
+          package: ../release.zip
+          startup-command: sh /home/site/wwwroot/startup.sh
