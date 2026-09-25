@@ -1,11 +1,7 @@
 /**
- * Read Token-2022 mint state and turn the extension soup into the narrow
- * shapes the rest of the app understands.
- *
- * Everything the money math needs -- the active scale multiplier and the active
- * transfer fee -- lives on the mint and changes without notice. Nothing here is
- * cached for long: a split or a fee bump takes effect at a timestamp or an
- * epoch boundary, and stale values produce confidently wrong prices.
+ * Read Token-2022 mint state into the narrow shapes the app uses. The scale
+ * multiplier and transfer fee live on the mint and change at a timestamp or
+ * epoch boundary without notice, so this state must not be cached for long.
  */
 
 import type { ScaledUiAmountConfig, TransferFeeConfig } from "@ps/core";
@@ -42,7 +38,7 @@ export interface MintState {
   /** Set when the issuer can seize balances from any account. */
   readonly permanentDelegate: string | null;
   readonly freezeAuthority: string | null;
-  /** Non-null means transfers invoke a hook program we do not control. */
+  /** Set when transfers invoke a hook program outside this app's control. */
   readonly transferHookProgramId: string | null;
 }
 
@@ -78,8 +74,8 @@ function readTransferFee(extensions: readonly ParsedExtension[]): TransferFeeCon
     return {
       epoch: Number(fee.epoch),
       transferFeeBasisPoints: Number(fee.transferFeeBasisPoints),
-      // maximumFee is u64 and arrives as a JSON number that has already lost
-      // precision at the u64::MAX sentinel. Go through the string form.
+      // maximumFee is u64: it arrives as a string or as a JSON number already
+      // imprecise at the u64::MAX sentinel, and String() accepts both.
       maximumFee: BigInt(String(fee.maximumFee)),
     };
   };
@@ -113,10 +109,8 @@ function parseMint(mint: string, account: ParsedAccount | null): MintState {
 }
 
 /**
- * Fetch several mints in one round trip.
- *
- * getMultipleAccounts caps at 100 addresses, which is far above the size of
- * this universe, so no chunking is needed yet.
+ * Fetch several mints in one round trip. getMultipleAccounts takes at most 100
+ * addresses, far more than the universe holds, so requests are not chunked.
  */
 export async function getMintStates(
   rpc: Rpc,

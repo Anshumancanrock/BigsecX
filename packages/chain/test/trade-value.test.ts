@@ -2,13 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { USDC_MINT, WSOL_MINT } from "../src/trades.ts";
 
 /**
- * Mirrors `tradeValueUsd` in apps/indexer/src/job.ts.
- *
- * Duplicated here rather than imported because the indexer is an app, not a
- * library. The rule it encodes is what the leaderboard depends on, so it is
- * worth pinning: an earlier version marked every trade at the current
- * snapshot price, which made a buy and a later sell of the same shares price
- * identically and reconstructed everyone's profit as roughly zero.
+ * Mirrors `tradeValueUsd` in packages/market/src/trade-rows.ts, which this
+ * package cannot import (@ps/market depends on @ps/chain). The leaderboard
+ * relies on its rule: a trade is valued by the cash that moved, not a snapshot
+ * price, so a buy and a later sell of the same shares keep different values.
  */
 const MIN_LAMPORT_TRADE = 5_000_000n;
 
@@ -49,21 +46,21 @@ describe("trade valuation", () => {
   });
 
   test("prefers the stablecoin leg when both moved", () => {
-    // An intermediate SOL hop can leave a residue; the stablecoin is the
-    // honest measure of what the wallet paid.
+    // An intermediate SOL hop can leave a residue; the stablecoin leg is what
+    // the wallet paid.
     expect(tradeValueUsd(-500_000_000n, -2_000_000_000n, null, 200)).toBeCloseTo(500, 9);
   });
 
   test("a buy and a later sell of the same shares do not net to zero", () => {
-    // The failure the old snapshot-price rule produced. Different cash
-    // amounts must survive into the accounting or profit is unmeasurable.
+    // Different cash amounts must survive into the accounting, or profit
+    // cannot be measured.
     const buy = tradeValueUsd(-1_000_000_000n, null, null, null);
     const sell = tradeValueUsd(1_200_000_000n, null, null, null);
     expect((buy ?? 0) + (sell ?? 0)).toBeCloseTo(-200, 9);
   });
 
   test("reports no cost when neither cash leg is present", () => {
-    // A plain transfer, or a route through a token we do not price.
+    // A plain transfer, or a route through an unpriced token.
     expect(tradeValueUsd(null, null, null, 200)).toBeNull();
     expect(tradeValueUsd(0n, 0n, 0n, 200)).toBeNull();
   });
@@ -73,10 +70,8 @@ describe("trade valuation", () => {
   });
 
   test("values a SOL-routed swap from native lamports", () => {
-    // Measured on mainnet: three consecutive pool trades showed usdc=0 and
-    // wsol=0 while moving 2.75, 0.25 and 1.01 SOL natively, because Jupiter
-    // wraps and unwraps inside the transaction. Without this the leaderboard
-    // prices none of them.
+    // Amounts from mainnet SOL-routed swaps: Jupiter wraps and unwraps SOL
+    // inside the transaction, so only native lamports show the movement.
     expect(tradeValueUsd(null, null, 2_751_289_640n, 100)).toBeCloseTo(-275.128964, 6);
     expect(tradeValueUsd(null, null, -1_013_361_096n, 100)).toBeCloseTo(101.3361096, 6);
   });
