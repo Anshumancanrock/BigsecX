@@ -1,0 +1,2416 @@
+/*
+ * Phone layout: an off-white page, near-black type in Satoshi, white cards on
+ * a hairline, a bright green for the primary action and black pills for the
+ * rest, with a floating tab bar. The palette lives in theme.css; this file is
+ * layout and the components only the phone has, written against tokens so
+ * the ones desktop pages borrow (follow button, sheets) fit there too.
+ */
+
+/* ============================================================ components */
+
+.face {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.22);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
+  user-select: none;
+}
+
+.face.ghost {
+  width: 84px;
+  height: 84px;
+  background: hsl(var(--ink) / 0.06);
+  box-shadow: inset 0 0 0 1px hsl(var(--ink) / 0.08);
+}
+
+/* Rows: the one list shape the phone uses, for companies, people, trades. */
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 66px;
+  padding: 10px 2px;
+  border-bottom: 1px solid hsl(var(--ink) / 0.06);
+  color: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+a.row:active,
+.person-link:active {
+  background: hsl(var(--ink) / 0.03);
+}
+
+.row.ghost {
+  display: block;
+  min-height: 0;
+  height: 54px;
+  margin: 6px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: hsl(var(--ink) / 0.045);
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.row.ghost.tall {
+  height: 62px;
+}
+
+@keyframes ghost-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row-main b {
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-main small {
+  font-size: 13px;
+  color: hsl(var(--fg-muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.row-side b {
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.row-side small {
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.row-side small em {
+  margin-left: 2px;
+  font-style: normal;
+  font-weight: 500;
+  color: hsl(var(--fg-faint));
+}
+
+.row.more {
+  min-height: 54px;
+  color: hsl(var(--fg));
+}
+
+.row.more svg {
+  flex: none;
+  color: hsl(var(--fg-faint));
+}
+
+/* Three small logos, overlapping, for a basket. */
+.basket-logos {
+  display: flex;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+}
+
+.basket-logos .token-logo {
+  box-shadow: 0 0 0 2px hsl(var(--page));
+}
+
+.basket-logos .token-logo + .token-logo {
+  margin-left: -16px;
+}
+
+/* Buttons. */
+.round-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: hsl(var(--ink) / 0.055);
+  color: hsl(var(--fg));
+  transition: transform 0.15s, background 0.15s;
+}
+
+.round-btn:active {
+  transform: scale(0.92);
+}
+
+.round-btn.glass {
+  background: rgb(0 0 0 / 0.3);
+  color: #fff;
+  backdrop-filter: blur(12px);
+}
+
+.btn-go {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 56px;
+  padding: 0 24px;
+  border-radius: 999px;
+  background: hsl(var(--mint));
+  color: hsl(140 60% 6%);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  box-shadow: 0 12px 28px -8px hsl(var(--mint) / 0.6);
+  transition: transform 0.15s var(--ease-out, ease-out), filter 0.15s;
+}
+
+.btn-go:active {
+  transform: scale(0.98);
+}
+
+.btn-go:disabled {
+  opacity: 0.5;
+}
+
+.btn-soft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: hsl(var(--ink) / 0.06);
+  color: hsl(var(--fg));
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.btn-soft.wide,
+.btn-mint.wide {
+  width: 100%;
+}
+
+.dark-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 50px;
+  padding: 0 24px;
+  border-radius: 999px;
+  background: hsl(0 0% 7%);
+  color: #fff;
+  font-size: 15.5px;
+  font-weight: 650;
+  box-shadow: 0 14px 30px -6px rgb(0 0 0 / 0.35);
+  transition: transform 0.15s;
+}
+
+.dark-pill:active {
+  transform: scale(0.96);
+}
+
+/* The quiet action beside a primary one: Edit profile, Copy. */
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px hsl(var(--ink) / 0.14);
+  color: hsl(var(--fg));
+  font-size: 14.5px;
+  font-weight: 650;
+}
+
+.pill-btn:disabled {
+  opacity: 0.5;
+}
+
+.follow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  min-width: 96px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: hsl(var(--fg));
+  color: hsl(var(--page));
+  font-size: 14.5px;
+  font-weight: 700;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.follow-btn:active {
+  transform: scale(0.95);
+}
+
+.follow-btn.on {
+  background: transparent;
+  color: hsl(var(--fg));
+  box-shadow: inset 0 0 0 1.5px hsl(var(--ink) / 0.16);
+}
+
+.follow-btn.sm {
+  height: 32px;
+  min-width: 82px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.follow-btn:disabled {
+  opacity: 0.7;
+}
+
+.text-link {
+  color: hsl(var(--fg));
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A segmented choice drawn as pills: the chosen one black, the rest grey. */
+.seg.pill-seg {
+  border: 0;
+  padding: 3px;
+  background: hsl(var(--ink) / 0.055);
+}
+
+.seg.pill-seg button {
+  min-width: 52px;
+  padding: 7px 14px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.seg.pill-seg button[aria-pressed="true"] {
+  background: hsl(var(--fg));
+  color: hsl(var(--page));
+}
+
+.seg.pill-seg.has-thumb button[aria-pressed="true"] {
+  background: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+.seg.pill-seg .seg-thumb {
+  background: hsl(var(--fg));
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.14);
+}
+
+.seg.pill-seg.small button {
+  min-width: 0;
+  padding: 5px 12px;
+  font-size: 12.5px;
+}
+
+.seg.sheet-seg {
+  display: flex;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.seg.sheet-seg button {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13.5px;
+}
+
+/* Sheets for people. */
+.people-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.person-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 2px;
+  border-bottom: 1px solid hsl(var(--ink) / 0.06);
+  text-align: left;
+}
+
+.person-row:last-child {
+  border-bottom: 0;
+}
+
+.person-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.person-text b {
+  font-weight: 650;
+}
+
+.person-text small {
+  color: hsl(var(--fg-muted));
+  font-size: 12.5px;
+}
+
+.edit-face {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.edit-field > span:first-child {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.edit-field small {
+  font-weight: 500;
+  color: hsl(var(--fg-faint));
+}
+
+.edit-field small.down {
+  color: hsl(var(--down));
+}
+
+.edit-field input,
+.edit-field textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid hsl(var(--ink) / 0.12);
+  background: hsl(var(--ink) / 0.03);
+  font-size: 16px;
+  outline: none;
+  resize: none;
+}
+
+.edit-field input:focus,
+.edit-field textarea:focus {
+  border-color: hsl(var(--ink) / 0.35);
+}
+
+.edit-at {
+  position: relative;
+  display: block;
+}
+
+.edit-at i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  translate: 0 -50%;
+  font-style: normal;
+  color: hsl(var(--fg-faint));
+}
+
+.edit-at input {
+  padding-left: 30px;
+}
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 15px 2px;
+  border-bottom: 1px solid hsl(var(--ink) / 0.06);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.menu-item small {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: hsl(var(--fg-muted));
+}
+
+.menu-item.danger {
+  color: hsl(var(--down));
+  border-bottom: 0;
+}
+
+.transfer-balances {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.transfer-balances span,
+.value-cash span,
+.home-split span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: hsl(var(--ink) / 0.04);
+}
+
+.transfer-balances small,
+.value-cash small,
+.home-split small {
+  font-size: 12px;
+  color: hsl(var(--fg-muted));
+}
+
+.transfer-balances b,
+.value-cash b,
+.home-split b {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+/* The value chart. */
+.value-chart {
+  position: relative;
+  width: 100%;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: crosshair;
+}
+
+.value-chart.empty {
+  display: grid;
+  place-items: center;
+  cursor: default;
+}
+
+.value-chart svg {
+  display: block;
+  overflow: visible;
+}
+
+.value-chart-cross {
+  stroke: hsl(var(--ink) / 0.25);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.value-empty {
+  font-size: 15px;
+  color: hsl(var(--fg-faint));
+  font-weight: 550;
+}
+
+.shimmer-text {
+  color: transparent;
+  border-radius: 8px;
+  background: hsl(var(--ink) / 0.07);
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.positions-empty {
+  padding: 22px 4px;
+  color: hsl(var(--fg-muted));
+  font-size: 14.5px;
+  text-align: center;
+}
+
+.positions-empty .btn-go {
+  margin-top: 4px;
+}
+
+/* ================================================================= frame */
+
+/*
+ * The frame: one light page and a single column of content under the
+ * floating tab bar. The desktop uses the same design with its own
+ * measurements, set at the end of this file.
+ */
+body:has(.app) {
+  background: hsl(60 23% 97.5%);
+}
+
+.app {
+  grid-template-columns: minmax(0, 1fr);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.content {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 8px 40px calc(132px + env(safe-area-inset-bottom, 0px));
+}
+
+/* The light pooling in each card's corner has nothing to glow against on
+   a white page. */
+.tile::after {
+  content: none;
+}
+
+.subcard {
+  background: hsl(var(--ink) / 0.03);
+}
+
+.flip:not(.flipped) button.stock-card:hover {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 28px -12px rgb(0 0 0 / 0.16);
+}
+
+.page-head {
+  margin: 30px 0 20px;
+}
+
+.page-title {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.page-back {
+  font-weight: 600;
+  color: hsl(var(--fg-muted));
+}
+
+.seg button[aria-pressed="true"] {
+  color: hsl(var(--page));
+}
+
+.seg.has-thumb button[aria-pressed="true"] {
+  position: relative;
+  z-index: 1;
+}
+
+.tape {
+  background: hsl(0 0% 100% / 0.7);
+}
+
+.toasts {
+  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Above Trade and Transfer where they float, not behind them. */
+.app:has(.home-pills) .toasts {
+  bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+}
+
+.sheet-head h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.popover,
+.search-menu,
+.wallet-menu {
+  background: hsl(0 0% 100%);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.14);
+}
+
+.funding-address code {
+  color: hsl(var(--fg));
+}
+
+/* Figures are set bold. */
+.asset-title h1,
+.card-title,
+.sub-head,
+.section-title,
+.section-head h2 {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.hero-figure > span:first-child,
+.gauge-figure,
+.balance-figure,
+.price-big,
+.asset-price b,
+.stats .num {
+  font-weight: 700 !important;
+  letter-spacing: -0.035em;
+}
+
+.trade-currency,
+.trade-input input,
+.trade-unit,
+.amount-field .field {
+  font-weight: 650;
+}
+
+.lede {
+  font-weight: 450;
+}
+
+.tile-name,
+.stock-name b {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.stock-price b,
+.tile-figure,
+.holding-tile b {
+  font-weight: 700;
+}
+
+/* The bright green is a fill; as text on white it is too faint, so links
+   and small labels that were mint read in the deeper green. */
+.menu-row.on,
+.card-more,
+.start-steps b,
+.tile-cta,
+.mono-link,
+.learn-num {
+  color: hsl(var(--up));
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .content {
+    max-width: none;
+    padding: 0 16px calc(104px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .page-head {
+    margin: 18px 0 14px;
+  }
+
+  .page-title {
+    font-size: 30px;
+  }
+
+  .toasts {
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app:has(.home-pills) .toasts {
+    bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Sheets rise from the bottom edge, with a grab handle. */
+  .sheet-backdrop {
+    padding: 0;
+  }
+
+  .sheet {
+    max-width: none;
+    max-height: calc(100svh - 48px);
+    border: 0;
+    border-radius: 26px 26px 0 0;
+    padding: 12px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sheet::before {
+    content: "";
+    display: block;
+    width: 38px;
+    height: 5px;
+    margin: 0 auto 12px;
+    border-radius: 999px;
+    background: hsl(var(--ink) / 0.14);
+  }
+
+  .sheet-head h2 {
+    font-size: 21px;
+  }
+}
+
+/* ============================================================== tab bar */
+
+.tabbar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  height: 64px;
+  padding: 0 6px;
+  border-radius: 32px;
+  background: hsl(0 0% 100% / 0.92);
+  box-shadow:
+    0 0 0 1px hsl(var(--ink) / 0.06),
+    0 18px 40px -12px rgb(0 0 0 / 0.22);
+  backdrop-filter: blur(18px) saturate(160%);
+  view-transition-name: app-tabbar;
+}
+
+.tab {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: hsl(0 0% 0% / 0.38);
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s, transform 0.15s;
+}
+
+.tab:active {
+  transform: scale(0.9);
+}
+
+.tab[aria-current="page"] {
+  color: hsl(0 0% 7%);
+}
+
+.tab svg {
+  width: 26px;
+  height: 26px;
+}
+
+.tab-mark-disc {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: hsl(0 0% 7%);
+  color: #fff;
+  box-shadow: 0 8px 18px -6px rgb(0 0 0 / 0.5);
+  transition: transform 0.2s var(--ease-spring, ease-out), background 0.2s;
+}
+
+.tab-mark-disc svg {
+  width: 22px;
+  height: 22px;
+}
+
+.tab-mark[aria-current="page"] .tab-mark-disc {
+  background: hsl(var(--mint));
+  color: hsl(140 60% 6%);
+  transform: scale(1.06);
+}
+
+.tab-face {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.2s;
+}
+
+.tab[aria-current="page"] .tab-face {
+  box-shadow: 0 0 0 2px hsl(0 0% 7%);
+}
+
+.tab-face .face {
+  font-size: 12px !important;
+}
+
+/* ================================================================= home */
+
+.home {
+  padding-top: 8px;
+}
+
+.home-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0 4px;
+}
+
+.home-hello {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 15px;
+  color: hsl(var(--fg-muted));
+}
+
+.home-hello > span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-hello b {
+  color: hsl(var(--fg));
+  font-weight: 650;
+}
+
+.home-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: hsl(0 0% 7%);
+  color: #fff;
+}
+
+.home-hero {
+  padding: 26px 0 26px;
+}
+
+.home-headline {
+  font-size: clamp(34px, 10.4vw, 46px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  color: hsl(var(--fg));
+  text-wrap: balance;
+}
+
+.home-sub {
+  margin: 14px 0 26px;
+  font-size: 17px;
+  color: hsl(var(--fg-faint));
+  font-weight: 500;
+}
+
+.home-kicker {
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: hsl(var(--fg-muted));
+  font-weight: 550;
+}
+
+.home-balance {
+  font-size: clamp(40px, 12vw, 50px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.home-today {
+  margin-top: 10px;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.home-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.home-split span {
+  background: hsl(0 0% 100%);
+  box-shadow: 0 0 0 1px hsl(var(--ink) / 0.06);
+}
+
+.home-markets {
+  margin-top: 30px;
+}
+
+.home-markets h2 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.home-tabs {
+  display: flex;
+  gap: 22px;
+  margin: 14px 0 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid hsl(var(--ink) / 0.06);
+}
+
+.home-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.home-tabs button {
+  flex: none;
+  position: relative;
+  padding: 8px 0 12px;
+  font-size: 15.5px;
+  font-weight: 650;
+  color: hsl(var(--fg-faint));
+  transition: color 0.2s;
+}
+
+.home-tabs button.on {
+  color: hsl(var(--fg));
+}
+
+.home-tabs button::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: hsl(var(--fg));
+  transform: scaleX(0);
+  transition: transform 0.3s var(--ease-out, ease-out);
+}
+
+.home-tabs button.on::after {
+  transform: scaleX(1);
+}
+
+/* Trade and Transfer, floating over the list above the tab bar. */
+.home-pills {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  z-index: 35;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.home-pills .dark-pill {
+  pointer-events: auto;
+}
+
+.home .rows {
+  padding-bottom: 64px;
+}
+
+/* ============================================================== profile */
+
+.profile-page {
+  margin: 0 -16px;
+}
+
+.profile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 6px;
+}
+
+.profile-top.over {
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+}
+
+.profile-top-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.profile-icons {
+  display: flex;
+  gap: 8px;
+}
+
+.cover {
+  height: 150px;
+}
+
+.profile-id {
+  padding: 8px 16px 0;
+}
+
+.profile-id.under-cover {
+  margin-top: -46px;
+}
+
+.profile-face-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-face {
+  position: relative;
+  display: inline-block;
+  border-radius: 50%;
+}
+
+.under-cover .profile-face .face {
+  box-shadow: 0 0 0 4px hsl(var(--page));
+}
+
+.face-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: hsl(var(--fg));
+  color: hsl(var(--page));
+  box-shadow: 0 0 0 3px hsl(var(--page));
+}
+
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+
+.profile-name {
+  margin-top: 14px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.profile-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 15px;
+  color: hsl(var(--fg-muted));
+}
+
+.profile-handle svg {
+  opacity: 0.6;
+}
+
+.profile-bio {
+  margin-top: 10px;
+  font-size: 15.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.add-bio {
+  display: block;
+  margin-top: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--fg-muted));
+}
+
+.profile-follows {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: 15px;
+  color: hsl(var(--fg-muted));
+}
+
+.profile-follows b {
+  color: hsl(var(--fg));
+  font-weight: 700;
+}
+
+.follows-you {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: hsl(var(--ink) / 0.06);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.profile-stats {
+  display: flex;
+  gap: 8px;
+  margin: 14px -16px 0;
+  padding: 0 16px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.profile-stats::-webkit-scrollbar {
+  display: none;
+}
+
+.stat-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: hsl(var(--ink) / 0.05);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.stat-chip svg {
+  opacity: 0.6;
+}
+
+.stat-chip.rank {
+  background: hsl(45 95% 55% / 0.2);
+  color: hsl(35 80% 28%);
+}
+
+.stat-chip.rank svg {
+  opacity: 1;
+}
+
+.stat-chip small {
+  font-size: 12px;
+  font-weight: 550;
+  opacity: 0.75;
+}
+
+.profile-value {
+  margin: 22px 16px 0;
+  padding: 18px 16px 16px;
+  border-radius: 26px;
+  background: hsl(0 0% 100%);
+  box-shadow: 0 0 0 1px hsl(var(--ink) / 0.06), 0 12px 30px -18px rgb(0 0 0 / 0.18);
+}
+
+.value-figure {
+  font-size: clamp(34px, 10vw, 42px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.value-change {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 22px;
+  margin: 6px 0 12px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.value-change .muted {
+  font-weight: 550;
+}
+
+.profile-value .seg {
+  display: flex;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.profile-value .seg button {
+  flex: 1;
+}
+
+.value-note {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: hsl(var(--fg-faint));
+}
+
+.value-cash {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.value-cash span {
+  padding: 10px 12px;
+}
+
+.value-cash b {
+  font-size: 14.5px;
+}
+
+.profile-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 16px 0;
+}
+
+.profile-warnings .banner {
+  margin: 0;
+}
+
+.profile-positions {
+  margin: 24px 16px 0;
+}
+
+.positions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.positions-head h2 {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.positions-head h2 span {
+  color: hsl(var(--fg-faint));
+}
+
+.profile-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.profile-cta .btn-soft {
+  width: 100%;
+}
+
+.signed-out {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 20px 10px;
+  text-align: center;
+}
+
+.signed-out h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.signed-out p {
+  max-width: 320px;
+  color: hsl(var(--fg-muted));
+  font-size: 15.5px;
+}
+
+.signed-out .inline-picker {
+  width: 100%;
+  max-width: 340px;
+  text-align: left;
+}
+
+/* ============================================================== traders */
+
+.feed-faces {
+  position: relative;
+  flex: none;
+}
+
+.feed-logo {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px hsl(var(--page));
+}
+
+.feed-row .row-main b {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* =============================================================== search */
+
+.find-page {
+  padding-top: 14px;
+}
+
+.find-field {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  margin: 0 0 8px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: hsl(var(--ink) / 0.055);
+  color: hsl(var(--fg-muted));
+}
+
+.find-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: none;
+  font-size: 16.5px;
+  color: hsl(var(--fg));
+}
+
+.find-field input::placeholder {
+  color: hsl(var(--fg-faint));
+}
+
+.find-clear {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: hsl(var(--ink) / 0.12);
+  color: hsl(var(--fg));
+  font-size: 16px;
+  line-height: 1;
+}
+
+.find-group {
+  margin-top: 18px;
+}
+
+.find-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.find-group-head h2 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.find-group-head a {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--fg-muted));
+}
+
+/* On a desktop the search page sits inside the glass product; it keeps
+   its measure there rather than stretching across the screen. */
+@media (min-width: 721px) {
+  .find-page {
+    max-width: 720px;
+  }
+  .find-field {
+    position: static;
+  }
+}
+
+/* ======================================================== reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .row.ghost,
+  .traders-card-row.ghost,
+  .shimmer-text {
+    animation: none;
+  }
+  .home-tabs button::after,
+  .tab-mark-disc {
+    transition: none;
+  }
+}
+
+/* ================================================================ glass */
+
+/*
+ * Glass: frosted white surfaces that let a soft wash of colour through, with
+ * a bright top edge, a hairline and a soft shadow. Buttons carry a faint
+ * gloss across their top half, and the dark ones are tinted glass rather
+ * than flat black.
+ */
+
+.app {
+  --gl-fill: linear-gradient(170deg, hsl(0 0% 100% / 0.78), hsl(0 0% 100% / 0.56));
+  --gl-fill-solid: linear-gradient(180deg, hsl(0 0% 100% / 0.9), hsl(0 0% 100% / 0.72));
+  --gl-edge: hsl(0 0% 100% / 0.85);
+  /*
+   * No backdrop blur on surfaces that sit on the page: behind them is only the
+   * fixed colour wash, which looks the same blurred, and a blur under every card
+   * makes scrolling several times more expensive. Glass that floats over moving
+   * content (tab bar, sheets, the Trade and Transfer pills, the sticky search
+   * field) keeps its blur.
+   */
+  --gl-blur: none;
+  --gl-blur-float: blur(26px) saturate(180%);
+  --gl-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.95),
+    inset 0 0 0 1px hsl(0 0% 100% / 0.25),
+    0 0 0 1px rgb(16 24 40 / 0.05),
+    0 1px 2px rgb(16 24 40 / 0.04),
+    0 14px 32px -16px rgb(16 24 40 / 0.22);
+  --gl-sheen: linear-gradient(180deg, hsl(0 0% 100% / 0.24), hsl(0 0% 100% / 0) 58%);
+  --gl-dark: linear-gradient(180deg, hsl(0 0% 100% / 0.13), hsl(0 0% 100% / 0) 58%), hsl(220 8% 9% / 0.88);
+  --gl-dark-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.2),
+    inset 0 0 0 1px hsl(0 0% 100% / 0.06),
+    0 10px 24px -12px rgb(0 0 0 / 0.5);
+}
+
+/* A soft wash of colour for the glass to show: mint and sky at the top,
+   a trace of lavender lower down. The page still reads as white. */
+.app-glow {
+  display: block;
+  background:
+    radial-gradient(85vw 60vw at 5% -8%, hsl(140 62% 78% / 0.46), transparent 72%),
+    radial-gradient(75vw 55vw at 100% 4%, hsl(190 70% 84% / 0.36), transparent 72%),
+    radial-gradient(85vw 70vw at 0% 70%, hsl(250 70% 90% / 0.3), transparent 72%),
+    radial-gradient(80vw 60vw at 100% 100%, hsl(150 55% 84% / 0.3), transparent 72%);
+}
+
+/* Surfaces. */
+.card,
+.stock-card,
+.tile,
+.card-company,
+.stats > span,
+.profile-value,
+.list-card,
+.home-split span,
+.holding-tile,
+.people-caveats,
+.inline-picker,
+.empty,
+.top3-card,
+.home-markets > .rows,
+.find-group .rows,
+.profile-positions .rows {
+  border: 1px solid var(--gl-edge);
+  background: var(--gl-fill);
+  box-shadow: var(--gl-shadow);
+  -webkit-backdrop-filter: var(--gl-blur);
+  backdrop-filter: var(--gl-blur);
+}
+
+.home-markets > .rows,
+.find-group .rows,
+.profile-positions .rows {
+  margin-top: 10px;
+  padding: 2px 14px;
+  border-radius: 22px;
+}
+
+.hero-card {
+  background: var(--gl-fill);
+}
+
+/* Small tiles inside a glass card: a lighter frost, not a second card. */
+.value-cash span,
+.transfer-balances span {
+  border: 1px solid hsl(0 0% 100% / 0.7);
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.62), hsl(0 0% 100% / 0.38));
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9), 0 0 0 1px rgb(16 24 40 / 0.035);
+}
+
+/* The green button: a faint gloss over the green, a line of light on top. */
+.btn-go,
+.btn-mint {
+  border: 0;
+  background: var(--gl-sheen), hsl(var(--mint));
+  color: hsl(140 70% 6%);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.5),
+    inset 0 -1px 0 hsl(140 50% 25% / 0.12),
+    0 0 0 1px hsl(136 45% 40% / 0.18),
+    0 10px 22px -12px hsl(134 60% 36% / 0.7);
+}
+
+.btn-mint:hover {
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.5),
+    inset 0 -1px 0 hsl(140 50% 25% / 0.12),
+    0 0 0 1px hsl(136 45% 40% / 0.18),
+    0 10px 22px -12px hsl(134 60% 36% / 0.7);
+}
+
+.btn-go:disabled,
+.btn-mint:disabled {
+  opacity: 0.5;
+}
+
+/* Tinted dark glass for the pills and Follow. */
+.dark-pill,
+.follow-btn,
+.tab-mark-disc {
+  background: var(--gl-dark);
+  color: #fff;
+  box-shadow: var(--gl-dark-shadow);
+}
+
+/* The Trade and Transfer pills float over the page as it scrolls. */
+.dark-pill {
+  height: 50px;
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+}
+
+/* Frosted white for the quiet ones. */
+.follow-btn.on,
+.pill-btn,
+.btn-ghost,
+.btn-soft,
+.round-btn,
+.trade-max,
+.sheet-close {
+  border: 1px solid hsl(0 0% 100% / 0.85);
+  background: var(--gl-fill-solid);
+  color: hsl(var(--fg));
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.95),
+    0 0 0 1px rgb(16 24 40 / 0.06),
+    0 4px 12px -6px rgb(16 24 40 / 0.2);
+  -webkit-backdrop-filter: var(--gl-blur);
+  backdrop-filter: var(--gl-blur);
+}
+
+.round-btn.glass {
+  border: 1px solid hsl(0 0% 100% / 0.25);
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.18), hsl(0 0% 100% / 0.04)), hsl(0 0% 0% / 0.22);
+  color: #fff;
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.3);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Segmented controls: a frosted track, a dark glass thumb. */
+.seg,
+.seg.pill-seg {
+  border: 1px solid hsl(0 0% 100% / 0.8);
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.5), hsl(0 0% 100% / 0.3));
+  box-shadow: inset 0 1px 2px rgb(16 24 40 / 0.06), 0 0 0 1px rgb(16 24 40 / 0.04);
+  -webkit-backdrop-filter: var(--gl-blur);
+  backdrop-filter: var(--gl-blur);
+}
+
+.seg-thumb,
+.seg.pill-seg .seg-thumb {
+  background: var(--gl-dark);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.18), 0 3px 8px rgb(0 0 0 / 0.2);
+}
+
+.seg.pill-seg.wide {
+  display: flex;
+  width: 100%;
+}
+
+.seg.pill-seg.wide button {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 14.5px;
+}
+
+.stat-chip {
+  border: 1px solid hsl(0 0% 100% / 0.85);
+  background: var(--gl-fill-solid);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.95), 0 0 0 1px rgb(16 24 40 / 0.05);
+  -webkit-backdrop-filter: var(--gl-blur);
+  backdrop-filter: var(--gl-blur);
+}
+
+.stat-chip.rank {
+  color: hsl(var(--fg));
+}
+
+.stat-chip.rank svg {
+  color: hsl(40 70% 42%);
+}
+
+/* The tab bar: the most glass of all, since everything scrolls under it. */
+.tabbar {
+  border: 1px solid hsl(0 0% 100% / 0.8);
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.66), hsl(0 0% 100% / 0.48));
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.95),
+    0 0 0 1px rgb(16 24 40 / 0.05),
+    0 18px 40px -16px rgb(16 24 40 / 0.34);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(28px) saturate(190%);
+}
+
+.tab {
+  position: relative;
+}
+
+.tab-mark[aria-current="page"] .tab-mark-disc {
+  background: var(--gl-sheen), hsl(var(--mint));
+  color: hsl(140 70% 6%);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.5), 0 8px 18px -10px hsl(134 60% 36% / 0.7);
+}
+
+/* Sheets: frosted white, rising from the bottom. */
+.sheet {
+  border-top: 1px solid hsl(0 0% 100% / 0.9);
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.9), hsl(0 0% 100% / 0.8));
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.95), 0 -14px 40px rgb(16 24 40 / 0.16);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+}
+
+.sheet-backdrop {
+  background: rgb(16 24 40 / 0.26);
+}
+
+/* The search field stays put while results scroll under it. */
+.find-field {
+  border: 1px solid hsl(0 0% 100% / 0.85);
+  background: var(--gl-fill-solid);
+  box-shadow: var(--gl-shadow);
+  -webkit-backdrop-filter: var(--gl-blur-float);
+  backdrop-filter: var(--gl-blur-float);
+}
+
+/* The dark card, as tinted glass with a line of light on its top edge.
+   Scoped under .app so it outranks the card's base rule further down. */
+.app .traders-card {
+  border: 1px solid hsl(0 0% 100% / 0.1);
+  background:
+    radial-gradient(120% 80% at 100% 0%, hsl(149 60% 45% / 0.24), transparent 60%),
+    linear-gradient(180deg, hsl(0 0% 100% / 0.06), hsl(0 0% 100% / 0) 40%),
+    linear-gradient(160deg, hsl(220 10% 14% / 0.94), hsl(220 12% 7% / 0.96));
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.14),
+    0 22px 44px -22px rgb(0 0 0 / 0.55);
+}
+
+/* People who asked their system for less transparency get solid white. */
+@media (prefers-reduced-transparency: reduce) {
+  .app {
+    --gl-fill: hsl(0 0% 100%);
+    --gl-fill-solid: hsl(0 0% 100%);
+    --gl-blur: none;
+    --gl-blur-float: none;
+  }
+  .app-glow {
+    display: none;
+  }
+}
+
+/* ======================================================= leaderboard kit */
+
+/* A rank: a plain figure, the top three tinted in their metal. */
+.medal {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  color: hsl(var(--fg-faint));
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.medal.gold {
+  background: hsl(43 80% 50% / 0.16);
+  color: hsl(40 75% 38%);
+}
+
+.medal.silver {
+  background: hsl(220 10% 60% / 0.16);
+  color: hsl(220 8% 42%);
+}
+
+.medal.bronze {
+  background: hsl(25 60% 50% / 0.16);
+  color: hsl(24 55% 38%);
+}
+
+.holding-logos {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: hsl(var(--fg-muted));
+}
+
+.holding-logos.none {
+  color: hsl(var(--fg-faint));
+}
+
+.holding-logos-stack {
+  display: inline-flex;
+  flex: none;
+}
+
+.holding-logos-stack .token-logo {
+  box-shadow: 0 0 0 1.5px hsl(var(--raised));
+}
+
+.holding-logos-stack .token-logo + .token-logo {
+  margin-left: -6px;
+}
+
+.holding-logos-words {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The top three: three equal cards, first to third. */
+.top3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0 4px;
+}
+
+.top3-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 8px 12px;
+  border-radius: 20px;
+  border: 1px solid hsl(var(--ink) / 0.08);
+  background: hsl(var(--ink) / 0.03);
+}
+
+.top3-card.ghost {
+  height: 208px;
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.top3-person {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  color: inherit;
+}
+
+.top3-place {
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--fg-faint));
+}
+
+.top3-card.gold .top3-place {
+  color: hsl(40 75% 38%);
+}
+
+.top3-card.silver .top3-place {
+  color: hsl(220 8% 45%);
+}
+
+.top3-card.bronze .top3-place {
+  color: hsl(24 55% 40%);
+}
+
+.top3-face {
+  display: inline-grid;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  padding: 2px;
+  box-shadow: 0 0 0 1.5px hsl(var(--ink) / 0.12);
+}
+
+.top3-card.gold .top3-face {
+  box-shadow: 0 0 0 1.5px hsl(43 75% 52%);
+}
+
+.top3-card.silver .top3-face {
+  box-shadow: 0 0 0 1.5px hsl(220 10% 66%);
+}
+
+.top3-card.bronze .top3-face {
+  box-shadow: 0 0 0 1.5px hsl(25 55% 52%);
+}
+
+.top3-name {
+  max-width: 100%;
+  font-size: 13.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top3-person .holding-logos {
+  justify-content: center;
+  min-height: 15px;
+}
+
+.top3-main {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.top3-side {
+  font-size: 12px;
+  font-weight: 550;
+  color: hsl(var(--fg-muted));
+}
+
+.top3-card .follow-btn.sm {
+  min-width: 0;
+  width: 100%;
+  max-width: 96px;
+}
+
+/* Three black pills in a row weigh more than the cards they sit in; here
+   Follow is an outline until it is pressed. */
+.top3-card .follow-btn:not(.on) {
+  background: hsl(0 0% 100% / 0.7);
+  color: hsl(var(--fg));
+  box-shadow: inset 0 0 0 1.5px hsl(var(--ink) / 0.14);
+}
+
+.top3-card .follow-btn.on {
+  border: 0;
+  background: var(--gl-dark);
+  color: #fff;
+}
+
+/* A card holding a ranked list: heading, column labels, rows. */
+.list-card {
+  margin-top: 14px;
+  padding: 4px 14px 6px;
+  border-radius: 22px;
+  background: hsl(var(--ink) / 0.03);
+}
+
+.list-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 2px 8px;
+}
+
+.list-card-head h2 {
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.list-card-head > span {
+  font-size: 12.5px;
+  color: hsl(var(--fg-faint));
+}
+
+.list-cols {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 2px 2px 8px;
+  border-bottom: 1px solid hsl(var(--ink) / 0.06);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--fg-faint));
+}
+
+/* Column widths shared by the heading and the rows under it, so the two
+   line up: a rank, the trader, the record, the figure, the Follow button. */
+.col-rank {
+  width: 22px;
+  flex: none;
+  text-align: center;
+}
+
+.col-trader {
+  flex: 1;
+  min-width: 0;
+  padding-left: 51px;
+}
+
+.col-main {
+  width: 96px;
+  flex: none;
+  text-align: right;
+}
+
+.col-follow {
+  width: 36px;
+  flex: none;
+}
+
+.col-stat {
+  width: 104px;
+  flex: none;
+  text-align: right;
+}
+
+.person-link .col-stat {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: hsl(var(--fg-muted));
+}
+
+.desk-only {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .col-main {
+    width: 78px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .desk-only {
+    display: block;
+  }
+}
+
+.list-card .row {
+  border-bottom-color: hsl(var(--ink) / 0.05);
+}
+
+.rank-num {
+  width: 22px;
+  flex: none;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: hsl(var(--fg-faint));
+}
+
+/* The second figure in a row: coloured text, no badge. */
+.pct-pill {
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+}
+
+/* In a tight row, Follow is a round outline button with an icon. */
+.follow-btn.icon {
+  width: 36px;
+  min-width: 0;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: hsl(var(--fg));
+  box-shadow: inset 0 0 0 1.5px hsl(var(--ink) / 0.14);
+}
+
+.follow-btn.icon.on {
+  background: hsl(var(--fg));
+  color: hsl(var(--page));
+  box-shadow: none;
+}
+
+.follow-btn.icon {
+  background: hsl(0 0% 100% / 0.7);
+  color: hsl(var(--fg));
+  box-shadow: inset 0 0 0 1.5px hsl(var(--ink) / 0.12);
+}
+
+.follow-btn.icon.on {
+  background: var(--gl-dark);
+  color: #fff;
+}
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px 18px 22px;
+  text-align: center;
+}
+
+.empty-card b {
+  font-size: 16.5px;
+  font-weight: 700;
+}
+
+.empty-card p {
+  max-width: 300px;
+  font-size: 14.5px;
+  color: hsl(var(--fg-muted));
+}
+
+.empty-card .btn-go {
+  margin-top: 6px;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: hsl(var(--ink) / 0.05);
+  color: hsl(var(--fg-muted));
+}
+
+/* The traders page. */
+.people-page {
+  padding-top: 8px;
+}
+
+.people-head {
+  padding: 16px 0 14px;
+}
+
+.people-head h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.people-head p {
+  margin-top: 4px;
+  font-size: 14px;
+  color: hsl(var(--fg-muted));
+}
+
+.people-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.row.person {
+  gap: 10px;
+}
+
+.person-link {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  border-radius: 14px;
+  color: inherit;
+}
+
+.you-tag {
+  flex: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: hsl(var(--ink) / 0.07);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.people-caveats {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: hsl(var(--ink) / 0.035);
+  font-size: 13.5px;
+  color: hsl(var(--fg-muted));
+}
+
+.people-caveats summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+  color: hsl(var(--fg));
+  cursor: pointer;
+  list-style: none;
+}
+
+.people-caveats summary::-webkit-details-marker {
+  display: none;
+}
+
+.people-caveats p {
+  margin-top: 8px;
+}
+
+.following-strip {
+  display: flex;
+  gap: 14px;
+  margin: 0 -14px;
+  padding: 4px 14px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.following-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.following-strip a {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 64px;
+  color: inherit;
+}
+
+.following-strip small {
+  max-width: 64px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ========================================== home: traders of the week */
+
+/* The dark traders card: a quiet gradient, rows on hairlines. */
+.traders-card {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 8px;
+  border-radius: 26px;
+  color: #fff;
+  background:
+    radial-gradient(120% 80% at 100% 0%, hsl(149 60% 45% / 0.22), transparent 60%),
+    linear-gradient(160deg, hsl(220 10% 13%), hsl(220 12% 7%));
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.08),
+    0 20px 40px -22px rgb(0 0 0 / 0.5);
+}
+
+.traders-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.tc-title {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tc-title b {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.tc-title small {
+  font-size: 13px;
+  color: hsl(0 0% 100% / 0.55);
+}
+
+.tc-all {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding-top: 2px;
+  color: hsl(0 0% 100% / 0.75);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.tc-cols {
+  display: flex;
+  justify-content: space-between;
+  margin: 16px 0 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid hsl(0 0% 100% / 0.08);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.4);
+}
+
+.tc-cols span:first-child {
+  padding-left: 36px;
+}
+
+.traders-card-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.traders-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  border-top: 1px solid hsl(0 0% 100% / 0.07);
+  color: #fff;
+}
+
+.traders-card-row:first-child {
+  border-top: 0;
+}
+
+.traders-card-row.ghost {
+  min-height: 0;
+  height: 46px;
+  margin: 8px 0;
+  border: 0;
+  border-radius: 12px;
+  background: hsl(0 0% 100% / 0.06);
+  animation: ghost-pulse 1.4s ease-in-out infinite;
+}
+
+.traders-card .medal {
+  color: hsl(0 0% 100% / 0.45);
+}
+
+.traders-card .medal.gold {
+  background: hsl(43 80% 55% / 0.16);
+  color: hsl(43 85% 66%);
+}
+
+.traders-card .medal.silver {
+  background: hsl(220 15% 75% / 0.14);
+  color: hsl(220 15% 80%);
+}
+
+.traders-card .medal.bronze {
+  background: hsl(25 70% 55% / 0.16);
+  color: hsl(25 75% 66%);
+}
+
+.traders-card-who {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.traders-card-who b {
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.traders-card .holding-logos {
+  color: hsl(0 0% 100% / 0.5);
+}
+
+.traders-card .holding-logos-stack .token-logo {
+  box-shadow: 0 0 0 1.5px hsl(220 11% 11%);
+}
+
+.traders-card-figures {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.tc-pct {
+  font-size: 15.5px;
+  font-weight: 700;
+}
+
+.tc-pct.up {
+  color: hsl(130 60% 62%);
+}
+
+.tc-pct.down {
+  color: hsl(3 90% 68%);
+}
+
+.traders-card-figures small {
+  font-size: 12px;
+  color: hsl(0 0% 100% / 0.5);
+}
+
+.traders-card-empty {
+  padding: 14px 0 12px;
+  font-size: 14px;
+  color: hsl(0 0% 100% / 0.66);
+}
+
+.traders-card-empty a {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* The desktop board: follow beside "See and copy", the top three above. */
+.board-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (min-width: 721px) {
+  .top3 {
+    margin: 24px 0 8px;
+    gap: 16px;
+  }
+
+  .top3-card {
+    padding: 20px 14px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top3-card.ghost {
+    animation: none;
+  }
+}
+
+/* A scheduled fee change, beside the fee it changes. */
+.trade-fee-change {
+  display: block;
+  margin-top: 6px;
+  font-weight: 650;
+  color: hsl(var(--down));
+}
