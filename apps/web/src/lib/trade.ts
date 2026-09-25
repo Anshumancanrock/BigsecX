@@ -208,7 +208,7 @@ export async function executeBundle(options: {
     if (isUserRejection(error)) {
       const back = {
         phase: "review" as const,
-        error: "You cancelled in your wallet. Nothing was sent — approve again when you are ready.",
+        error: "You cancelled in your wallet. Nothing was sent. Approve again when you are ready.",
         problems: [],
       };
       onState(back);
@@ -370,7 +370,7 @@ export function describeChainError(err: unknown): string {
     // The handful of cluster errors a user can actually do something about.
     if (err === "AccountNotFound") return "your wallet has no SOL to pay the network fee";
     if (err === "InsufficientFundsForRent") return "your wallet needs a little more SOL for the account deposit";
-    if (err === "BlockhashNotFound") return "it took too long to approve, so it expired — try again";
+    if (err === "BlockhashNotFound") return "it took too long to approve, so it expired; try again";
     if (err === "AlreadyProcessed") return "already processed";
     return err;
   }
@@ -380,7 +380,7 @@ export function describeChainError(err: unknown): string {
     const [index, detail] = instruction;
     const custom = (detail as { Custom?: number })?.Custom;
     if (custom === 6001) {
-      return "the price moved too much before it went through, so it was cancelled — nothing was bought or sold";
+      return "the price moved too much before it went through, so it was cancelled; nothing was bought or sold";
     }
     if (custom !== undefined) return `program error ${custom} on instruction ${index}`;
     return `instruction ${index} failed: ${JSON.stringify(detail)}`;

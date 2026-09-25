@@ -130,7 +130,7 @@ export function TradersSection() {
           <p className="tr-headline">Own what they own.</p>
           <p className="tr-lede">
             Every trader on the leaderboard is a real wallet on Solana. See what they hold and how it has
-            done, then copy the same mix in one approval — at your own size.
+            done, then copy the same mix in one approval, at your own size.
           </p>
         </div>
       </div>

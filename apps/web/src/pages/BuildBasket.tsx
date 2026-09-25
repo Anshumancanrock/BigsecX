@@ -245,7 +245,7 @@ export function BuildBasket({ market }: { market: Market | null }) {
               ? "Pick at least two companies. For just one, buy it from its own page."
               : !named
                 ? "Give it a name of at least three characters."
-                : `Publishing as ${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}. Your wallet signs a message — no transaction, no fee.`}
+                : `Publishing as ${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}. Your wallet signs a message: no transaction, no fee.`}
         </p>
         {!wallet.address ? (
           <div className="inline-picker" style={{ maxWidth: 320 }}>

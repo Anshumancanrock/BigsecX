@@ -473,7 +473,7 @@ function Review({
           <span>Fees and price gap</span>
           {/* A negative cost means the price is in the user's favour; it is not shown as a refund. */}
           <span className={`num ${costHigh ? "down" : ""}`}>
-            {costUsd > 0.005 ? `${usd(costUsd)} · ${percent(build.costFraction)}` : "None — the price is in your favour"}
+            {costUsd > 0.005 ? `${usd(costUsd)} · ${percent(build.costFraction)}` : "None, the price is in your favour"}
           </span>
         </div>
       </div>
@@ -482,7 +482,7 @@ function Review({
         <div className="banner bad">
           <span>
             Fees and the price gap come to {percent(build.costFraction)} of this. That is what trading a small market
-            costs — and a similar gap applies again when you sell.
+            costs, and a similar gap applies again when you sell.
           </span>
         </div>
       ) : null}
@@ -526,12 +526,12 @@ function Review({
           </p>
           {list(build.failed).map((f) => (
             <p className="note" key={f.symbol}>
-              · {nameOf(f.symbol)} — {f.reason}
+              · {nameOf(f.symbol)}: {f.reason}
             </p>
           ))}
           {list(build.deferred).map((d) => (
             <p className="note" key={d.symbol}>
-              · {nameOf(d.symbol)} — {d.reason}
+              · {nameOf(d.symbol)}: {d.reason}
             </p>
           ))}
         </div>
@@ -542,7 +542,7 @@ function Review({
       {steps > 1 ? (
         <p className="note" style={{ marginTop: 14 }}>
           Your wallet will ask you to approve {steps} transactions at once. Each one goes through on its own, so
-          occasionally some go through and others do not — you will see exactly which.
+          occasionally some go through and others do not. You will see exactly which.
         </p>
       ) : null}
     </>

@@ -64,7 +64,7 @@ export function FollowButton({
         onClick={() => void toggle()}
         disabled={busy}
         aria-pressed={state}
-        aria-label={size === "icon" ? (state ? "Following — tap to unfollow" : "Follow") : undefined}
+        aria-label={size === "icon" ? (state ? "Following, tap to unfollow" : "Follow") : undefined}
         title={size === "icon" ? (state ? "Following" : "Follow") : undefined}
       >
         {size === "icon" ? (
@@ -87,7 +87,7 @@ export function FollowButton({
       {connecting ? (
         <Sheet title="Connect to follow" onClose={() => setConnecting(false)}>
           <p className="note" style={{ marginBottom: 12 }}>
-            Following is free and public. Connect your wallet; the first follow asks it to sign a message — no
+            Following is free and public. Connect your wallet; the first follow asks it to sign a message: no
             transaction, no fee.
           </p>
           <div className="inline-picker">

@@ -12,8 +12,6 @@ import { api, type History, type IndexList, type Market } from "../lib/api.ts";
 import { useAsync } from "../lib/useAsync.ts";
 import { navigate } from "../lib/router.ts";
 import { list, price } from "../lib/format.ts";
-import { MarketContext } from "../lib/market.ts";
-import { TokenLogo } from "../components/TokenLogo.tsx";
 import { fallbackFrames, fmtChange, fmtUsd, framesFromHistory } from "./phone-model.ts";
 import { PhoneScreen, type PhoneHolding } from "./PhoneScreen.tsx";
 
@@ -139,26 +137,7 @@ export function PhoneHero({ market, indexes }: { market: Market | null; indexes:
       </div>
       {frames ? createPortal(<PhoneScreen frames={frames} holdings={holdings} active={active} />, screen) : null}
 
-      <MarketContext.Provider value={market}>
-        <p className="phone-sub rise">
-          Own <Logos symbols={["SPACEX"]} />
-          SpaceX, <Logos symbols={["OPENAI", "ANTHROPIC"]} />
-          AI labs and <Logos symbols={["KALSHI", "POLYMARKET"]} />
-          prediction markets —{" "}
-          <span className="phone-sub-badge up" aria-hidden="true">
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M2 8 8 2M3.5 2H8v4.5" />
-            </svg>
-          </span>
-          buy or{" "}
-          <span className="phone-sub-badge down" aria-hidden="true">
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m2 2 6 6M8 3.5V8H3.5" />
-            </svg>
-          </span>
-          sell, any hour. Self-custodial.
-        </p>
-      </MarketContext.Provider>
+      <p className="phone-sub rise">Own SpaceX, AI labs and prediction markets. Buy or sell, any hour. Self-custodial.</p>
 
       <div className="rise">
         <button className="phone-cta" onClick={() => navigate("/dashboard")}>
@@ -166,16 +145,6 @@ export function PhoneHero({ market, indexes }: { market: Market | null; indexes:
         </button>
       </div>
     </div>
-  );
-}
-
-function Logos({ symbols }: { symbols: readonly string[] }) {
-  return (
-    <span className="phone-logos" aria-hidden="true">
-      {symbols.map((s) => (
-        <TokenLogo key={s} symbol={s} size={18} badge={false} />
-      ))}
-    </span>
   );
 }
 

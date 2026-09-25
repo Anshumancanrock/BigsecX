@@ -292,7 +292,7 @@ export function ProfilePage({ wallet, market }: { wallet: string; market: Market
                     className="pill-btn"
                     label="Copy"
                     title={`Copy ${name}`}
-                    prompt="How much do you want to put in? You buy the same mix this wallet holds right now, in proportion. It is a one-off copy — it does not follow their future trades, and nothing you already own is sold."
+                    prompt="How much do you want to put in? You buy the same mix this wallet holds right now, in proportion. It is a one-off copy: it does not follow their future trades, and nothing you already own is sold."
                     weights={mix.map((m) => ({ symbol: m.symbol, weight: mixTotal > 0 ? m.valueUsd / mixTotal : 0 }))}
                     makeRequest={(owner, amountUsd) => ({ kind: "copy", leader: wallet, follower: owner, capitalUsd: amountUsd })}
                   />
@@ -553,7 +553,7 @@ export function ProfilePage({ wallet, market }: { wallet: string; market: Market
               className="btn-go"
               label="Copy this mix"
               title={`Copy ${name}`}
-              prompt="How much do you want to put in? You buy the same mix this wallet holds right now, in proportion. It is a one-off copy — it does not follow their future trades, and nothing you already own is sold."
+              prompt="How much do you want to put in? You buy the same mix this wallet holds right now, in proportion. It is a one-off copy: it does not follow their future trades, and nothing you already own is sold."
               weights={mix.map((m) => ({ symbol: m.symbol, weight: mixTotal > 0 ? m.valueUsd / mixTotal : 0 }))}
               makeRequest={(owner, amountUsd) => ({ kind: "copy", leader: wallet, follower: owner, capitalUsd: amountUsd })}
             />
@@ -656,7 +656,7 @@ function Warnings({ data }: { data: PortfolioDto }) {
   return (
     <div className="profile-warnings">
       {!data.cash.canPayFees ? (
-        <p className="banner bad">This wallet needs a little SOL — about 0.02 — to pay network fees before it can buy or sell.</p>
+        <p className="banner bad">This wallet needs a little SOL (about 0.02) to pay network fees before it can buy or sell.</p>
       ) : null}
       {frozen.length ? (
         <p className="banner bad">

@@ -34,7 +34,7 @@ export function priceGapWords(basis: number | null): { label: string; tone: "up"
 export function liquidityWords(usd: number): { label: string; tone: "up" | "down" | "muted" } {
   if (usd >= 500_000) return { label: "Easy to sell", tone: "up" };
   if (usd >= 150_000) return { label: "Usually easy to sell", tone: "muted" };
-  return { label: "Harder to sell — thin market", tone: "down" };
+  return { label: "Harder to sell: thin market", tone: "down" };
 }
 
 /** A fee in basis points, as a percentage: "1%", "0.5%". */
@@ -111,7 +111,7 @@ export function issuerPowers(control: {
 
 /** What this product is, for somebody who has never heard of it. */
 export const WHAT_THIS_IS =
-  "These are tokens that track private companies — SpaceX, OpenAI, Anthropic — the ones you normally " +
+  "These are tokens that track private companies (SpaceX, OpenAI, Anthropic), the ones you normally " +
   "cannot invest in until they go public. You buy them with USDC, they land in your own wallet, and you " +
   "can sell them whenever the market has a buyer.";
 

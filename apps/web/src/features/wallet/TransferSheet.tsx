@@ -99,7 +99,7 @@ export function TransferSheet({ onClose, initial = "in" }: { onClose: () => void
             wallet, and every sale pays USDC back to it.
           </p>
           <p>
-            To take money out, first sell what you want to turn into cash — from your profile or a company's page. Then
+            To take money out, first sell what you want to turn into cash, from your profile or a company's page. Then
             send the USDC from your wallet app to an exchange or anywhere else, on the Solana network.
           </p>
           <a className="btn-soft wide" href="/portfolio" onClick={(event) => {

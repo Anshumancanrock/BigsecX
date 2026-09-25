@@ -196,7 +196,7 @@ export function TradeLauncher({
               {raw && !inRange ? (
                 <p className="note warn-note">
                   {amount < MIN_BASKET_USD
-                    ? `The smallest amount is ${whole(MIN_BASKET_USD)} — below that, fees take too big a bite.`
+                    ? `The smallest amount is ${whole(MIN_BASKET_USD)}. Below that, fees take too big a bite.`
                     : `The most in one go is ${whole(MAX_BUY_USD)}.`}
                 </p>
               ) : tooMuch && !broke ? (

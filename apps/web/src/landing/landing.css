@@ -1368,39 +1368,6 @@
   color: rgb(0 0 0 / 0.55);
 }
 
-/* Company logos inside the sentence, spaced so none covers another. */
-.phone-logos {
-  display: inline-flex;
-  gap: 3px;
-  margin: 0 5px 0 1px;
-  vertical-align: -4px;
-}
-
-.phone-logos .token-logo {
-  background: hsl(0 0% 100%);
-  box-shadow: 0 0 0 1.5px hsl(0 0% 100%);
-}
-
-.phone-sub-badge {
-  display: inline-grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  margin: 0 5px 0 1px;
-  border-radius: 50%;
-  vertical-align: -4px;
-}
-
-.phone-sub-badge.up {
-  background: rgb(88 198 105 / 0.15);
-  color: #58c669;
-}
-
-.phone-sub-badge.down {
-  background: rgb(255 69 58 / 0.1);
-  color: #ff453a;
-}
-
 .phone-cta {
   margin-top: 24px;
   padding: 10px 20px;

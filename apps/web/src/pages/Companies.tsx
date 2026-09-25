@@ -40,7 +40,7 @@ export function Companies({ market, loading }: { market: Market | null; loading:
       <PageHead title="Companies" />
       <TickerTape tokens={market.tokens} />
       <p className="lede">
-        {WHAT_THIS_IS} You can put in any amount from $5 — you do not need to buy a whole token.{" "}
+        {WHAT_THIS_IS} You can put in any amount from $5; you do not need to buy a whole token.{" "}
         <a href="/learn" onClick={go("/learn")} style={{ textDecoration: "underline" }}>
           How it works
         </a>

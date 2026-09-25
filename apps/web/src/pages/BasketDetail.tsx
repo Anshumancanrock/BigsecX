@@ -107,7 +107,7 @@ export function BasketDetail({ id, market }: { id: string; market: Market | null
 
       {!index.weights?.length ? (
         <div className="empty">
-          Nothing in this basket can be bought right now — the market for these companies is too thin at the moment. Try again later.
+          Nothing in this basket can be bought right now: the market for these companies is too thin at the moment. Try again later.
         </div>
       ) : (
         <div className="card table-scroll" style={{ marginTop: 20 }}>

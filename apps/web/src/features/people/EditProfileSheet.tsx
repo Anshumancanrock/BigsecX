@@ -105,7 +105,7 @@ export function EditProfileSheet({
       </label>
       {problem ? <p className="note down" style={{ marginTop: 6 }}>{problem}</p> : null}
       <p className="note" style={{ marginTop: 10 }}>
-        Saving asks your wallet to sign a message the first time — free, not a transaction — and keeps you signed in
+        Saving asks your wallet to sign a message the first time (free, not a transaction) and keeps you signed in
         here for 30 days. Your address is always shown beside your name.
       </p>
     </Sheet>
