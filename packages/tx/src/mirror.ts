@@ -1,14 +1,7 @@
 /**
- * Build the transactions that move a wallet onto a target allocation.
- *
- * The user never deposits anything and this service never holds a key. It
- * quotes the legs, asks Jupiter for the instructions, packs them into as few
- * versioned transactions as will hold them, and hands back unsigned bytes for
- * the wallet to sign in one prompt.
- *
- * Quotes are taken fresh here rather than reused from planning. A plan may be
- * minutes old by the time someone clicks, and in a market with under $100k in
- * the thinner pools, a stale route is a bad fill.
+ * Builds the unsigned transactions that move a wallet onto a target allocation:
+ * quotes each leg, fetches its Jupiter instructions and packs them for the
+ * wallet to sign in one prompt. No key is held here.
  */
 
 import {
@@ -34,12 +27,9 @@ import {
 import { PACKET_DATA_SIZE, compileAndMeasure, packGroups, type InstructionGroup } from "./pack.ts";
 
 /**
- * Successively tighter route constraints.
- *
- * An unconstrained PreStocks route can need 1335 bytes, over the 1232-byte
- * transaction limit, so a leg that does not fit is re-quoted against a
- * narrower search rather than abandoned. Each step trades price improvement
- * for a smaller account set; giving up a few basis points beats not filling.
+ * Successively tighter route constraints for a leg that does not fit in one
+ * transaction (an unconstrained route can need 1335 of 1232 bytes). Each step
+ * gives up some price improvement for fewer accounts.
  */
 const ROUTE_LADDER: readonly { readonly maxAccounts: number; readonly onlyDirectRoutes: boolean }[] = [
   { maxAccounts: 40, onlyDirectRoutes: false },
@@ -53,10 +43,8 @@ const COMPUTE_MARGIN = 1.25;
 /** Per-transaction ceiling the runtime enforces. */
 const MAX_COMPUTE_UNITS = 1_400_000;
 /**
- * Placeholder price used only while measuring.
- *
- * SetComputeUnitPrice encodes a u64 whatever the value, so the size measured
- * with this is the size of the transaction carrying the real fee.
+ * Placeholder price for size measurement. SetComputeUnitPrice encodes a
+ * fixed-width u64, so the real fee does not change the size.
  */
 const MAX_PRIORITY_FEE = 1_000_000;
 
@@ -66,10 +54,8 @@ export interface MirrorLeg {
   /** Notional to trade, in USD. */
   readonly usd: number;
   /**
-   * Tolerance for this leg, overriding the request default.
-   *
-   * Set from the impact the leg measured during planning, because one global
-   * tolerance cannot suit pools whose spreads differ by a factor of four.
+   * Slippage for this leg, overriding the request default. Set from the impact
+   * measured in planning, since spreads differ by up to four times across pools.
    */
   readonly slippageBps?: number;
 }
@@ -94,7 +80,7 @@ export interface MirrorRequest {
 export interface MirrorBundle {
   /** Unsigned versioned transactions, base64, in signing order. */
   readonly transactions: readonly string[];
-  /** Which legs landed in which transaction, by index into `legs`. */
+  /** Leg symbols carried by each transaction, parallel to `transactions`. */
   readonly legsByTransaction: readonly (readonly string[])[];
   readonly blockhash: string;
   readonly lastValidBlockHeight: number;
@@ -158,9 +144,8 @@ async function quoteLeg(
 }
 
 /**
- * A route that quoted cleanly but failed simulation.
- *
- * Carries the venues it used so the next attempt can exclude them.
+ * A route that quoted but failed simulation. Carries its venues so the next
+ * attempt can exclude them.
  */
 class RouteRejected extends Error {
   constructor(message: string, readonly venues: readonly string[]) {
@@ -181,31 +166,21 @@ async function buildGroup(
   computeUnits: number;
   budget: readonly JupiterInstruction[];
 }> {
-  // Always a fresh quote, taken immediately before the instructions are
-  // fetched from it.
-  //
-  // Reusing the quote the planner already took halves the upstream calls and
-  // cuts several seconds, and it was tried: it spends the user's slippage
-  // budget on our latency. That tolerance exists to absorb the market moving
-  // between quoting and landing, and handing a leg a quote that is already
-  // seconds old consumes it before the user has even signed. Measured, the
-  // reuse turned a basket that landed six of six into one of five.
+  // Quote immediately before fetching instructions: a reused planner quote is
+  // already seconds old and would use up slippage tolerance before signing.
   const quote = await quoteLeg(jupiter, leg, request, route, excludeDexes);
   const response = await fetchSwapInstructions<SwapInstructionsResponse>(quote, {
     userPublicKey: request.owner,
   });
   if (response.simulationError) {
-    // Carry the venues so the caller can route around whichever one rejected
-    // the swap, instead of re-quoting into the same failure.
     throw new RouteRejected(
       `Jupiter simulation failed: ${JSON.stringify(response.simulationError).slice(0, 160)}`,
       venues(quote),
     );
   }
 
-  // Every leg keeps its own setup. These are idempotent account creations, so
-  // a duplicate costs a few bytes; a missing one costs the transaction.
-  // Duplicates are removed later, within each transaction, where it is safe.
+  // Each leg keeps its own setup (idempotent account creations); duplicates are
+  // removed later, within each transaction.
   const instructions: JupiterInstruction[] = [...response.setupInstructions];
   instructions.push(response.swapInstruction);
   if (response.cleanupInstruction) instructions.push(response.cleanupInstruction);
@@ -231,14 +206,9 @@ export async function buildMirrorBundle(
   const groupSymbols: string[] = [];
   const groupComputeUnits: number[] = [];
   /**
-   * Jupiter's recommended priority fee per leg, in micro-lamports.
-   *
-   * Recorded per leg because the recommendations differ by an order of
-   * magnitude -- three legs quoted together returned 94,706, 911,344 and
-   * 532,844 -- and each transaction needs the highest of the legs it
-   * actually carries. An earlier version kept whichever leg had the longest
-   * budget array, which is every leg, so the first leg's fee was applied to
-   * all of them and the expensive routes shipped ten times underpriced.
+   * Jupiter's recommended priority fee per leg, in micro-lamports per compute
+   * unit. Recommendations can differ by an order of magnitude between legs, so
+   * each transaction takes the highest among the legs it carries.
    */
   const groupPriorityFees: number[] = [];
 
@@ -246,12 +216,16 @@ export async function buildMirrorBundle(
     ? ROUTE_LADDER
     : [{ maxAccounts: request.maxAccounts, onlyDirectRoutes: false }, ...ROUTE_LADDER];
 
-  for (const leg of request.legs) {
+  // Legs are routed concurrently, since each depends only on its own quotes and
+  // excluded venues. Results are placed back in leg order before packing.
+  const placeLeg = async (
+    leg: MirrorLeg,
+  ): Promise<
+    | { readonly placed: Awaited<ReturnType<typeof buildGroup>> }
+    | { readonly failed: string }
+  > => {
     let lastError = "no route attempted";
-    let placed = false;
-    // Venues that already rejected this leg. Excluding them is what turns a
-    // failed leg into a filled one, since the fault is usually one pool rather
-    // than the trade.
+    // Venues that rejected this leg; the fault is usually one pool, not the trade.
     const excluded = new Set<string>();
 
     for (const route of ladder) {
@@ -266,14 +240,8 @@ export async function buildMirrorBundle(
         continue;
       }
 
-      // Reject a route that cannot fit in a transaction by itself before
-      // committing to it, so the ladder can try a narrower one.
-      //
-      // The compute-unit limit has to be in this measurement. The packer
-      // prepends one to every transaction, so leaving it out here
-      // under-measures each leg and lets a route through at, say, 1228 bytes
-      // that the packer then compiles at 1236 and reports as oversized --
-      // after the ladder has already stopped looking for a narrower one.
+      // Measure the leg alone with the same budget preamble the packer adds, so
+      // a route that cannot fit falls through to a narrower rung here.
       const measured = compileAndMeasure({
         payer,
         blockhash: request.blockhash,
@@ -289,16 +257,24 @@ export async function buildMirrorBundle(
         continue;
       }
 
-      groups.push(built.group);
-      groupSymbols.push(leg.symbol);
-      groupComputeUnits.push(built.computeUnits);
-      groupPriorityFees.push(priorityFeeOf(built.budget));
-      placed = true;
-      break;
+      return { placed: built };
     }
 
-    if (!placed) failed.push({ symbol: leg.symbol, reason: lastError });
-  }
+    return { failed: lastError };
+  };
+
+  const outcomes = await Promise.all(request.legs.map(placeLeg));
+  outcomes.forEach((outcome, i) => {
+    const leg = request.legs[i]!;
+    if ("failed" in outcome) {
+      failed.push({ symbol: leg.symbol, reason: outcome.failed });
+      return;
+    }
+    groups.push(outcome.placed.group);
+    groupSymbols.push(leg.symbol);
+    groupComputeUnits.push(outcome.placed.computeUnits);
+    groupPriorityFees.push(priorityFeeOf(outcome.placed.budget));
+  });
 
   if (groups.length === 0) {
     return {
@@ -311,9 +287,8 @@ export async function buildMirrorBundle(
     };
   }
 
-  // Pack against placeholder budget instructions. Both encode a fixed-width
-  // integer, so their serialized size does not depend on the value and the
-  // real numbers can be substituted afterwards without changing what fits.
+  // Pack against placeholder budget instructions. Both encode fixed-width
+  // integers, so substituting the real values later does not change what fits.
   const preamble = [
     ComputeBudgetProgram.setComputeUnitLimit({ units: MAX_COMPUTE_UNITS }),
     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: MAX_PRIORITY_FEE }),
@@ -332,10 +307,7 @@ export async function buildMirrorBundle(
     });
   }
 
-  // Now that the grouping is known, give each transaction a unit limit that
-  // covers every swap in it. Using the largest single leg instead -- which an
-  // earlier version did -- exhausts the budget as soon as two swaps share a
-  // transaction.
+  // Each transaction's unit limit covers the sum of its swaps, not the largest one.
   const transactions: string[] = [];
   const byteLengths: number[] = [];
   const legsByTransaction: string[][] = [];
@@ -351,9 +323,7 @@ export async function buildMirrorBundle(
 
     const deduped = dedupeWithinTransaction(entry.instructions);
 
-    // The highest fee among the legs sharing this transaction. They settle
-    // together, so the cheapest leg cannot be allowed to set the price for
-    // the expensive one it travels with.
+    // Highest fee among the legs in this transaction, so none is underpriced.
     const microLamports = entry.groupIndices.reduce(
       (highest, i) => Math.max(highest, groupPriorityFees[i] ?? 0),
       0,
@@ -391,10 +361,8 @@ export async function buildMirrorBundle(
 }
 
 /**
- * The priority fee Jupiter recommends for a leg, in micro-lamports per unit.
- *
- * SetComputeUnitLimit is discriminator 0x02 and SetComputeUnitPrice is 0x03,
- * followed by a little-endian u64.
+ * Jupiter's recommended priority fee for a leg, in micro-lamports per compute
+ * unit: the little-endian u64 after the SetComputeUnitPrice discriminator (0x03).
  */
 function priorityFeeOf(instructions: readonly JupiterInstruction[]): number {
   for (const instruction of instructions) {
