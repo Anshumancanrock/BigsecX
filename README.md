@@ -198,6 +198,18 @@ Behind a reverse proxy, set `ALLOWED_ORIGINS` and `TRUST_PROXY=1`, and make
 sure the proxy overwrites `X-Forwarded-For` rather than appending the
 client's value.
 
+The `Dockerfile` builds the site while the image is built and runs all three
+processes in one container on `$PORT` (10000 by default):
+
+```bash
+docker build -t basketx .
+docker run -p 10000:10000 -v basketx-data:/app/data basketx
+```
+
+Without a persistent volume the database starts empty on every restart: the
+indexer refills recent trades, but profiles, follows and published baskets
+are lost.
+
 ## Disclaimer
 
 PreStocks tokens give economic exposure through an issuer-controlled SPV; they
