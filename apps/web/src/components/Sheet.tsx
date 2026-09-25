@@ -22,13 +22,19 @@ export function Sheet({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const restoreTo = useRef<HTMLElement | null>(null);
+  const latest = useRef({ onClose, dismissible });
+  useEffect(() => {
+    latest.current = { onClose, dismissible };
+  });
 
+  // Runs once per opening. Callers pass a new onClose on every render, so
+  // depending on it would pull focus out of any input on each keystroke.
   useEffect(() => {
     restoreTo.current = document.activeElement as HTMLElement | null;
     panel.current?.focus();
 
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && dismissible) onClose();
+      if (event.key === "Escape" && latest.current.dismissible) latest.current.onClose();
     };
     document.addEventListener("keydown", onKey);
 
@@ -40,7 +46,7 @@ export function Sheet({
       document.body.style.overflow = previousOverflow;
       restoreTo.current?.focus?.();
     };
-  }, [onClose, dismissible]);
+  }, []);
 
   // Portalled into <body> so the sheet does not inherit layout rules from
   // wherever it was opened, such as a card or a table cell.
