@@ -1,18 +1,8 @@
 /**
- * Reconstruct PreStocks trades from mainnet transaction history.
- *
- * The obvious source of traders -- `getTokenLargestAccounts` -- is refused
- * outright by every free endpoint tested, returning 429 even for a single
- * call, and `getProgramAccounts` over 68,000 holder accounts is worse. Reading
- * signatures and transactions, which free endpoints do serve, works instead.
- *
- * It is also the better source. Largest-holder snapshots find whales who may
- * never trade; transaction history finds people who actually trade, and
- * because each transaction shows both the token and the stablecoin leg, it
- * yields a cost basis rather than a guess at one.
- *
- * Balances here are raw. The ScaledUiAmount multiplier is applied upstream,
- * where the mint state is known.
+ * Reconstruct PreStocks trades from mainnet transaction history, which free
+ * endpoints serve (unlike `getTokenLargestAccounts`). Each transaction shows
+ * both the token and the cash leg, so it yields a cost basis. Amounts are raw;
+ * the ScaledUiAmount multiplier is applied upstream, where mint state is known.
  */
 
 import type { Rpc } from "./rpc.ts";
@@ -64,29 +54,22 @@ export interface Trade {
   /** Matching USDC change, negative when the wallet spent. Null if absent. */
   readonly usdcDeltaRaw: bigint | null;
   /**
-   * Matching wrapped-SOL change, negative when the wallet spent.
-   *
-   * Carried because most routes here hop through SOL rather than stablecoin:
-   * of eight trades sampled from mainnet, only two had a USDC leg. Ignoring
-   * the SOL side discards three quarters of the observable cost basis.
+   * Matching wrapped-SOL change, negative when the wallet spent. Most routes
+   * hop through SOL rather than stablecoin, so this leg carries most of the
+   * observable cost basis.
    */
   readonly wsolDeltaRaw: bigint | null;
   /**
    * Fee payer's native lamport change, with the transaction fee added back.
    *
-   * This is where a SOL-routed swap actually shows up. Jupiter wraps and
-   * unwraps SOL inside the transaction, so the wrapped account opens at zero
-   * and closes at zero and its token delta is nothing -- while the real
-   * movement, measured on mainnet at 2.75, 0.25 and 1.01 SOL across three
-   * consecutive pool trades, sits in the native balance. Reading only token
-   * balances leaves every such trade with no observable cost.
-   *
-   * Only set when the fee payer is also the owner of the token leg.
+   * Jupiter wraps and unwraps SOL inside the transaction, so a SOL-routed swap
+   * leaves the wrapped account at zero and shows only here. Set only when the
+   * fee payer also owns the token leg.
    */
   readonly lamportDeltaRaw: bigint | null;
 }
 
-/** Owners that are program-controlled rather than people. */
+/** True for an owner that did not sign, such as a pool or program account. */
 function isCounterparty(owner: string, signers: ReadonlySet<string>): boolean {
   return !signers.has(owner);
 }
@@ -109,16 +92,11 @@ export async function getSignatures(
 }
 
 /**
- * Every signature newer than `until`, across as many pages as allowed.
+ * Every signature newer than `until`, paging backward with `before`, since one
+ * page returns only the newest `limit` and would skip the rest down to `until`.
  *
- * A single page silently drops history whenever more than `limit` new
- * signatures have accumulated: the node returns the newest page, and
- * advancing the cursor to the top of it skips everything between that page
- * and the previous cursor. Paging backward with `before` closes that gap.
- *
- * `maxPages` bounds the work per run. When the budget runs out the result is
- * flagged `complete: false`, and the caller must not advance its cursor past
- * what it actually indexed or the same gap reopens.
+ * When `maxPages` runs out the result has `complete: false`, and the caller
+ * must not advance its cursor past what it actually indexed.
  */
 export async function getSignaturesSince(
   rpc: Rpc,
@@ -136,11 +114,24 @@ export async function getSignaturesSince(
   let before: string | undefined;
 
   for (let page = 0; page < maxPages; page++) {
-    const batch = await getSignatures(rpc, address, {
-      limit: pageSize,
-      ...(options.until ? { until: options.until } : {}),
-      ...(before ? { before } : {}),
-    });
+    let batch: SignatureRef[];
+    try {
+      batch = await getSignatures(rpc, address, {
+        limit: pageSize,
+        ...(options.until ? { until: options.until } : {}),
+        ...(before ? { before } : {}),
+      });
+    } catch (error) {
+      // Free endpoints keep a short history, so an old cursor can name a
+      // transaction the node no longer holds, and it then answers "not found"
+      // for the whole request. Restart from the newest page; the scan is
+      // incomplete because the stretch back to the old cursor is a gap.
+      if (page === 0 && options.until && /not found/i.test((error as Error).message)) {
+        const fresh = await getSignaturesSince(rpc, address, { ...options, until: undefined });
+        return { signatures: fresh.signatures, complete: false };
+      }
+      throw error;
+    }
     signatures.push(...batch);
 
     // A short page means the node had nothing older left above `until`.
@@ -160,9 +151,14 @@ function extractTrades(
   const meta = response.meta;
   if (!meta || meta.err) return [];
 
+  // A missing level in a response from an untrusted node would throw mid-parse
+  // and fail the whole batch; unreadable account keys yield no trades instead.
+  const accountKeys = response.transaction?.message?.accountKeys;
+  if (!Array.isArray(accountKeys)) return [];
+
   // The fee payer is the first account key. Its native balance is the only
   // place a SOL-routed swap is visible.
-  const feePayer = response.transaction.message.accountKeys[0]?.pubkey ?? null;
+  const feePayer = accountKeys[0]?.pubkey ?? null;
   const preLamports = meta.preBalances?.[0];
   const postLamports = meta.postBalances?.[0];
   const lamportDelta =
@@ -170,11 +166,10 @@ function extractTrades(
       ? BigInt(postLamports) - BigInt(preLamports) + BigInt(meta.fee)
       : null;
 
-  // Only balance changes belonging to a signer count as that wallet trading.
-  // Every swap also moves the pool's balance, and without this filter the
-  // liquidity pools dominate any ranking built on the result.
+  // Only signers count as trading. Every swap also moves a pool's balance, and
+  // pools would otherwise dominate any ranking built on the result.
   const signers = new Set(
-    response.transaction.message.accountKeys.filter((k) => k.signer).map((k) => k.pubkey),
+    accountKeys.filter((k) => k.signer).map((k) => k.pubkey),
   );
 
   // Index by account rather than owner: an owner can hold several accounts in
@@ -203,10 +198,9 @@ function extractTrades(
     byOwnerMint.set(key, (byOwnerMint.get(key) ?? 0n) + entry.delta);
   }
 
-  // How many watched mints each owner moved in this transaction. A stablecoin
-  // leg can only be attributed to a token leg when there is exactly one; a
-  // basket swap moves several against a single USDC delta, and pinning that
-  // delta to each leg would count the same money once per leg.
+  // Watched mints moved per owner. Cash is attributed only when there is
+  // exactly one: a basket swap moves several against one USDC delta, which
+  // would otherwise be counted once per leg.
   const legsPerOwner = new Map<string, number>();
   for (const [key, delta] of byOwnerMint) {
     const [owner, mint] = key.split("\u0000") as [string, string];
@@ -239,48 +233,84 @@ function extractTrades(
 }
 
 /**
- * Fetch and parse transactions.
- *
- * Requests go out in small batches and sequentially. Public endpoints tolerate
- * this method but not a burst of it, and the indexer is a background job where
- * finishing reliably matters more than finishing quickly.
+ * Fetch and parse transactions in small sequential batches; public endpoints
+ * tolerate getTransaction but not a burst of it.
  */
 export async function fetchTrades(
   rpc: Rpc,
   signatures: readonly string[],
   watchedMints: ReadonlySet<string>,
-  options: { readonly batchSize?: number } = {},
-): Promise<{ readonly trades: Trade[]; readonly missed: number }> {
+  options: {
+    readonly batchSize?: number;
+    /**
+     * "confirmed" reads a transaction seconds after it lands; the node's
+     * default, "finalized", answers null for it for the first thirteen or so.
+     */
+    readonly commitment?: "confirmed" | "finalized";
+  } = {},
+): Promise<{
+  readonly trades: Trade[];
+  readonly missed: number;
+  /** Signatures the node returned a transaction for; the rest it does not have (yet). */
+  readonly seen: readonly string[];
+}> {
   const batchSize = options.batchSize ?? 10;
   const trades: Trade[] = [];
+  const seen: string[] = [];
   let missed = 0;
+  // Version 1 transactions are live on mainnet; requesting only version 0
+  // makes the node refuse them outright.
+  const paramsFor = (signature: string) => [
+    signature,
+    {
+      maxSupportedTransactionVersion: 1,
+      encoding: "jsonParsed",
+      ...(options.commitment ? { commitment: options.commitment } : {}),
+    },
+  ];
+
+  // The default endpoint allows one getTransaction per batch and mainnet-beta
+  // rate limits large batches, so the first failed batch switches the rest of
+  // the run to single calls.
+  let batching = true;
 
   for (let i = 0; i < signatures.length; i += batchSize) {
     const slice = signatures.slice(i, i + batchSize);
-    let responses: (TransactionResponse | null)[];
-    try {
-      responses = await rpc.batch<TransactionResponse | null>(
-        slice.map((signature) => ({
-          method: "getTransaction",
-          // Version 1 transactions are live on mainnet; requesting only
-          // version 0 makes the node refuse them outright.
-          params: [signature, { maxSupportedTransactionVersion: 1, encoding: "jsonParsed" }],
-        })),
-      );
-    } catch {
-      // Report the loss upward. The caller must not advance its cursor past a
-      // window it failed to read, or these signatures are never looked at
-      // again and the gap is permanent.
-      missed += slice.length;
-      continue;
+    let responses: (TransactionResponse | null | undefined)[] | null = null;
+
+    if (batching) {
+      try {
+        responses = await rpc.batch<TransactionResponse | null>(
+          slice.map((signature) => ({ method: "getTransaction", params: paramsFor(signature) })),
+        );
+      } catch {
+        batching = false;
+      }
+    }
+
+    if (responses === null) {
+      responses = [];
+      for (const signature of slice) {
+        try {
+          responses.push(await rpc.call<TransactionResponse | null>("getTransaction", paramsFor(signature)));
+        } catch {
+          // Counted as missed so the caller keeps its cursor, since signatures
+          // the cursor moves past are never revisited.
+          responses.push(undefined);
+          missed++;
+        }
+      }
     }
 
     slice.forEach((signature, j) => {
-      const response = responses[j];
+      const response = responses![j];
       // A null response means the node has no record of it; nothing to index,
       // and nothing lost.
-      if (response) trades.push(...extractTrades(signature, response, watchedMints));
+      if (response) {
+        seen.push(signature);
+        trades.push(...extractTrades(signature, response, watchedMints));
+      }
     });
   }
-  return { trades, missed };
+  return { trades, missed, seen };
 }
