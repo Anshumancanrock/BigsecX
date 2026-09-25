@@ -46,6 +46,10 @@
   "include": [
     "packages/*/src/**/*.ts",
     "packages/*/test/**/*.ts",
-    "apps/*/src/**/*.ts"
+    "apps/*/src/**/*.ts",
+    "scripts/**/*.ts"
+  ],
+  "exclude": [
+    "apps/web/**"
   ]
 }
