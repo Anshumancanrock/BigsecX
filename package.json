@@ -7,10 +7,13 @@
     "apps/*"
   ],
   "scripts": {
+    "start": "bun run scripts/run.ts",
     "test": "bun test",
     "typecheck": "bun ./node_modules/typescript/lib/tsc.js --noEmit -p tsconfig.json",
     "api": "bun run --hot apps/api/src/server.ts",
-    "indexer": "bun run apps/indexer/src/index.ts"
+    "indexer": "bun run apps/indexer/src/index.ts",
+    "typecheck:web": "bun ./node_modules/typescript/lib/tsc.js --noEmit -p apps/web/tsconfig.json",
+    "web": "bun run --cwd apps/web dev"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -18,6 +21,10 @@
   },
   "dependencies": {
     "@solana/web3.js": "^1.99.0",
-    "hono": "^4.13.8"
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "hono": "^4.13.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }
