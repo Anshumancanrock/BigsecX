@@ -1,11 +1,7 @@
 /**
- * Build one consistent view of the market.
- *
- * "Consistent" is the operative word. Prices, mint state, and the epoch all
- * come from different places and all move, so a snapshot fixes a single
- * timestamp and epoch and derives everything from those. Otherwise a split
- * taking effect mid-refresh, or an epoch rolling over between two calls, yields
- * a view whose numbers disagree with each other.
+ * One consistent view of the market. A snapshot fixes a single timestamp and
+ * epoch and derives every figure from them, so a multiplier change or epoch
+ * rollover mid-refresh cannot produce figures that disagree.
  */
 
 import {
@@ -40,12 +36,9 @@ export interface TokenView {
   readonly transferFeeBps: number;
   readonly paused: boolean;
   /**
-   * Powers the issuer holds over this mint.
-   *
-   * Parsed from chain and carried through to the API because it is a property
-   * of the asset a holder is entitled to know: a permanent delegate can move
-   * their tokens without consent, a freeze authority can immobilise them, and
-   * a pause authority can stop every transfer at once.
+   * Issuer authorities over this mint, read from chain for disclosure. A
+   * permanent delegate can move holders' tokens without consent; a freeze
+   * authority can immobilise them.
    */
   readonly issuerControl: {
     readonly permanentDelegate: string | null;
@@ -62,7 +55,7 @@ export interface MarketSnapshot {
   readonly totalLiquidityUsd: number;
   /** Set when a transfer fee change is scheduled but not yet live. */
   readonly pendingFeeChange: { readonly fromBps: number; readonly toBps: number; readonly atEpoch: number } | null;
-  /** Symbols whose data was incomplete; surfaced rather than hidden. */
+  /** Symbols with missing mint state or prices. */
   readonly degraded: readonly string[];
   /** Set when the price feed failed outright and every price is missing. */
   readonly priceFeedError: string | null;
@@ -106,22 +99,20 @@ function buildTokenView(
   };
 }
 
+/** Just under the API's snapshot lifetime, so each snapshot asks once. */
+const PRICE_TTL_MS = 2_500;
+
 export async function takeSnapshot(
   rpc: Rpc,
   jupiter: JupiterClient,
 ): Promise<MarketSnapshot> {
-  // Pin the epoch and the clock before reading anything derived from them.
-  //
-  // The price feed is allowed to fail. Every route depends on a snapshot, so
-  // letting a Jupiter 429 reject the whole call takes the entire API down
-  // with it -- and it made the `degraded` list below unreachable for the
-  // likeliest failure there is. Chain state is not optional: without mint
-  // state there is no scale multiplier and no fee, and every number would be
-  // wrong rather than missing.
+  // Every API route depends on a snapshot, so a price feed failure degrades it
+  // instead of failing it. Mint state is required: without it the multiplier
+  // and fee are unknown and every figure would be wrong.
   const [epoch, mints, priceResult] = await Promise.all([
     rpc.epoch(),
     getMintStates(rpc, ALL_MINTS),
-    jupiter.prices(ALL_MINTS).then(
+    jupiter.prices(ALL_MINTS, PRICE_TTL_MS).then(
       (value) => ({ ok: true as const, value }),
       (error: unknown) => ({ ok: false as const, error: error as Error }),
     ),
@@ -145,8 +136,7 @@ export async function takeSnapshot(
     tokens.push(view);
   }
 
-  // The fee schedule is identical across these mints, so read it from any of
-  // them; fall back to null if the universe somehow came back empty.
+  // The fee schedule is identical across these mints, so any one will do.
   const anyMint = mints.get(UNIVERSE[0]?.mint ?? "");
 
   return {
